@@ -62,6 +62,7 @@ header .deco .dir{right:0;width:var(--dirW,520px);background:linear-gradient(180
 /* menu lateral escuro */
 #menu{position:fixed;left:0;top:var(--topo,64px);bottom:0;width:var(--menuW);background:linear-gradient(180deg,#1e1e21 0,#131315 55%,#0c0c0d 100%);color:#ececf0;overflow-y:auto;padding:14px 12px 120px;z-index:4;scrollbar-width:thin;scrollbar-color:#3b3b40 transparent;isolation:isolate}
 #menu::after{content:'';position:fixed;left:0;bottom:0;width:var(--menuW);aspect-ratio:240/110;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 110'%3E%3Cdefs%3E%3ClinearGradient id='v' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2b2b'/%3E%3Cstop offset='1' stop-color='%23a8000a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.06' stroke-width='.6'%3E%3Cg transform='translate%28128 30%29 scale%283.4%29'%3E%3Ccircle cx='12' cy='12' r='3.2'/%3E%3Cpath d='M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'/%3E%3C/g%3E%3Cg transform='translate%28190 58%29 scale%282.2%29'%3E%3Ccircle cx='12' cy='12' r='3.2'/%3E%3Cpath d='M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'/%3E%3C/g%3E%3C/g%3E%3Cpath d='M0 62 C 28 72 50 88 64 110 L 0 110 Z' fill='url%28%23v%29'/%3E%3Cpath d='M0 80 C 18 87 32 97 41 110 L 0 110 Z' fill='%230b0b0c' fill-opacity='.55'/%3E%3C/svg%3E") left bottom/100% auto no-repeat;pointer-events:none;z-index:-1}
+#menu .area.grupo{display:flex;align-items:center;cursor:pointer;user-select:none}#menu .area.grupo:hover{color:#fff}#menu .gSeta{margin-left:auto;font-size:11px;transition:transform .15s}#menu .area.fechado .gSeta{transform:rotate(-90deg)}
 #menu .area{font-size:10.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:#8e8e94;padding:16px 12px 6px}
 #menu button{display:flex;align-items:center;gap:13px;width:100%;text-align:left;border:0;background:none;border-radius:11px;padding:9px 12px;cursor:pointer;font-size:14px;color:#ececf0;margin-bottom:1px;transition:background .12s}
 #menu button:hover{background:rgba(255,255,255,.07)}
@@ -546,6 +547,11 @@ const MENU = [
 const LETRA = { diretoria:'D', administrativo:'A', projetos:'P', servicos:'S', tecnico:'T', agente:'G' };
 const FASES = { 2:'Projetos', 3:'Serviços', 4:'Financeiro' };
 function itensVisiveis(comFav = true){ const l = LETRA[ST.eu.perfil]; const fav = comFav ? favoritosVisiveis() : []; const gs = (MENU.map(g => ({ area:g.area, itens:g.itens.filter(i => menuVe(i)) })).filter(g => g.itens.length)); if(fav.length) gs.splice(gs[0] && !gs[0].area ? 1 : 0, 0, { area:'★ Favoritos', itens: fav }); return gs; }
+function menuFechados(){ if(!ST._menuFechados){ try{ ST._menuFechados = JSON.parse(localStorage.getItem('erp-menu-fechados') || '[]'); }catch(e){ ST._menuFechados = []; } } return ST._menuFechados; }
+// abre/fecha um grupo sem redesenhar a tela
+function desenhaSoMenu(){ const l = menuFechados(); let g = null;
+  [...$('#menu').children].forEach(el => { if(el.dataset.grupo !== undefined){ g = el.dataset.grupo; const f = l.includes(g); el.classList.toggle('fechado', f); el.title = (f ? 'Abrir' : 'Fechar') + ' o grupo'; }
+    else if(el.tagName === 'BUTTON' && g){ el.classList.toggle('hidden', l.includes(g) && !el.classList.contains('ativo')); } }); }
 function desenhar(){
   registrarTelas();
   if(ST._abaAtual && ST._abaAtual !== ST.aba && !ST._voltando){ (ST.hist = ST.hist || []).push(ST._abaAtual); if(ST.hist.length > 50) ST.hist.shift(); }
@@ -553,8 +559,12 @@ function desenhar(){
   const vis = itensVisiveis(), todos = vis.flatMap(g => g.itens);
   if(!todos.some(i => i[0] === ST.aba)) ST.aba = todos[0][0];
   document.body.classList.add('comMenu');
-  $('#menu').innerHTML = vis.map(g => (g.area?`<div class="area">${g.area}</div>`:'') + g.itens.map(([k,ic,r,,fase]) =>
-    `<button data-aba="${k}" class="${ST.aba===k?'ativo':''}">${IC[k] ? ico(k) : `<span class="ic">${ic}</span>`}<span>${r}</span>${k==='fila'&&ST.fila.length?`<span class="cont">${ST.fila.length}</span>`:''}${fase&&!TELAS[k]?'<span class="breve">em breve</span>':''}</button>`).join('')).join('');
+  const fechados = menuFechados();
+  $('#menu').innerHTML = vis.map(g => { const fch = g.area && fechados.includes(g.area);
+    return (g.area?`<div class="area grupo${fch?' fechado':''}" data-grupo="${esc(g.area)}" title="${fch?'Abrir':'Fechar'} o grupo"><span>${g.area}</span><span class="gSeta">▾</span></div>`:'') + g.itens.map(([k,ic,r,,fase]) =>
+    `<button data-aba="${k}" class="${ST.aba===k?'ativo':''}${fch && ST.aba!==k?' hidden':''}">${IC[k] ? ico(k) : `<span class="ic">${ic}</span>`}<span>${r}</span>${k==='fila'&&ST.fila.length?`<span class="cont">${ST.fila.length}</span>`:''}${fase&&!TELAS[k]?'<span class="breve">em breve</span>':''}</button>`).join(''); }).join('');
+  $('#menu').querySelectorAll('[data-grupo]').forEach(a => a.onclick = () => { const g = a.dataset.grupo, l = menuFechados(); const i = l.indexOf(g); if(i >= 0) l.splice(i, 1); else l.push(g);
+    try{ localStorage.setItem('erp-menu-fechados', JSON.stringify(l)); }catch(e){} ST._menuFechados = l; desenhaSoMenu(); });
   $('#menu').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ ST.aba=b.dataset.aba; ST.busca=''; $('#menu').classList.remove('aberto'); if(ST.aba!=='projetos' && ST.aba!=='servicos') await carregar(); desenhar(); });
   document.documentElement.style.setProperty('--topo', document.querySelector('header').getBoundingClientRect().height + 'px');
   const item = todos.find(i => i[0] === ST.aba);
