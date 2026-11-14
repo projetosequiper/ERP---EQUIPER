@@ -7843,7 +7843,7 @@ function acUsuarios(){
       ${aguard.map(u => `<tr><td>${esc(u.nome)}</td><td>${esc(u.email || '')}</td><td>${dtHoraBR(u.criado_em)}</td><td style="text-align:right;white-space:nowrap"><button class="btn peq" data-acrec="${u.id}">Recusar</button> <button class="btn peq pri" data-acapr="${u.id}">Aprovar</button></td></tr>`).join('')}</tbody></table></div>` : ''}
     <div class="card"><h2>Quem entra no ERP</h2>
       <table class="reg"><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Cadastro de funcionário</th><th>Último acesso</th><th>Situação</th><th></th></tr></thead><tbody>
-      ${resto.map(u => `<tr><td><b>${esc(u.nome)}</b></td><td>${esc(u.email || '')}</td>
+      ${resto.map(u => `<tr><td>${u.perfil === 'agente' ? `<b>${esc(u.nome)}</b>` : `<input data-acnome="${u.id}" value="${esc(u.nome)}" style="min-width:150px;font-weight:600">`}</td><td>${esc(u.email || '')}</td>
         <td><select data-acperf="${u.id}" ${u.perfil === 'agente' ? 'disabled' : ''}>${optsPerfis(u.perfil_id)}</select></td>
         <td>${u.perfil === 'agente' ? '—' : `<select data-acpes="${u.id}">${optsFunc(u.pessoa_id)}</select>`}</td>
         <td>${u.ultimo_acesso ? dtHoraBR(u.ultimo_acesso) : '<span class="muted">nunca</span>'}</td>
@@ -7853,6 +7853,9 @@ function acUsuarios(){
       <p class="muted" style="font-size:12px;margin:8px 0 0">O cadastro de funcionário (em Empresas) liga o login ao técnico ou projetista, para o nível "Só o seu" (as OS, a agenda, as tarefas e a comissão dele).
       Quem sai da empresa: <b>Desativar</b> — perde o acesso na hora.</p></div>`;
   const salva = async (q, ok) => { const r = await q; if(r.error){ await aviso('Não mudou', esc(erroBanco(r.error))); return telaAcessos(); } toast(ok); if(ok) ST.ac = await carregaAcessos(); };
+  document.querySelectorAll('[data-acnome]').forEach(i => i.onchange = async () => { const v = i.value.trim(); if(!v){ await aviso('Falta o nome', 'O nome não pode ficar vazio.'); return telaAcessos(); }
+    await salva(sb.from('usuarios').update({ nome: v }).eq('id', i.dataset.acnome), 'Nome salvo.');
+    if(i.dataset.acnome === ST.eu.id){ ST.eu.nome = v; $('#uNome').textContent = 'Olá, ' + v; } });
   document.querySelectorAll('[data-acperf]').forEach(s => s.onchange = () => salva(sb.from('usuarios').update({ perfil_id: s.value }).eq('id', s.dataset.acperf), 'Perfil mudado.'));
   document.querySelectorAll('[data-acpes]').forEach(s => s.onchange = () => salva(sb.from('usuarios').update({ pessoa_id: s.value || null }).eq('id', s.dataset.acpes), 'Ligado ao cadastro.'));
   document.querySelectorAll('[data-acativo]').forEach(b => b.onclick = async () => {
@@ -8016,16 +8019,19 @@ function acConvites(){
   $('#acCorpo').innerHTML = `<div class="card"><div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0">Pré-cadastro</h2><button class="btn pri" id="acNovoConv" style="margin-left:auto">+ Pessoa</button></div>
     <p class="muted" style="font-size:12px">Quem vai usar o ERP. Com o <b>e-mail</b> preenchido, quando a pessoa criar a conta com esse e-mail ela entra direto, já com o perfil. Sem e-mail, ela cai em "Aguardando aprovação" e você escolhe quem é.</p>
     <table class="reg"><thead><tr><th>Nome</th><th>Função</th><th>Perfil</th><th>E-mail</th><th>Cadastro de funcionário</th><th>Celular</th><th>Situação</th><th></th></tr></thead><tbody>
-    ${A.convites.map(c => `<tr><td><b>${esc(c.nome)}</b></td><td>${esc(c.funcao || '')}</td>
+    ${A.convites.map(c => `<tr><td>${c.usado_por ? `<b>${esc(c.nome)}</b>` : `<input data-cvf="nome" data-cv="${c.id}" value="${esc(c.nome)}" style="min-width:150px;font-weight:600">`}</td>
+      <td>${c.usado_por ? esc(c.funcao || '') : `<input data-cvf="funcao" data-cv="${c.id}" value="${esc(c.funcao || '')}" placeholder="função" style="min-width:140px">`}</td>
       <td>${c.usado_por ? esc(perfilNome(c.perfil_id)) : `<select data-cvf="perfil_id" data-cv="${c.id}">${optsPerfis(c.perfil_id)}</select>`}</td>
       <td>${c.usado_por ? esc(c.email || '') : `<input data-cvf="email" data-cv="${c.id}" type="email" value="${esc(c.email || '')}" placeholder="e-mail da pessoa" style="min-width:190px">`}</td>
       <td>${c.usado_por ? esc((pessoa(c.pessoa_id) || {}).nome || '—') : `<select data-cvf="pessoa_id" data-cv="${c.id}">${optsFunc(c.pessoa_id)}</select>`}</td>
       <td>${c.celular ? 'sim' : ''}</td>
       <td>${c.usado_por ? `<span class="tag ok">entrou${c.usado_em ? ' ' + dtHoraBR(c.usado_em).slice(0, 10) : ''}</span>` : c.email ? '<span class="tag">esperando o 1º acesso</span>' : '<span class="tag rasc">falta o e-mail</span>'}</td>
-      <td style="text-align:right">${c.usado_por ? '' : `<button class="btn peq" data-cvdel="${c.id}">Tirar</button>`}</td></tr>`).join('') || '<tr><td colspan="8" class="vazio">Ninguém no pré-cadastro.</td></tr>'}</tbody></table>
-    <p class="muted" style="font-size:12px;margin:8px 0 0">Como a pessoa entra: abre o ERP → <b>Criar minha conta</b> → nome, e-mail e senha.</p></div>`;
+      <td style="text-align:right">${c.usado_por ? '' : `<button class="btn peq" data-cvdel="${c.id}">Remover</button>`}</td></tr>`).join('') || '<tr><td colspan="8" class="vazio">Ninguém no pré-cadastro.</td></tr>'}</tbody></table>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">Nome e função se editam direto na tabela. Quem já entrou no ERP tem o nome editado na aba <b>Usuários</b>.<br>Como a pessoa entra: abre o ERP → <b>Criar minha conta</b> → nome, e-mail e senha.</p></div>`;
   document.querySelectorAll('[data-cv]').forEach(i => i.onchange = async () => {
-    const v = i.value.trim() || null, r = await sb.from('acesso_convites').update({ [i.dataset.cvf]: i.dataset.cvf === 'email' && v ? v.toLowerCase() : v }).eq('id', i.dataset.cv);
+    const v = i.value.trim() || null;
+    if(i.dataset.cvf === 'nome' && !v){ await aviso('Falta o nome', 'O nome não pode ficar vazio.'); return acConvites(); }
+    const r = await sb.from('acesso_convites').update({ [i.dataset.cvf]: i.dataset.cvf === 'email' && v ? v.toLowerCase() : v }).eq('id', i.dataset.cv);
     if(r.error){ await aviso('Não gravou', esc(/acesso_convites_email|duplicate/.test(r.error.message) ? 'Este e-mail já está em outro pré-cadastro.' : erroBanco(r.error))); return telaAcessos(); }
     toast('Gravado.'); ST.ac = await carregaAcessos(); if(i.dataset.cvf === 'email') acConvites();
   });
