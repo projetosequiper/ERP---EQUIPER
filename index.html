@@ -547,7 +547,9 @@ const MENU = [
 const LETRA = { diretoria:'D', administrativo:'A', projetos:'P', servicos:'S', tecnico:'T', agente:'G' };
 const FASES = { 2:'Projetos', 3:'Serviços', 4:'Financeiro' };
 function itensVisiveis(comFav = true){ const l = LETRA[ST.eu.perfil]; const fav = comFav ? favoritosVisiveis() : []; const gs = (MENU.map(g => ({ area:g.area, itens:g.itens.filter(i => menuVe(i)) })).filter(g => g.itens.length)); if(fav.length) gs.splice(gs[0] && !gs[0].area ? 1 : 0, 0, { area:'★ Favoritos', itens: fav }); return gs; }
-function menuFechados(){ if(!ST._menuFechados){ try{ ST._menuFechados = JSON.parse(localStorage.getItem('erp-menu-fechados') || '[]'); }catch(e){ ST._menuFechados = []; } } return ST._menuFechados; }
+// os grupos começam fechados; guarda só os que a pessoa abriu
+function menuAbertos(){ if(!ST._menuAbertos){ try{ ST._menuAbertos = JSON.parse(localStorage.getItem('erp-menu-abertos') || '[]'); }catch(e){ ST._menuAbertos = []; } } return ST._menuAbertos; }
+function menuFechados(){ const ab = menuAbertos(); return ['★ Favoritos', ...MENU.map(g => g.area)].filter(a => a && !ab.includes(a)); }
 // abre/fecha um grupo sem redesenhar a tela
 function desenhaSoMenu(){ const l = menuFechados(); let g = null;
   [...$('#menu').children].forEach(el => { if(el.dataset.grupo !== undefined){ g = el.dataset.grupo; const f = l.includes(g); el.classList.toggle('fechado', f); el.title = (f ? 'Abrir' : 'Fechar') + ' o grupo'; }
@@ -563,8 +565,8 @@ function desenhar(){
   $('#menu').innerHTML = vis.map(g => { const fch = g.area && fechados.includes(g.area);
     return (g.area?`<div class="area grupo${fch?' fechado':''}" data-grupo="${esc(g.area)}" title="${fch?'Abrir':'Fechar'} o grupo"><span>${g.area}</span><span class="gSeta">▾</span></div>`:'') + g.itens.map(([k,ic,r,,fase]) =>
     `<button data-aba="${k}" class="${ST.aba===k?'ativo':''}${fch && ST.aba!==k?' hidden':''}">${IC[k] ? ico(k) : `<span class="ic">${ic}</span>`}<span>${r}</span>${k==='fila'&&ST.fila.length?`<span class="cont">${ST.fila.length}</span>`:''}${fase&&!TELAS[k]?'<span class="breve">em breve</span>':''}</button>`).join(''); }).join('');
-  $('#menu').querySelectorAll('[data-grupo]').forEach(a => a.onclick = () => { const g = a.dataset.grupo, l = menuFechados(); const i = l.indexOf(g); if(i >= 0) l.splice(i, 1); else l.push(g);
-    try{ localStorage.setItem('erp-menu-fechados', JSON.stringify(l)); }catch(e){} ST._menuFechados = l; desenhaSoMenu(); });
+  $('#menu').querySelectorAll('[data-grupo]').forEach(a => a.onclick = () => { const g = a.dataset.grupo, l = menuAbertos(); const i = l.indexOf(g); if(i >= 0) l.splice(i, 1); else l.push(g);
+    try{ localStorage.setItem('erp-menu-abertos', JSON.stringify(l)); }catch(e){} desenhaSoMenu(); });
   $('#menu').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ ST.aba=b.dataset.aba; ST.busca=''; $('#menu').classList.remove('aberto'); if(ST.aba!=='projetos' && ST.aba!=='servicos') await carregar(); desenhar(); });
   document.documentElement.style.setProperty('--topo', document.querySelector('header').getBoundingClientRect().height + 'px');
   const item = todos.find(i => i[0] === ST.aba);
