@@ -137,6 +137,21 @@ a.btn{display:inline-block;text-decoration:none;color:inherit}a.btn.pri{color:#f
 #modal .box{background:#fff;border-radius:18px;padding:22px;width:min(440px,92%);box-shadow:0 20px 50px rgba(0,0,0,.2)}
 #modal h3{margin:0 0 8px;font-size:16px}
 .thOrd{cursor:pointer;user-select:none;white-space:nowrap}.thOrd:hover{color:var(--verm)}.ordSeta{font-size:10px;color:var(--verm)}
+.pnFiltros{display:flex;flex-wrap:wrap;align-items:center}.pnFiltros select,.pnFiltros input{width:auto!important;min-width:0;padding:7px 10px;font-size:13px}
+.pnTiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:0 0 14px}
+.pnTile{background:var(--card);border:1px solid var(--borda);border-radius:14px;padding:12px 14px}
+.pnNum{font-size:22px;font-weight:700;margin:2px 0;white-space:nowrap}
+.pnD{font-weight:600}.pnD.up{color:var(--verde)}.pnD.dn{color:var(--verm)}
+.pnSec{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--texto2);margin:18px 0 8px}
+.pnGrade{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px}
+.pnCard{margin:0!important}.pnCab{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap}.pnCab h2{margin:0;font-size:15px}
+.pnSvg{width:100%;height:auto;display:block}.pnEixo{font-size:11px;fill:#6e6e73}
+.pnLeg{display:flex;gap:14px;font-size:12px;color:var(--texto2);margin:0 0 4px}.pnLeg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.pnH{display:flex;flex-direction:column;gap:6px}.pnHL{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;gap:8px;align-items:center;font-size:13px;border-radius:8px;padding:2px 4px}
+.pnHL.clic{cursor:pointer}.pnHL.clic:hover{background:#f3f3f6}.pnHR{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pnHB{height:12px;background:#f1f1f4;border-radius:6px;overflow:hidden}.pnHB i{display:block;height:100%;border-radius:0 6px 6px 0}.pnHV{font-variant-numeric:tabular-nums;color:var(--texto2);white-space:nowrap;font-size:12px}
+#pnDica{position:fixed;z-index:60;background:#141416;color:#fff;font-size:12px;padding:6px 9px;border-radius:8px;pointer-events:none;display:none;max-width:320px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+@media (max-width:700px){.pnGrade{grid-template-columns:1fr}.pnNum{font-size:18px}}
 .soConsulta{background:#eef4ff;color:#1e40af;border-radius:10px;padding:8px 12px;margin:0 0 10px;font-size:13px}
 .selNiv{padding:4px 6px;border-radius:8px;font-size:13px}
 #modal .btns{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:18px}
@@ -541,7 +556,7 @@ const MENU = [
   { area:'Projetos', itens:[ ['pj_propostas','📄','Propostas e parcelas','DAPG'], ['pj_projetos','📋','Projetos e tarefas','DAPG'], ['pj_cal','📅','Calendário','DAPG'], ['pj_visitas','📝','Visitas e considerações','DAPG'], ['pj_art','📐','ART','DAPG'], ['pj_com','💵','Comissões','DAPG'], ['pj_dim','🧮','Dimensionamento','DAPG'] ] },
   { area:'Serviços', itens:[ ['sv_agenda','📅','Agenda e atividades','DSAT'], ['sv_os','🧾','Ordens de serviço','DSA'], ['sv_orc','📥','Solicitações de orçamento','DSA'], ['sv_pedidos','🏗️','Obras e pedidos','DSA'], ['sv_manut','🔧','Manutenções e contratos','DSA'], ['sv_oficina','🛠️','Oficina','DSAT'], ['sv_estoque','📦','Estoque','DSAT'], ['sv_comissoes','💵','Comissões dos técnicos','DA'] ] },
   { area:'Suprimentos', itens:[ ['cp_compras','🛒','Compras','DAS'], ['cp_precos','🏷️','Preços de compra','DA'] ] },
-  { area:'Financeiro', itens:[ ['fn_cobranca','📞','Cobrança','DA'], ['fn_fluxo','🗓️','Fluxo diário','DA'], ['fn_caixa','🏦','Caixa e bancos','DA'], ['fn_receber','💰','A receber','DA'], ['fn_pagar','💸','A pagar','DA'], ['fn_posicao','👤','Posição do cliente','DA'], ['fn_recibos','🧾','Recibos','DA'], ['fn_notas','🧾','Notas fiscais','DA'], ['fn_plano','📒','Plano de contas','DA'], ['fn_recebidas','📥','Notas recebidas','DA'], ['fn_gerencial','📈','Relatório gerencial','DA'], ['fn_contabil','📚','Relatórios para a contabilidade','DA'], ['fn_cnpj','📊','Faturamento por CNPJ','DA'], ['fn_pendencias','⚠️','Pendências de clientes','DAPS'] ] },
+  { area:'Financeiro', itens:[ ['fn_painel','📊','Painel de resultados','DA'], ['fn_cobranca','📞','Cobrança','DA'], ['fn_fluxo','🗓️','Fluxo diário','DA'], ['fn_caixa','🏦','Caixa e bancos','DA'], ['fn_receber','💰','A receber','DA'], ['fn_pagar','💸','A pagar','DA'], ['fn_posicao','👤','Posição do cliente','DA'], ['fn_recibos','🧾','Recibos','DA'], ['fn_notas','🧾','Notas fiscais','DA'], ['fn_plano','📒','Plano de contas','DA'], ['fn_recebidas','📥','Notas recebidas','DA'], ['fn_gerencial','📈','Relatório gerencial','DA'], ['fn_contabil','📚','Relatórios para a contabilidade','DA'], ['fn_cnpj','📊','Faturamento por CNPJ','DA'], ['fn_pendencias','⚠️','Pendências de clientes','DAPS'] ] },
   { area:'Administração', itens:[ ['adm_usuarios','👥','Usuários e acessos','D'], ['adm_fiscal','⚙️','Configuração fiscal','DA'], ['adm_cert','🔐','Certificados digitais','DA'], ['adm_regras','⚖️','Regras fiscais (CFOP)','DA'], ['registro','🗂️','Registro de ações','D'], ['adm_backup','💾','Backup','D'], ['vinculos','🔗','Migração dos apps','DAPS'], ['projetos','🗄️','App Projetos (antigo)','DAP'], ['servicos','🗄️','App Serviços (antigo)','DAST'] ] }
 ];
 const LETRA = { diretoria:'D', administrativo:'A', projetos:'P', servicos:'S', tecnico:'T', agente:'G' };
@@ -4627,6 +4642,223 @@ async function formConta(C, todas, uso){
     try{ await exec(sb.from('fin_plano').delete().eq('codigo', C.codigo), 'Conta excluída.'); await carregaFin(true); fecharPainel(); telaPlano(); }catch(e){} };
 }
 Object.assign(TELAS, { fn_plano: telaPlano });
+
+/* ================== Painel de resultados (Financeiro, só leitura) — script 37 ==================
+   Filtros numa linha; números do período com comparação; gráficos em SVG próprios
+   (sem biblioteca), cada um com "ver como tabela". Clicar numa marca, grupo, produto
+   ou cliente filtra o painel inteiro. */
+IC.fn_painel = '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>';
+Object.assign(TELAS, { fn_painel: telaPainel });
+EXPORTA.fn_painel = () => ST.pnExp ? ST.pnExp() : null;
+
+const PN_COR = { projeto:'#2a78d6', equipamento:'#eb6834', servico:'#1baf7a', cigam:'#eda100', outro:'#9aa0a6', entradas:'#2a78d6', saidas:'#eb6834' };
+const PN_AREA = { projeto:'Projetos', equipamento:'Equipamentos', servico:'Serviços', cigam:'CIGAM (histórico)', outro:'Outros' };
+const PN_TIPO_ITEM = { equipamento:'Equipamentos', mao_obra:'Mão de obra', material:'Material', projeto:'Projetos', servico:'Serviços', outro:'Outros' };
+const pnR$ = v => R$(v || 0).replace(/,\d\d$/, '');                       // sem centavos nos gráficos
+const pnK = v => { v = Number(v) || 0; const a = Math.abs(v); return a >= 1e6 ? (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mi' : a >= 1e3 ? (v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' mil' : v.toLocaleString('pt-BR', { maximumFractionDigits: 0 }); };
+const pnN = v => (Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+const pnRotP = (p, g) => { if(g === 'mes'){ const [a, m] = p.split('-'); return ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][Number(m) - 1] + '/' + a.slice(2); } return p.replace('-T', ' T').replace('-S', ' S'); };
+
+function pnPeriodo(preset){
+  const h = new Date(), y = h.getFullYear(), m = h.getMonth(), iso = d => isoLocal(d);
+  const r = {
+    mes: [new Date(y, m, 1), new Date(y, m + 1, 0)], mes_ant: [new Date(y, m - 1, 1), new Date(y, m, 0)],
+    tri: [new Date(y, Math.floor(m / 3) * 3, 1), new Date(y, Math.floor(m / 3) * 3 + 3, 0)],
+    sem: [new Date(y, m < 6 ? 0 : 6, 1), new Date(y, m < 6 ? 6 : 12, 0)],
+    ano: [new Date(y, 0, 1), new Date(y, 11, 31)], ano_ant: [new Date(y - 1, 0, 1), new Date(y - 1, 11, 31)],
+    u12: [new Date(y, m - 11, 1), new Date(y, m + 1, 0)] }[preset];
+  return r ? [iso(r[0]), iso(r[1])] : null;
+}
+function pnComparar(de, ate, modo){
+  const d0 = new Date(de + 'T12:00:00'), d1 = new Date(ate + 'T12:00:00');
+  if(modo === 'ano'){ const a = new Date(d0), b = new Date(d1); a.setFullYear(a.getFullYear() - 1); b.setFullYear(b.getFullYear() - 1); return [isoLocal(a), isoLocal(b)]; }
+  const dias = Math.round((d1 - d0) / 864e5) + 1, b = new Date(d0); b.setDate(b.getDate() - 1); const a = new Date(b); a.setDate(a.getDate() - dias + 1); return [isoLocal(a), isoLocal(b)];
+}
+
+async function telaPainel(){
+  const F = ST.pn = ST.pn || { preset:'ano', grupo:'mes', empresa:'', area:'', base:'aprovado', comp:'ano', tipoItem:'equipamento', medida:'valor', tabelas:{} };
+  if(F.preset !== 'livre'){ const p = pnPeriodo(F.preset); if(p){ F.de = p[0]; F.ate = p[1]; } else if(F.preset === 'tudo'){ F.de = F.de0 || '2020-01-01'; F.ate = hojeISO(); } }
+  if(!ST.pnOp){ const o = await sb.rpc('painel_opcoes'); ST.pnOp = o.data || {}; if(ST.pnOp.primeiro) F.de0 = ST.pnOp.primeiro; if(F.preset === 'tudo' && F.de0) F.de = F.de0; }
+  const sel = (id, v, ops) => `<select id="${id}">${ops.map(([k, t]) => `<option value="${k}" ${String(v) === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  const chips = [['marca', 'Marca'], ['grupo_prod', 'Grupo'], ['produto', 'Produto'], ['cliente', 'Cliente']].filter(([k]) => F[k])
+    .map(([k, t]) => `<button class="chip on" data-pnx="${k}">${t}: ${esc(k === 'cliente' ? ((pessoa(F[k]) || {}).nome || 'cliente') : k === 'produto' ? (F.produtoNome || F[k]) : F[k])} ✕</button>`).join('');
+  $('#conteudo').innerHTML = `<div class="cab"><h2>Painel de resultados</h2><span class="muted" style="margin-left:8px;font-size:13px">só leitura · ${dataBR(F.de)} a ${dataBR(F.ate)}</span></div>
+    <div class="barra pnFiltros" style="flex-wrap:wrap;gap:8px">
+      ${sel('pnPre', F.preset, [['mes','Este mês'],['mes_ant','Mês passado'],['tri','Este trimestre'],['sem','Este semestre'],['ano','Este ano'],['ano_ant','Ano passado'],['u12','Últimos 12 meses'],['tudo','Desde o início'],['livre','Escolher datas…']])}
+      <span id="pnDatas" style="display:${F.preset === 'livre' ? 'flex' : 'none'};gap:6px;align-items:center"><input type="date" id="pnDe" value="${F.de}"> a <input type="date" id="pnAte" value="${F.ate}"></span>
+      ${sel('pnGrp', F.grupo, [['mes','por mês'],['trimestre','por trimestre'],['semestre','por semestre'],['ano','por ano']])}
+      ${sel('pnEmp', F.empresa, [['','EQP + Equiper'],['EQP','EQP'],['Equiper','Equiper']])}
+      ${sel('pnArea', F.area, [['','Todas as áreas'],['projeto','Projetos'],['equipamento','Equipamentos'],['servico','Serviços']])}
+      ${sel('pnBase', F.base, [['aprovado','Vendido = aprovado'],['faturado','Vendido = faturado (nota)'],['recebido','Vendido = recebido']])}
+      ${sel('pnComp', F.comp, [['','sem comparar'],['ant','comparar c/ período anterior'],['ano','comparar c/ ano anterior']])}
+    </div>
+    ${chips ? `<div class="chips" style="margin:-4px 0 10px">${chips}<span class="muted" style="font-size:12px;align-self:center">o painel está filtrado</span></div>` : ''}
+    <div id="pnCorpo"><div class="card"><div class="vazio">Calculando…</div></div></div>`;
+  const muda = () => { telaPainel(); };
+  $('#pnPre').onchange = e => { F.preset = e.target.value; muda(); };
+  $('#pnDe').onchange = e => { F.de = e.target.value; F.preset = 'livre'; muda(); }; $('#pnAte').onchange = e => { F.ate = e.target.value; F.preset = 'livre'; muda(); };
+  [['pnGrp','grupo'],['pnEmp','empresa'],['pnArea','area'],['pnBase','base'],['pnComp','comp']].forEach(([id, k]) => $('#' + id).onchange = e => { F[k] = e.target.value; muda(); });
+  document.querySelectorAll('[data-pnx]').forEach(b => b.onclick = () => { F[b.dataset.pnx] = null; muda(); });
+
+  const args = (de, ate) => ({ p_de: de, p_ate: ate, p_grupo: F.grupo, p_empresa: F.empresa || null, p_area: F.area || null, p_base: F.base,
+    p_marca: F.marca || null, p_grupo_prod: F.grupo_prod || null, p_produto: F.produto || null, p_cliente: F.cliente || null, p_cigam: true });
+  const [r, c] = await Promise.all([ sb.rpc('painel_resultados', args(F.de, F.ate)), F.comp ? sb.rpc('painel_resultados', args(...pnComparar(F.de, F.ate, F.comp))) : Promise.resolve({ data: null }) ]);
+  if(r.error) return $('#pnCorpo').innerHTML = `<div class="card"><p class="muted">${/painel_resultados/.test(r.error.message) ? 'Rode o script <b>37_painel.sql</b> no Supabase para ligar esta tela.' : esc(erroBanco(r.error))}</p></div>`;
+  ST.pnDados = r.data; desenhaPainel(r.data, c.data);
+}
+
+function desenhaPainel(D, C){
+  const F = ST.pn, g = F.grupo;
+  const cx = D.caixa_serie || [], ent = cx.reduce((s, x) => s + Number(x.entradas), 0), sai = cx.reduce((s, x) => s + Number(x.saidas), 0);
+  const cxC = C ? (C.caixa_serie || []) : null, entC = cxC && cxC.reduce((s, x) => s + Number(x.entradas), 0), saiC = cxC && cxC.reduce((s, x) => s + Number(x.saidas), 0);
+  const delta = (a, b) => { if(b == null || !C) return ''; if(!b) return a ? '<span class="pnD">novo</span>' : ''; const p = (a - b) / Math.abs(b) * 100;
+    return `<span class="pnD ${p >= 0 ? 'up' : 'dn'}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</span>`; };
+  const tile = (rot, val, d, sub) => `<div class="pnTile"><div class="muted" style="font-size:12px">${rot}</div><div class="pnNum">${val}</div><div style="font-size:12px">${d || ''} ${sub ? `<span class="muted">${sub}</span>` : ''}</div></div>`;
+  const tick = D.vendas_n ? D.vendas_total / D.vendas_n : 0, tickC = C && C.vendas_n ? C.vendas_total / C.vendas_n : (C ? 0 : null);
+  const compTxt = C ? (F.comp === 'ano' ? 'vs. ano anterior' : 'vs. período anterior') : '';
+  const baseTxt = { aprovado:'aprovado', faturado:'faturado', recebido:'recebido' }[F.base];
+
+  // séries de vendas por área (empilhadas)
+  const per = [...new Set([...(D.vendas_serie || []).map(x => x.p), ...cx.map(x => x.p)])].sort();
+  const areas = Object.keys(PN_AREA).filter(a => (D.vendas_serie || []).some(x => x.area === a));
+  const vs = per.map(p => ({ rot: pnRotP(p, g), partes: areas.map(a => ({ k: a, v: Number(((D.vendas_serie || []).find(x => x.p === p && x.area === a) || {}).valor || 0) })) }));
+  const cs = per.map(p => { const x = cx.find(y => y.p === p) || {}; return { rot: pnRotP(p, g), lado: [{ k: 'entradas', v: Number(x.entradas || 0) }, { k: 'saidas', v: Number(x.saidas || 0) }] }; });
+  const fun = D.funil || {}, fn = k => (fun[k] || { n: 0, valor: 0 });
+  const tot = ['elaboracao','enviado','aprovado','aprovado_parcial','perdido','cancelado'].reduce((s, k) => s + fn(k).n, 0);
+  const aprov = fn('aprovado').n + fn('aprovado_parcial').n, decididos = aprov + fn('perdido').n;
+  const prods = (D.produtos_top || []).filter(p => F.tipoItem === '' || (p.tipo || 'outro') === F.tipoItem);
+  const med = F.medida === 'qtd' ? 'qtd' : 'valor', fmtMed = v => med === 'qtd' ? pnN(v) : pnR$(v);
+  const marcasT = (D.marcas || []).reduce((s, x) => s + Number(x[med]), 0);
+
+  const cartao = (id, tit, sub, svg, tabela, extra) => `<div class="card pnCard" id="${id}"><div class="pnCab"><h2>${tit}</h2>${sub ? `<span class="muted" style="font-size:12px">${sub}</span>` : ''}
+    <span style="margin-left:auto;display:flex;gap:6px">${extra || ''}<button class="btn peq" data-pntab="${id}" data-exp-ignorar>${F.tabelas[id] ? 'ver gráfico' : 'ver como tabela'}</button></span></div>
+    ${F.tabelas[id] ? tabela : svg}</div>`;
+  const tab = (cols, linhas, num) => `<table class="reg"><thead><tr>${cols.map((c, i) => `<th${num && num[i] ? ' style="text-align:right"' : ''}>${c}</th>`).join('')}</tr></thead><tbody>
+    ${linhas.map(l => `<tr>${l.map((v, i) => `<td${num && num[i] ? ' style="text-align:right;white-space:nowrap"' : ''}>${v}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length}" class="vazio">Nada no período.</td></tr>`}</tbody></table>`;
+
+  $('#pnCorpo').innerHTML = `
+    <div class="pnTiles">
+      ${tile('Vendas (' + baseTxt + ')', pnR$(D.vendas_total), delta(D.vendas_total, C && C.vendas_total), compTxt)}
+      ${tile('Negócios', pnN(D.vendas_n), delta(D.vendas_n, C && C.vendas_n), '')}
+      ${tile('Ticket médio', pnR$(tick), delta(tick, tickC), '')}
+      ${tile('Clientes', pnN(D.clientes_total), '', D.clientes_novos ? `<b>${D.clientes_novos}</b> novo(s)` : '')}
+      ${tile('Entradas no caixa', pnR$(ent), delta(ent, entC), '')}
+      ${tile('Saídas do caixa', pnR$(sai), delta(sai, saiC), '')}
+      ${tile('Resultado de caixa', `<span style="color:${ent - sai >= 0 ? 'var(--verde)' : 'var(--verm)'}">${pnR$(ent - sai)}</span>`, delta(ent - sai, C ? entC - saiC : null), '')}
+    </div>
+    <h3 class="pnSec">Vendas</h3>
+    <div class="pnGrade">
+      ${cartao('pnV', 'Vendas por ' + { mes:'mês', trimestre:'trimestre', semestre:'semestre', ano:'ano' }[g], areas.length > 1 ? '' : (PN_AREA[areas[0]] || ''),
+          pnBarras(vs, 'empilha', PN_COR, PN_AREA), tab(['Período', ...areas.map(a => PN_AREA[a]), 'Total'], vs.map(x => [x.rot, ...x.partes.map(p => R$(p.v)), R$(x.partes.reduce((s, p) => s + p.v, 0))]), [0, ...areas.map(() => 1), 1]))}
+      ${cartao('pnF', 'Funil de orçamentos', 'pela data do orçamento',
+          pnHBarras([['Feitos', tot], ['Enviados ou além', tot - fn('elaboracao').n], ['Aprovados', aprov], ['Perdidos', fn('perdido').n]].map(([r, v], i) => ({ rot: r, v, txt: pnN(v), cor: ['#2a78d6','#2a78d6','#1baf7a','#eb6834'][i] })))
+          + `<p class="muted" style="font-size:12px;margin:6px 0 0">Conversão (aprovados ÷ decididos): <b>${decididos ? Math.round(aprov / decididos * 100) : 0}%</b> · em aberto: ${pnR$(fn('elaboracao').valor + fn('enviado').valor)}</p>`,
+          tab(['Etapa', 'Quantidade', 'Valor'], Object.entries(fun).map(([k, x]) => [k.replace('_', ' '), pnN(x.n), R$(x.valor)]), [0, 1, 1]))}
+      ${cartao('pnC', 'Maiores clientes', 'clique para filtrar',
+          pnHBarras((D.clientes_top || []).slice(0, 10).map(x => ({ rot: x.nome, v: Number(x.valor), txt: pnR$(x.valor), acao: x.id ? 'cliente|' + x.id : null }))),
+          tab(['Cliente', 'Negócios', 'Valor'], (D.clientes_top || []).map(x => [esc(x.nome), pnN(x.n), R$(x.valor)]), [0, 1, 1]))}
+      ${cartao('pnP', 'Por que perdemos', '',
+          pnHBarras((D.perdas || []).map(x => ({ rot: x.motivo, v: Number(x.n), txt: x.n + ' · ' + pnR$(x.valor), cor: '#eb6834' }))),
+          tab(['Motivo', 'Orçamentos', 'Valor'], (D.perdas || []).map(x => [esc(x.motivo), pnN(x.n), R$(x.valor)]), [0, 1, 1]))}
+    </div>
+    <h3 class="pnSec">Produtos e marcas <span class="muted" style="font-size:12px;font-weight:400;text-transform:none;letter-spacing:0">· itens dos orçamentos aprovados no período</span></h3>
+    <div class="barra" style="gap:6px;margin:-4px 0 8px">${[['equipamento','Equipamentos'],['mao_obra','Mão de obra'],['material','Material'],['projeto','Projetos'],['','Tudo']].map(([k, t]) => `<button class="chip ${F.tipoItem === k ? 'on' : ''}" data-pnti="${k}">${t}</button>`).join('')}
+      <span style="margin-left:auto" class="chips">${[['valor','em R$'],['qtd','em quantidade']].map(([k, t]) => `<button class="chip ${F.medida === k ? 'on' : ''}" data-pnmed="${k}">${t}</button>`).join('')}</span></div>
+    <div class="pnGrade">
+      ${cartao('pnPr', 'Mais vendidos', 'clique para ver a evolução',
+          pnHBarras(prods.slice().sort((a, b) => b[med] - a[med]).slice(0, 12).map(x => ({ rot: x.descricao + (x.marca && x.marca !== '(sem marca)' ? ' · ' + x.marca : ''), v: Number(x[med]), txt: fmtMed(x[med]), acao: 'produto|' + x.codigo + '|' + x.descricao }))),
+          tab(['Código', 'Produto', 'Marca', 'Grupo', 'Qtd', 'Valor', 'Orçamentos'], prods.map(x => [esc(x.codigo || ''), esc(x.descricao || ''), esc(x.marca), esc(x.grupo), pnN(x.qtd), R$(x.valor), pnN(x.n)]), [0, 0, 0, 0, 1, 1, 1]))}
+      ${cartao('pnM', 'Marcas (equipamentos)', 'participação · clique para filtrar',
+          pnHBarras((D.marcas || []).map(x => ({ rot: x.marca, v: Number(x[med]), txt: fmtMed(x[med]) + (marcasT ? ` · ${Math.round(x[med] / marcasT * 100)}%` : ''), acao: 'marca|' + x.marca }))),
+          tab(['Marca', 'Qtd', 'Valor', '%'], (D.marcas || []).map(x => [esc(x.marca), pnN(x.qtd), R$(x.valor), marcasT ? Math.round(x[med] / marcasT * 100) + '%' : '']), [0, 1, 1, 1]))}
+      ${cartao('pnG', 'Grupos de produto', 'clique para filtrar',
+          pnHBarras((D.grupos || []).map(x => ({ rot: x.grupo, v: Number(x[med]), txt: fmtMed(x[med]), acao: 'grupo_prod|' + x.grupo }))),
+          tab(['Grupo', 'Qtd', 'Valor'], (D.grupos || []).map(x => [esc(x.grupo), pnN(x.qtd), R$(x.valor)]), [0, 1, 1]))}
+      ${D.produto_serie ? cartao('pnPS', 'Evolução do filtro', [F.marca, F.grupo_prod, F.produtoNome].filter(Boolean).map(esc).join(' · '),
+          pnBarras(D.produto_serie.map(x => ({ rot: pnRotP(x.p, g), partes: [{ k: 'v', v: Number(x[med]) }] })), 'empilha', { v: '#2a78d6' }, { v: med === 'qtd' ? 'Quantidade' : 'Valor' }, med === 'qtd'),
+          tab(['Período', 'Qtd', 'Valor'], D.produto_serie.map(x => [pnRotP(x.p, g), pnN(x.qtd), R$(x.valor)]), [0, 1, 1])) : ''}
+    </div>
+    <h3 class="pnSec">Projetos</h3>
+    <div class="pnGrade">
+      ${cartao('pnDi', 'Projetos por disciplina', '',
+          pnHBarras((D.disciplinas || []).map(x => ({ rot: x.disciplina, v: Number(x.valor), txt: pnR$(x.valor) + ' · ' + x.n }))),
+          tab(['Disciplina', 'Projetos', 'Valor'], (D.disciplinas || []).map(x => [esc(x.disciplina), pnN(x.n), R$(x.valor)]), [0, 1, 1]))}
+      <div class="card pnCard"><div class="pnCab"><h2>Área projetada</h2></div><div class="pnTiles" style="margin:0">
+        ${tile('Projetos aprovados', pnN((D.projetos_m2 || {}).n), '', '')}${tile('Área (m²)', pnN((D.projetos_m2 || {}).m2), '', '')}${tile('Valor por m²', R$((D.projetos_m2 || {}).valor_m2 || 0), '', 'só os que têm área')}</div></div>
+    </div>
+    <h3 class="pnSec">Dinheiro</h3>
+    <div class="pnGrade">
+      ${cartao('pnCx', 'Entradas × saídas', 'caixa real · sem transferências entre contas',
+          pnBarras(cs, 'lado', PN_COR, { entradas:'Entradas', saidas:'Saídas' }),
+          tab(['Período', 'Entradas', 'Saídas', 'Resultado'], cs.map(x => [x.rot, R$(x.lado[0].v), R$(x.lado[1].v), R$(x.lado[0].v - x.lado[1].v)]), [0, 1, 1, 1]))}
+      ${cartao('pnDe', 'Para onde foi o dinheiro', 'as 10 maiores saídas por conta',
+          pnHBarras((D.despesas || []).map(x => ({ rot: x.nome, v: Number(x.valor), txt: pnR$(x.valor), cor: '#eb6834' }))),
+          tab(['Conta', 'Nome', 'Valor'], (D.despesas || []).map(x => [esc(x.conta), esc(x.nome), R$(x.valor)]), [0, 0, 1]))}
+      ${cartao('pnPv', 'O que vem por aí', 'a receber × a pagar em aberto (a partir de hoje)',
+          pnBarras(['Vencido', 'Até 30 dias', '31 a 60', '61 a 90'].map((rot, i) => ({ rot, lado: [{ k: 'entradas', v: Number(D.previsao.receber[i]) }, { k: 'saidas', v: Number(D.previsao.pagar[i]) }] })), 'lado', PN_COR, { entradas:'A receber', saidas:'A pagar' }),
+          tab(['Prazo', 'A receber', 'A pagar', 'Saldo'], ['Vencido', 'Até 30 dias', '31 a 60', '61 a 90'].map((rot, i) => [rot, R$(D.previsao.receber[i]), R$(D.previsao.pagar[i]), R$(D.previsao.receber[i] - D.previsao.pagar[i])]), [0, 1, 1, 1]))}
+    </div>`;
+  document.querySelectorAll('[data-pntab]').forEach(b => b.onclick = () => { F.tabelas[b.dataset.pntab] = !F.tabelas[b.dataset.pntab]; desenhaPainel(D, C); });
+  document.querySelectorAll('[data-pnti]').forEach(b => b.onclick = () => { F.tipoItem = b.dataset.pnti; desenhaPainel(D, C); });
+  document.querySelectorAll('[data-pnmed]').forEach(b => b.onclick = () => { F.medida = b.dataset.pnmed; desenhaPainel(D, C); });
+  document.querySelectorAll('#pnCorpo [data-pnacao]').forEach(e => e.onclick = () => { const [k, v, nome] = e.dataset.pnacao.split('|'); F[k] = v; if(k === 'produto') F.produtoNome = nome; telaPainel(); });
+  pnLigaDicas();
+  ST.pnExp = () => {
+    const sec = (titulo, cols, linhas) => ({ titulo, colunas: cols, linhas });
+    return [sec('Resumo', ['Indicador', 'Valor'], [['Vendas (' + baseTxt + ')', R$(D.vendas_total)], ['Negócios', pnN(D.vendas_n)], ['Ticket médio', R$(tick)], ['Clientes', pnN(D.clientes_total)], ['Clientes novos', pnN(D.clientes_novos)], ['Entradas', R$(ent)], ['Saídas', R$(sai)], ['Resultado de caixa', R$(ent - sai)]]),
+      sec('Vendas por período', ['Período', ...areas.map(a => PN_AREA[a]), 'Total'], vs.map(x => [x.rot, ...x.partes.map(p => R$(p.v)), R$(x.partes.reduce((s, p) => s + p.v, 0))])),
+      sec('Maiores clientes', ['Cliente', 'Negócios', 'Valor'], (D.clientes_top || []).map(x => [x.nome, pnN(x.n), R$(x.valor)])),
+      sec('Produtos', ['Código', 'Produto', 'Marca', 'Grupo', 'Qtd', 'Valor'], (D.produtos_top || []).map(x => [x.codigo || '', x.descricao || '', x.marca, x.grupo, pnN(x.qtd), R$(x.valor)])),
+      sec('Marcas', ['Marca', 'Qtd', 'Valor'], (D.marcas || []).map(x => [x.marca, pnN(x.qtd), R$(x.valor)])),
+      sec('Entradas × saídas', ['Período', 'Entradas', 'Saídas', 'Resultado'], cs.map(x => [x.rot, R$(x.lado[0].v), R$(x.lado[1].v), R$(x.lado[0].v - x.lado[1].v)])),
+      sec('Saídas por conta', ['Conta', 'Valor'], (D.despesas || []).map(x => [x.nome, R$(x.valor)]))];
+  };
+}
+
+/* ---------- gráficos (SVG) ---------- */
+// barras verticais: modo 'empilha' (partes uma sobre a outra) ou 'lado' (lado a lado)
+function pnBarras(dados, modo, cores, nomes, inteiro){
+  if(!dados.length || dados.every(d => (d.partes || d.lado).every(p => !p.v))) return '<div class="vazio">Nada no período.</div>';
+  const W = 640, H = 230, ml = 52, mb = 26, mt = 10, n = dados.length, larg = (W - ml - 8) / n;
+  const max = Math.max(...dados.map(d => modo === 'empilha' ? d.partes.reduce((s, p) => s + Math.max(0, p.v), 0) : Math.max(...d.lado.map(p => p.v))), 1);
+  const passo = (() => { const b = Math.pow(10, Math.floor(Math.log10(max))); for(const m of [1, 2, 2.5, 5, 10]) if(max / (b * m) <= 5) return b * m; return b * 10; })();
+  const topo = Math.ceil(max / passo) * passo, y = v => mt + (H - mt - mb) * (1 - v / topo);
+  let s = `<svg viewBox="0 0 ${W} ${H}" class="pnSvg" role="img">`;
+  for(let v = 0; v <= topo + 1e-9; v += passo) s += `<line x1="${ml}" x2="${W - 4}" y1="${y(v)}" y2="${y(v)}" stroke="#e8e8ec" stroke-width="1"/><text x="${ml - 6}" y="${y(v) + 4}" text-anchor="end" class="pnEixo">${inteiro ? pnN(v) : pnK(v)}</text>`;
+  const cada = Math.ceil(n / 14);
+  dados.forEach((d, i) => {
+    const x0 = ml + i * larg, bw = Math.min(46, larg * 0.62);
+    if(modo === 'empilha'){
+      let acc = 0; const ps = d.partes.filter(p => p.v > 0), totD = ps.reduce((a, p) => a + p.v, 0);
+      ps.forEach((p, j) => { const y1 = y(acc + p.v), y0 = y(acc), h = Math.max(0, y0 - y1 - (j ? 2 : 0)); acc += p.v;
+        const topoBarra = j === ps.length - 1;
+        s += `<path d="${pnRet(x0 + (larg - bw) / 2, y1, bw, h, topoBarra ? 4 : 0)}" fill="${cores[p.k] || '#9aa0a6'}" data-dica="${esc(d.rot)} · ${esc(nomes[p.k] || p.k)}: ${inteiro ? pnN(p.v) : R$(p.v)}${ps.length > 1 ? ' (total ' + (inteiro ? pnN(totD) : R$(totD)) + ')' : ''}"/>`; });
+    } else {
+      const k = d.lado.length, bw2 = Math.min(22, (larg * 0.7) / k);
+      d.lado.forEach((p, j) => { const xb = x0 + (larg - bw2 * k - 2 * (k - 1)) / 2 + j * (bw2 + 2), h = Math.max(0, y(0) - y(p.v));
+        if(p.v > 0) s += `<path d="${pnRet(xb, y(p.v), bw2, h, 4)}" fill="${cores[p.k]}" data-dica="${esc(d.rot)} · ${esc(nomes[p.k] || p.k)}: ${R$(p.v)}"/>`; });
+    }
+    if(i % cada === 0) s += `<text x="${x0 + larg / 2}" y="${H - 8}" text-anchor="middle" class="pnEixo">${esc(d.rot)}</text>`;
+  });
+  s += `<line x1="${ml}" x2="${W - 4}" y1="${y(0)}" y2="${y(0)}" stroke="#c9c9cf"/></svg>`;
+  const ks = modo === 'empilha' ? [...new Set(dados.flatMap(d => d.partes.filter(p => p.v > 0).map(p => p.k)))] : dados[0].lado.map(p => p.k);
+  return (ks.length > 1 ? `<div class="pnLeg">${ks.map(k => `<span><i style="background:${cores[k]}"></i>${esc(nomes[k] || k)}</span>`).join('')}</div>` : '') + s;
+}
+const pnRet = (x, y, w, h, r) => { r = Math.min(r, h, w / 2); return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`; };
+// barras horizontais (rankings): rótulo à esquerda, valor escrito, clique opcional
+function pnHBarras(l){
+  if(!l.length || l.every(x => !x.v)) return '<div class="vazio">Nada no período.</div>';
+  const max = Math.max(...l.map(x => x.v), 1);
+  return `<div class="pnH">${l.map(x => `<div class="pnHL${x.acao ? ' clic' : ''}" ${x.acao ? `data-pnacao="${esc(x.acao)}"` : ''} data-dica="${esc(x.rot)}: ${esc(x.txt)}">
+    <span class="pnHR">${esc(x.rot)}</span><span class="pnHB"><i style="width:${Math.max(1, x.v / max * 100)}%;background:${x.cor || '#2a78d6'}"></i></span><span class="pnHV">${esc(x.txt)}</span></div>`).join('')}</div>`;
+}
+function pnLigaDicas(){
+  let d = $('#pnDica'); if(!d){ d = document.createElement('div'); d.id = 'pnDica'; document.body.appendChild(d); }
+  document.querySelectorAll('#pnCorpo [data-dica]').forEach(e => {
+    e.onmousemove = ev => { d.textContent = e.dataset.dica; d.style.display = 'block'; d.style.left = Math.min(innerWidth - d.offsetWidth - 8, ev.clientX + 14) + 'px'; d.style.top = (ev.clientY + 14) + 'px'; };
+    e.onmouseleave = () => { d.style.display = 'none'; };
+  });
+}
 
 /* ================== Orçamentos (script 14) ==================
    Catálogo de produtos + importação da planilha do CIGAM
