@@ -217,6 +217,19 @@ tr.sub td{font-family:var(--f-display);font-weight:700;font-size:12px;text-trans
 .dlg .resumo div{display:flex;justify-content:space-between;gap:10px}
 .dlg .bf{display:flex;gap:10px;justify-content:flex-end;padding:0 20px 18px}
 .dlg .err{color:var(--red);font-size:13px;min-height:1em}
+.sw i{pointer-events:none}
+.mini .mrow{display:flex;align-items:center;gap:14px;padding:13px 16px}
+.mini .mrow h3{font-size:15px;flex:1;min-width:0;line-height:1.3}
+.mini .mrow h3 small{display:block;font:500 12px var(--f-body);color:var(--muted);margin-top:2px}
+.mini .mv{text-align:right;white-space:nowrap}
+.mini .mv b{font-family:var(--f-display);font-size:17px;font-weight:800}
+.card.on.mini .mv b{color:var(--red)}
+.mini .mv s{display:block;font-size:11.5px;color:var(--muted)}
+.mini details ul{margin:0;padding:4px 18px 14px 34px;color:var(--muted);font-size:13px;display:grid;gap:2px}
+.pacote{border:1px solid var(--line);border-left:4px solid var(--red);background:var(--surface);border-radius:var(--r);padding:12px 14px;margin:0 0 18px;font-size:14px;color:var(--muted)}
+.pacote b{color:var(--ink)}
+.figs s{font-size:12px;color:var(--muted);margin-left:6px}
+.split .acr{color:var(--red)}
 .tela{min-height:70vh;display:grid;place-items:center;text-align:center;padding:40px 16px}
 .tela h1{font-size:26px;margin-bottom:10px}.tela p{color:var(--muted);max-width:46ch;margin:0 auto}
 </style></head><body>
@@ -247,7 +260,8 @@ tr.sub td{font-family:var(--f-display);font-weight:700;font-size:12px;text-trans
     <div id="banner"></div>
     <div class="layout">
       <section aria-label="Sistemas da proposta">
-        <div class="how" id="how"><span class="sw" aria-hidden="true"><input type="checkbox" checked tabindex="-1"><i></i></span>Toque na chave para incluir ou retirar um sistema da proposta.</div>
+        <div class="how" id="how"><span class="sw" aria-hidden="true"><input type="checkbox" checked tabindex="-1"><i></i></span>Toque na chave para incluir ou retirar um item da proposta.</div>
+        <div id="pacote"></div>
         <div id="groups"></div>
       </section>
 
@@ -374,15 +388,21 @@ async function iniciar(){
 }
 
 function areas(){ const a = []; SYS.forEach(s => { if(!a.includes(s.area)) a.push(s.area); }); return a; }
-const nomeSis = s => (s.area ? s.area + ' · ' : '') + s.t;
+const nomeSis = s => (s.area && !s.mini ? s.area + ' · ' : '') + s.t;
 
 function card(s){
+  const id = 's' + SYS.indexOf(s);
+  if(s.mini) return `<article class="card mini" id="c-${id}">
+    <div class="mrow"><label class="sw"><input type="checkbox" id="t-${id}" data-k="${esc(s.k)}" ${travada ? 'disabled' : ''} aria-label="${esc(s.t)}"><i></i></label>
+      <h3>${esc(s.t)}${s.L[0] && s.L[0][1] ? `<small>${esc(s.L[0][1])}</small>` : ''}<small id="l-${id}"></small></h3>
+      <div class="mv"><b id="v-${id}">${brl(s.tot)}</b><s id="p-${id}" hidden></s></div></div>
+    ${s.esc && s.esc.length ? `<details><summary>Ver o escopo</summary><ul>${s.esc.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
+  </article>`;
   const rows = s.L.map(l => {
     if(l[0] === '#') return `<tr class="sub"><td colspan="5">${esc(l[1])}</td></tr>`;
     if(l[1] === null) return `<tr><td>${esc(l[0])}</td><td colspan="4" class="${l[2] === 'NI' ? 'ni' : 'nt'}">${l[2] === 'NI' ? 'Não incluso' : esc(l[2])}</td></tr>`;
     return `<tr><td>${esc(l[0])}${l[1] ? `<small>${esc(l[1])}</small>` : ''}</td><td class="v">${cell(l[2])}</td><td class="v">${cell(l[3])}</td><td class="v">${cell(l[4])}</td><td class="v"><b>${brl(l[2] + l[3] + l[4])}</b></td></tr>`;
   }).join('');
-  const id = 's' + SYS.indexOf(s);
   return `<article class="card" id="c-${id}">
     <div class="card-main">
       <div class="ill" aria-hidden="true">${ILL[s.ill] || ILL.geral}</div>
@@ -393,7 +413,7 @@ function card(s){
         </div>
         ${s.d ? `<p>${esc(s.d)}</p>` : ''}
         ${s.b.length ? `<div class="brands">${s.b.map(b => `<span>${esc(b)}</span>`).join('')}</div>` : ''}
-        <div class="figs"><span>Equip. <b>${s.eq ? brl(s.eq) : '·'}</b></span><span>M. obra <b>${s.mo ? brl(s.mo) : '·'}</b></span><span>Material <b>${s.ma ? brl(s.ma) : '·'}</b></span><span class="tot">${brl(s.tot)}</span></div>
+        <div class="figs"><span>Equip. <b>${s.eq ? brl(s.eq) : '·'}</b></span><span>M. obra <b>${s.mo ? brl(s.mo) : '·'}</b></span><span>Material <b>${s.ma ? brl(s.ma) : '·'}</b></span><span class="tot"><span id="v-${id}">${brl(s.tot)}</span><s id="p-${id}" hidden></s></span></div>
       </div>
     </div>
     <details><summary>Ver itens do sistema</summary>
@@ -404,6 +424,9 @@ function card(s){
 }
 
 function montar(){
+  const PJ = SYS.every(s => s.mini);
+  document.querySelector('.top .num').firstChild.textContent = PJ ? 'Proposta de projetos' : 'Proposta comercial';
+  $('#all').textContent = PJ ? 'Incluir todos os projetos' : 'Incluir todos os sistemas';
   $('#hNum').textContent = 'nº ' + D.numero; $('#hData').textContent = dataExt(D.data) + (R.revisao > 1 ? ` · revisão ${R.revisao}` : '');
   $('#hEyebrow').textContent = [...new Set(SYS.map(s => s.t))].join(' · ');
   const t = D.titulo || 'Sua proposta, do seu jeito.', i = t.indexOf(',');
@@ -412,7 +435,10 @@ function montar(){
   $('#hCli').innerHTML = `<small>Cliente</small><strong>${esc(D.cliente)}</strong>${D.att ? `<small>Aos cuidados de</small><span>${esc(D.att)}</span>` : ''}${D.local ? `<small>Local</small><span>${esc(D.local)}</span>` : ''}`;
   const A = areas();
   $('#groups').innerHTML = A.map(a => { const l = SYS.filter(s => s.area === a), sum = l.reduce((x, s) => x + s.tot, 0);
-    return `<div class="group">${a || A.length > 1 ? `<div class="group-h"><h2>${esc(a || 'Outros sistemas')}</h2><span>${l.length} ${l.length > 1 ? 'sistemas' : 'sistema'} · ${brl(sum)}</span></div>` : ''}${l.map(card).join('')}</div>`; }).join('');
+    return `<div class="group">${a || A.length > 1 ? `<div class="group-h"><h2>${esc(a || 'Outros sistemas')}</h2><span>${l.length} ${l.every(s => s.mini) ? (l.length > 1 ? 'projetos' : 'projeto') : (l.length > 1 ? 'sistemas' : 'sistema')} · ${brl(sum)}</span></div>` : ''}${l.map(card).join('')}</div>`; }).join('');
+  const RG = D.regra || {}, un = SYS.every(s => s.mini) ? ['projeto', 'projetos'] : ['sistema', 'sistemas'];
+  const pf = v => String(v).replace('.', ',');
+  $('#pacote').innerHTML = RG.pct > 0 && SYS.length > 1 ? `<div class="pacote"><b>Preço de pacote.</b> Contratando todos os ${SYS.length} ${un[1]} desta proposta, vale o valor da proposta — é o melhor preço. Você pode retirar o que quiser: cada ${un[0]} retirado aumenta <b>${pf(RG.pct)}%</b> o valor dos que ficam, até <b>${pf(RG.teto)}%</b>.</div>` : '';
   const mc = [...new Set(SYS.flatMap(s => s.b))];
   $('#marcasBox').hidden = !mc.length; $('#marcas').innerHTML = mc.map(m => `<span>${esc(m)}</span>`).join('');
   $('#entrega').innerHTML = (D.entrega || []).map(x => `<li>${esc(x)}</li>`).join('');
@@ -433,18 +459,23 @@ function banner(){
 
 function calc(){
   let eq = 0, mo = 0, ma = 0, n = 0; SYS.forEach(s => { if(on[s.k]){ eq += s.eq; mo += s.mo; ma += s.ma; n++; } });
-  const sub = eq + mo + ma, fr = n ? (D.frete || 0) : 0, f = D.bruto ? D.total / D.bruto : 1, tot = Math.round((sub + fr) * f);
-  return { eq, mo, ma, n, fr, sub, desc: sub + fr - tot, tot };
+  const RG = D.regra || {}, ac = RG.pct > 0 ? Math.min((SYS.length - n) * RG.pct, RG.teto || 0) : 0, m = 1 + ac / 100;
+  const sub = eq + mo + ma, acr = Math.round(sub * ac / 100), fr = n ? (D.frete || 0) : 0, f = D.bruto ? D.total / D.bruto : 1, tot = Math.round((sub * m + fr) * f);
+  return { eq, mo, ma, n, fr, sub, ac, m, acr, desc: sub + acr + fr - tot, tot };
 }
 function render(){
   const c = calc();
   $('#sel').innerHTML = SYS.map((s, i) => { const k = on[s.k], id = 's' + i;
-    $('t-' + id).checked = k; $('c-' + id).classList.toggle('on', k); $('l-' + id).textContent = k ? 'Incluído' : 'Fora';
-    return `<li class="${k ? '' : 'off'}"><span>${esc(nomeSis(s))}</span><span>${brl(s.tot)}</span></li>`; }).join('');
-  $('#split').innerHTML = `<div><span>Equipamentos</span><span>${brl(c.eq)}</span></div><div><span>Mão de obra</span><span>${brl(c.mo)}</span></div><div><span>Material auxiliar</span><span>${brl(c.ma)}</span></div>`
+    $('t-' + id).checked = k; $('c-' + id).classList.toggle('on', k); $('l-' + id).textContent = k ? (s.mini ? '' : 'Incluído') : (s.mini ? 'retirado' : 'Fora');
+    const vv = Math.round(s.tot * (k ? c.m : 1)); $('v-' + id).textContent = brl(vv);
+    const pp = $('p-' + id); pp.hidden = !(k && c.ac > 0); pp.textContent = 'no pacote ' + brl(s.tot);
+    return `<li class="${k ? '' : 'off'}"><span>${esc(nomeSis(s))}</span><span>${brl(vv)}</span></li>`; }).join('');
+  const pj = SYS.every(s => s.mini);
+  $('#split').innerHTML = (pj ? `<div><span>Projetos (preço de pacote)</span><span>${brl(c.sub)}</span></div>` : `<div><span>Equipamentos</span><span>${brl(c.eq)}</span></div><div><span>Mão de obra</span><span>${brl(c.mo)}</span></div><div><span>Material auxiliar</span><span>${brl(c.ma)}</span></div>`)
+    + (c.acr > 0 ? `<div class="acr"><span>Acréscimo por retirada (+${String(c.ac).replace('.', ',')}%)</span><span>+ ${brl(c.acr)}</span></div>` : '')
     + (c.fr ? `<div><span>Frete</span><span>${brl(c.fr)}</span></div>` : '') + (c.desc > 0 ? `<div class="dsc"><span>Desconto</span><span>− ${brl(c.desc)}</span></div>` : '');
   $('#sTot').textContent = brl(c.tot); $('#mTot').textContent = brl(c.tot);
-  $('#count').textContent = `${c.n} de ${SYS.length} ${SYS.length > 1 ? 'sistemas selecionados' : 'sistema selecionado'}`;
+  $('#count').textContent = `${c.n} de ${SYS.length} ${pj ? (SYS.length > 1 ? 'projetos selecionados' : 'projeto selecionado') : (SYS.length > 1 ? 'sistemas selecionados' : 'sistema selecionado')}`;
   const P = (D.parcelas && D.parcelas.length) ? D.parcelas : [['Parcela única', 100, '']]; let acc = 0;
   $('#pay').innerHTML = `<h3>Condição de pagamento</h3>${P.map(([nm, p, q], i) => { const v = i < P.length - 1 ? Math.round(c.tot * p / 100) : c.tot - acc; acc += v;
     return `<div><span>${esc(nm)}${q ? `<small style="display:block;color:var(--muted);font-size:11.5px">${esc(q)}</small>` : ''}</span><span>${String(p).replace('.', ',')}%</span><span>${brl(v)}</span></div>`; }).join('')}<div><b>Total</b><span>100%</span><b>${brl(c.tot)}</b></div>`;
@@ -462,7 +493,7 @@ $('all').onclick = () => { SYS.forEach(s => on[s.k] = true); render(); guardar()
 
 function selecaoTexto(){
   const c = render();
-  const a = SYS.filter(s => on[s.k]).map(s => `• ${nomeSis(s)}: ${brl(s.tot)}`), f = SYS.filter(s => !on[s.k]).map(s => `• ${nomeSis(s)}`);
+  const a = SYS.filter(s => on[s.k]).map(s => `• ${nomeSis(s)}: ${brl(Math.round(s.tot * c.m))}`), f = SYS.filter(s => !on[s.k]).map(s => `• ${nomeSis(s)}`);
   return `Proposta Equiper nº ${D.numero} · ${D.cliente}\n\nSistemas que quero contratar:\n${a.join('\n') || '(nenhum)'}\n` + (f.length ? `\nRetirados:\n${f.join('\n')}\n` : '') + `\nTotal: ${brl(c.tot)}`;
 }
 $('copy').onclick = () => { const t = selecaoTexto(), box = $('copytext'); box.value = t;
@@ -479,7 +510,8 @@ const fecha = () => { $('dlg').hidden = true; $('dlg').innerHTML = ''; };
 
 $('aprovar').onclick = () => { const c = calc(); if(!c.n) return;
   janela('Aprovar a proposta', `<div>Você está aprovando a proposta nº <b>${esc(D.numero)}</b> com:</div>
-    <div class="resumo">${SYS.filter(s => on[s.k]).map(s => `<div><span>${esc(nomeSis(s))}</span><span>${brl(s.tot)}</span></div>`).join('')}
+    <div class="resumo">${SYS.filter(s => on[s.k]).map(s => `<div><span>${esc(nomeSis(s))}</span><span>${brl(Math.round(s.tot * c.m))}</span></div>`).join('')}
+      ${c.acr > 0 ? `<div style="color:var(--muted);font-size:12.5px"><span>já com o acréscimo de ${String(c.ac).replace('.', ',')}% por retirada</span><span></span></div>` : ''}
       ${c.desc > 0 ? `<div style="color:var(--ok)"><span>Desconto</span><span>− ${brl(c.desc)}</span></div>` : ''}<div style="border-top:1px solid var(--line);padding-top:4px"><b>Total</b><b>${brl(c.tot)}</b></div></div>
     <label>Nome completo<input type="text" id="aNome" autocomplete="name" value="${esc(D.cliente)}"></label>
     <label>CPF ou CNPJ<input type="text" id="aDoc" inputmode="numeric" autocomplete="off"></label>

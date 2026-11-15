@@ -5238,11 +5238,12 @@ async function telaOrc(){
     <div class="barra"><input type="search" id="busca" placeholder="Buscar nº, cliente, sistema…" value="${esc(ST.busca)}">
       <select id="oEtapa" style="max-width:200px">${[['abertos','Em aberto'],['elaboracao','Em elaboração'],['enviado','Enviados'],['aprovados','Aprovados'],['perdidos','Perdidos / cancelados'],['todos','Todos']].map(([k,r]) => `<option value="${k}" ${f.etapa===k?'selected':''}>${r}</option>`).join('')}</select>
       <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" id="vInat" style="width:auto" ${ST.mostrarInativos?'checked':''}> inativos</label>
-      <button class="btn pri" id="btnNovo">+ Novo orçamento</button></div>
+      ${nivelTela('orc') === 4 ? '<button class="btn" id="btnRegPO" title="Aumento por item retirado na proposta online">⚙ Regras da proposta online</button>' : ''}<button class="btn pri" id="btnNovo">+ Novo orçamento</button></div>
     <table class="reg"><thead><tr><th>Nº</th><th>Tipo</th><th>Cliente · obra</th><th>Itens</th><th>Data</th><th style="text-align:right">Total</th><th>Situação</th></tr></thead><tbody>
     ${l.map(o => `<tr data-orc2="${o.id}" style="cursor:pointer"><td><b>${numOrc(o.numero)}</b></td><td>${TIPOS_ORC[o.tipo][1]} ${TIPOS_ORC[o.tipo][0]}</td><td><b>${esc(o.pagador || o.obra)}</b>${tagStatus(o.status)}${o.obra && o.pagador ? `<div class="muted" style="font-size:12px">🏠 ${esc(o.obra)}</div>` : !o.obra ? '<div class="muted" style="font-size:12px">obra criada ao aprovar</div>' : ''}</td>
       <td style="font-size:12px">${esc(o.grupos||'')}</td><td>${dataBR(o.data_orcamento)}${o.etapa==='enviado'&&o.validade&&o.validade<hoje?'<div style="color:var(--verm);font-size:11px">validade vencida</div>':''}</td><td style="text-align:right">${R$(o.total)}</td><td>${tagOrc(o.etapa)}${PO[o.id] && PO[o.id].situacao !== 'rascunho' && (PO[o.id].situacao !== 'confirmada' || !o.etapa.startsWith('aprovado')) ? '<div>' + tagPO(PO[o.id].situacao) + '</div>' : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum orçamento.</td></tr>'}</tbody></table></div>`;
   ligaBarra(() => novoOrcamento(null));
+  if($('#btnRegPO')) $('#btnRegPO').onclick = formRegrasProposta;
   document.querySelectorAll('[data-ft]').forEach(b => b.onclick = () => { f.tipo = b.dataset.ft; telaOrc(); });
   document.querySelectorAll('[data-fe]').forEach(b => b.onclick = () => { f.etapa = b.dataset.fe; telaOrc(); });
   $('#oEtapa').onchange = e => { f.etapa = e.target.value; telaOrc(); };
@@ -5622,6 +5623,14 @@ const PO_TEXTOS = {
   entrega: ['Fornecimento dos equipamentos listados em cada sistema', 'Montagem das casas de máquinas e instalação dos equipamentos', 'Kits de material auxiliar de cada sistema', 'Quadros de comando e automação indicados'],
   fora: ['Obra civil (a Equiper não executa obra civil)']
 };
+/* textos padrão: projeto usa os textos da própria proposta de projetos */
+function poPadrao(O){
+  if(O.tipo !== 'projeto') return PO_TEXTOS;
+  const tx = { ...TEXTOS_PROJETO, ...(O.textos || {}) }, ls = v => String(v || '').split('\n').map(x => x.trim().replace(/^[-•]\s*/, '')).filter(Boolean);
+  return { titulo: PO_TEXTOS.titulo,
+    intro: 'Reunimos aqui os projetos orçados para a sua obra. Contratando todos, vale o preço de pacote; se preferir, retire os que não precisar e veja o valor atualizar na hora. O escopo de cada projeto fica logo abaixo dele.',
+    entrega: ['Os projetos marcados, com o escopo descrito em cada um'], fora: ls(tx.nao_incluso), prazo: tx.prazo || '' };
+}
 const PO_EV = { publicou:'Publicou', abriu:'Cliente abriu', aprovou:'Cliente aprovou', pediu_alteracao:'Cliente pediu alteração', devolveu:'Aprovação devolvida ao cliente', confirmou:'Aprovação confirmada', desativou:'Link desativado', reativou:'Link reativado' };
 const poDH = t => t ? new Date(t).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
 const poDoc = d => !d ? '' : d.length === 11 ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
@@ -5639,10 +5648,18 @@ function illPadrao(t){ t = norm(t || '');
   return 'geral'; }
 
 /* o que o cliente vai ver: só preços de venda (nada de custo) */
-function montarDadosProposta(O, G, cfg, marcas, end){
+function montarDadosProposta(O, G, cfg, marcas, end, regras){
+  const RG = (regras || {})[O.tipo === 'projeto' ? 'projeto' : 'equipamento'] || { percentual: 0, teto: 0 };
   const cs = cfg.sist || {}, pg = pessoa(O.pagador_id) || {}, ob = obra(O.obra_id) || {}, x = end || {};
   const local = [[x.logradouro, x.numero].filter(Boolean).join(', '), ob.bairro, [ob.municipio, ob.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ') || ob.nome || '';
-  const sistemas = G.filter(g => (g.itens || []).some(i => i.tipo !== 'titulo')).map(g => {
+  const porItem = O.tipo === 'projeto';
+  const sistemas = porItem ? G.flatMap(g => { const c = cs[g.titulo] || {}; let sec = '';
+    return g.itens.map(it => { if(it.tipo === 'titulo'){ sec = cap(it.descricao); return null; }
+      const v = Math.round(Number(it.quantidade) * Number(it.preco_unit) * 100), q = Number(it.quantidade);
+      const det = q !== 1 || ['M2','PTO','M','H'].includes(String(it.unidade).toUpperCase()) ? q.toLocaleString('pt-BR') + ' ' + String(it.unidade || 'un').toLowerCase().replace('m2', 'm²') : '';
+      return { k: g.ordem + '|' + g.titulo + '|' + it.ordem, area: sec || (c.area || '').trim() || 'Projetos', ill: 'proj', mini: true, t: it.descricao, d: '',
+        esc: String(it.escopo || '').split('\n').map(x => x.trim().replace(/^[-•]\s*/, '')).filter(Boolean), b: [], L: [[it.descricao, det, v, 0, 0]], note: '' }; }).filter(Boolean); })
+  : G.filter(g => (g.itens || []).some(i => i.tipo !== 'titulo')).map(g => {
     const c = cs[g.titulo] || {}, L = [], mats = [];
     let ma = 0;
     g.itens.forEach(it => { const v = Math.round(Number(it.quantidade) * Number(it.preco_unit) * 100);
@@ -5657,11 +5674,12 @@ function montarDadosProposta(O, G, cfg, marcas, end){
     return { k: g.ordem + '|' + g.titulo, area: (c.area || '').trim(), ill: c.ill || illPadrao(g.titulo), t: c.nome || cap(g.titulo), d: c.d || '', b, L, note: c.note || '' };
   });
   return { numero: numOrc(O.numero), cliente: pg.nome || '', local, att: O.aos_cuidados || '', data: O.data_orcamento, validade: cfg.validade || O.validade || null,
-    empresa: O.empresa || '', titulo: cfg.titulo || PO_TEXTOS.titulo, intro: cfg.intro || PO_TEXTOS.intro,
-    entrega: (cfg.entrega || PO_TEXTOS.entrega).filter(Boolean), fora: (cfg.fora || PO_TEXTOS.fora).filter(Boolean),
-    prazo: O.prazo_texto || '', obs: O.observacoes || '', vendedor: O.vendedor || '',
+    empresa: O.empresa || '', titulo: cfg.titulo || poPadrao(O).titulo, intro: cfg.intro || poPadrao(O).intro,
+    entrega: (cfg.entrega || poPadrao(O).entrega).filter(Boolean), fora: (cfg.fora || poPadrao(O).fora).filter(Boolean),
+    prazo: O.prazo_texto || poPadrao(O).prazo || '', obs: O.observacoes || '', vendedor: O.vendedor || '',
     parcelas: (O.parcelas || []).map(p => [p.nome, Number(p.percentual) || 0, p.quando || '']),
-    total: Math.round(Number(O.total) * 100), bruto: Math.round(Number(O.total_bruto) * 100), frete: Math.round(Number(O.frete || 0) * 100), sistemas };
+    total: Math.round(Number(O.total) * 100), bruto: Math.round(Number(O.total_bruto) * 100), frete: Math.round(Number(O.frete || 0) * 100), sistemas,
+    regra: { pct: Number(RG.percentual) || 0, teto: Number(RG.teto) || 0, un: porItem ? 'item' : 'sistema' } };
 }
 const cap = s => String(s || '').toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/\b(De|Da|Do|Das|Dos|E|Com|Para)\b/g, x => x.toLowerCase());
 
@@ -5673,6 +5691,7 @@ async function abrirPropostaOnline(id){
   const O = a.data, G = (b.data || []).map(g => ({ ...g, itens: (g.orcamento_itens || []).sort((x, y) => x.ordem - y.ordem) })), R = c.data, EV = e.data || [], T = O.tipo;
   const pode = podeOrc(T), aberto = ['elaboracao','enviado'].includes(O.etapa), sit = R ? R.situacao : 'rascunho';
   const pids = [...new Set(G.flatMap(g => g.itens.map(i => i.produto_id)).filter(Boolean))], marcas = {};
+  const REG = Object.fromEntries(((await sb.from('proposta_regras').select('*')).data || []).map(x => [x.area, x]));
   const end = O.obra_id ? ((await sb.schema('privado').from('obras_endereco').select('logradouro,numero').eq('obra_id', O.obra_id).maybeSingle()).data || null) : null;
   if(pids.length){ const p = await sb.from('produtos').select('id,marca').in('id', pids); (p.data || []).forEach(x => { if(x.marca) marcas[x.id] = cap(x.marca); }); }
   const cfg = JSON.parse(JSON.stringify(R?.config || {})); cfg.sist = cfg.sist || {};
@@ -5688,6 +5707,7 @@ async function abrirPropostaOnline(id){
     <table class="reg" data-sem-ordem style="margin-top:10px"><thead><tr><th>Sistemas que o cliente marcou</th><th style="text-align:right">Valor</th></tr></thead><tbody>
       ${(ap.dados?.sistemas || []).map(s => { const on = (ap.sel || []).includes(s.k), v = s.L.reduce((t, l) => t + (typeof l[2] === 'number' ? l[2] + (l[3] || 0) + (l[4] || 0) : 0), 0);
         return `<tr style="${on ? '' : 'color:#999;text-decoration:line-through'}"><td>${on ? '✓' : '✕'} ${esc(s.area ? s.area + ' · ' : '')}${esc(s.t)}</td><td style="text-align:right">${poBRL(v)}</td></tr>`; }).join('')}
+      ${Number(ap.acrescimo) > 0 ? `<tr><td>Acréscimo por contratação parcial (${String(ap.acrescimo).replace('.', ',')}% nos itens contratados)</td><td style="text-align:right">+ ${String(ap.acrescimo).replace('.', ',')}%</td></tr>` : ''}
       <tr><td><b>Total aprovado${ap.dados && ap.dados.total !== ap.dados.bruto ? ' (com desconto)' : ''}</b></td><td style="text-align:right"><b>${poBRL(ap.total)}</b></td></tr></tbody></table>
     ${sit === 'aprovada_cliente' && poPodeConfirmar(T) ? `<p class="muted" style="font-size:13px">Confira com o cliente se precisar. Ao confirmar, roda a aprovação de sempre só com os sistemas marcados (pedidos e A receber).</p>
       <div class="barra"><button class="btn" id="poDevolver">Devolver ao cliente</button><button class="btn pri" id="poConfirmar" style="background:var(--verde);border-color:var(--verde)">✓ Confirmar aprovação</button></div>` : ''}</div>`;
@@ -5701,20 +5721,24 @@ async function abrirPropostaOnline(id){
         ${R.ultima_selecao && sit !== 'confirmada' && !ap ? `<p class="muted" style="font-size:13px;margin:6px 0 0">O cliente deixou ligado: <b>${esc((pub?.sistemas || []).filter(s => R.ultima_selecao.includes(s.k)).map(s => s.t).join(', ') || 'nenhum')}</b> (${poDH(R.selecao_em)}).</p>` : ''}
         ${pode ? `<div class="barra" style="margin-top:8px"><button class="btn peq" id="poAtiva">${R.ativa ? 'Desativar o link' : 'Reativar o link'}</button></div>` : ''}`
       : `<p class="muted" style="margin:0">Ainda não publicada. Confira os textos abaixo e clique em <b>Publicar</b>: o ERP gera um link único para mandar ao cliente.</p>`}</div>
-    <div class="card"><h2>Como os sistemas aparecem</h2>
+    <div class="card"><h2>Preço de pacote</h2>${(() => { const rg = pub?.regra || { pct: Number(REG[T === 'projeto' ? 'projeto' : 'equipamento']?.percentual) || 0, teto: Number(REG[T === 'projeto' ? 'projeto' : 'equipamento']?.teto) || 0 }, un = T === 'projeto' ? 'projeto' : 'sistema';
+        return rg.pct > 0 ? `<p style="margin:0">Contratando todos os ${un}s, vale o preço desta proposta. Cada ${un} retirado aumenta <b>${String(rg.pct).replace('.', ',')}%</b> o valor dos que ficam, até <b>${String(rg.teto).replace('.', ',')}%</b>.${pub?.regra ? ' <span class="muted">(regra gravada na publicação)</span>' : ''}</p>`
+          : `<p class="muted" style="margin:0">Sem acréscimo: o cliente retira ${un}s e o valor dos outros não muda.</p>`; })()}
+      <p class="muted" style="font-size:12px;margin:6px 0 0">A regra vale para todas as propostas de ${T === 'projeto' ? 'projetos' : 'equipamento e serviço'} e muda em Orçamentos → ⚙ Regras da proposta online. Proposta já publicada mantém a regra da publicação até ser publicada de novo.</p></div>
+    <div class="card"><h2>${T === 'projeto' ? 'Como os projetos aparecem' : 'Como os sistemas aparecem'}</h2>${T === 'projeto' ? '<p class="muted" style="font-size:13px;margin-top:0">Na página, cada projeto vira um item que o cliente pode retirar, com o escopo do catálogo.</p>' : ''}
       <p class="muted" style="font-size:13px;margin-top:0">Os itens e valores vêm do orçamento. Aqui você escreve o que o cliente lê. A área agrupa os sistemas na página (ex.: <i>Casa principal</i>, <i>Piscina e spa</i>).</p>
       ${GS.map((g, i) => { const s = cfg.sist[g.titulo] || {}; return `<div class="secao-sens" data-poi="${i}"><h3>${esc(g.titulo)} <span class="muted" style="font-weight:400">· ${R$(g.total)}</span></h3><div class="grade">
-        <label class="campo">Nome na proposta<input data-pf="nome" value="${esc(s.nome || cap(g.titulo))}"></label>
+        <label class="campo"${T === 'projeto' ? ' style="display:none"' : ''}>Nome na proposta<input data-pf="nome" value="${esc(s.nome || cap(g.titulo))}"></label>
         <label class="campo">Área<input data-pf="area" value="${esc(s.area || '')}" placeholder="opcional"></label>
-        <label class="campo">Desenho<select data-pf="ill">${Object.entries(PO_ILL).map(([k, r]) => `<option value="${k}" ${(s.ill || illPadrao(g.titulo)) === k ? 'selected' : ''}>${r}</option>`).join('')}</select></label>
-        <label class="campo largo">Descrição (o que o sistema faz)<textarea data-pf="d" rows="2">${esc(s.d || '')}</textarea></label>
-        <label class="campo largo">Não incluso neste sistema (um por linha)<textarea data-pf="ni" rows="2">${esc(linhas(s.ni))}</textarea></label>
+        <label class="campo"${T === 'projeto' ? ' style="display:none"' : ''}>Desenho<select data-pf="ill">${Object.entries(PO_ILL).map(([k, r]) => `<option value="${k}" ${(s.ill || illPadrao(g.titulo)) === k ? 'selected' : ''}>${r}</option>`).join('')}</select></label>
+        <label class="campo largo"${T === 'projeto' ? ' style="display:none"' : ''}>Descrição (o que o sistema faz)<textarea data-pf="d" rows="2">${esc(s.d || '')}</textarea></label>
+        <label class="campo largo"${T === 'projeto' ? ' style="display:none"' : ''}>Não incluso neste sistema (um por linha)<textarea data-pf="ni" rows="2">${esc(linhas(s.ni))}</textarea></label>
         <label class="campo largo">Observação<input data-pf="note" value="${esc(s.note || '')}"></label></div></div>`; }).join('') || '<p class="muted">O orçamento não tem itens.</p>'}</div>
     <div class="card"><h2>Textos da página</h2><div class="grade">
-      <label class="campo largo">Título<input id="poTit" value="${esc(cfg.titulo || PO_TEXTOS.titulo)}"></label>
-      <label class="campo largo">Apresentação<textarea id="poIntro" rows="3">${esc(cfg.intro || PO_TEXTOS.intro)}</textarea></label>
-      <label class="campo largo">O que a Equiper entrega (um por linha)<textarea id="poEntrega" rows="4">${esc(linhas(cfg.entrega || PO_TEXTOS.entrega))}</textarea></label>
-      <label class="campo largo">Fora desta proposta (um por linha)<textarea id="poFora" rows="3">${esc(linhas(cfg.fora || PO_TEXTOS.fora))}</textarea></label>
+      <label class="campo largo">Título<input id="poTit" value="${esc(cfg.titulo || poPadrao(O).titulo)}"></label>
+      <label class="campo largo">Apresentação<textarea id="poIntro" rows="3">${esc(cfg.intro || poPadrao(O).intro)}</textarea></label>
+      <label class="campo largo">O que a Equiper entrega (um por linha)<textarea id="poEntrega" rows="4">${esc(linhas(cfg.entrega || poPadrao(O).entrega))}</textarea></label>
+      <label class="campo largo">Fora desta proposta (um por linha)<textarea id="poFora" rows="3">${esc(linhas(cfg.fora || poPadrao(O).fora))}</textarea></label>
       <label class="campo">Link válido até<input id="poVal" type="date" value="${R?.validade || O.validade || ''}"></label></div></div>
     <div class="card"><h2>Acompanhamento</h2>${EV.length ? `<table class="reg" data-sem-ordem><thead><tr><th>Quando</th><th>O quê</th><th>Detalhe</th></tr></thead><tbody>${EV.map(v => `<tr><td style="white-space:nowrap">${poDH(v.em)}</td><td>${PO_EV[v.tipo] || v.tipo}</td><td style="font-size:13px">${
         v.tipo === 'pediu_alteracao' ? `<b>${esc(v.dados?.nome || '')}</b>: ${esc(v.dados?.msg || '')}` : v.tipo === 'aprovou' ? `${esc(v.dados?.nome || '')} · ${poBRL(v.dados?.total)}` : v.tipo === 'devolveu' ? esc(v.dados?.motivo || '') : v.dados?.revisao ? 'revisão ' + v.dados.revisao : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted" style="margin:0">Nada ainda.</p>'}</div>
@@ -5730,11 +5754,11 @@ async function abrirPropostaOnline(id){
     return n; };
   const canon = v => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']' : v && typeof v === 'object' ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}' : JSON.stringify(v ?? null);
   const semData = d => d && canon({ ...d, validade: null });
-  const atualizaDif = () => { const el = $('#poDif'); if(!el || !pub) return; const igual = semData(montarDadosProposta(O, G, ler(), marcas, end)) === semData(pub);
+  const atualizaDif = () => { const el = $('#poDif'); if(!el || !pub) return; const igual = semData(montarDadosProposta(O, G, ler(), marcas, end, REG)) === semData(pub);
     el.innerHTML = igual ? '<span style="color:var(--verde)">✓ O cliente está vendo a versão atual do orçamento.</span>' : '<span style="color:#b45309">⚠ O orçamento ou os textos mudaram depois da última publicação. O cliente ainda vê a versão anterior.</span>'; };
   atualizaDif(); document.querySelectorAll('#folha input,#folha textarea,#folha select').forEach(x => x.addEventListener('input', atualizaDif));
 
-  async function salvar(publicar){ const c2 = ler(), d = montarDadosProposta(O, G, c2, marcas, end);
+  async function salvar(publicar){ const c2 = ler(), d = montarDadosProposta(O, G, c2, marcas, end, REG);
     if(publicar && !d.sistemas.length) return aviso('Nada para publicar', 'O orçamento não tem itens.');
     const r = await sb.rpc('proposta_salvar', { p_orc: id, p_config: c2, p_dados: publicar ? d : null, p_validade: c2.validade, p_publicar: !!publicar });
     if(r.error) return aviso('Não foi possível ' + (publicar ? 'publicar' : 'salvar'), esc(erroBanco(r.error)));
@@ -5771,6 +5795,30 @@ async function avisosPropostas(){
       out.push({ ord: 6, aba:'orc', orc: v.orcamento_id, ic:'orc', txt: `${esc(nm)} abriu a proposta <b>${numOrc(v.orcamentos?.numero)}</b> · ${new Date(v.em).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}` }); });
   }
   return out;
+}
+
+/* ---------- regras do preço de pacote (uma para projetos, outra para equipamento/serviço) ---------- */
+async function formRegrasProposta(){
+  const r = await sb.from('proposta_regras').select('*');
+  if(r.error) return aviso('Proposta online', /proposta_regras/.test(r.error.message) ? 'Rode o script <b>40_proposta_regras.sql</b> no Supabase.' : esc(erroBanco(r.error)));
+  const R = Object.fromEntries((r.data || []).map(x => [x.area, x])), pode = nivelTela('orc') === 4, f = v => String(Number(v || 0)).replace('.', ',');
+  const bloco = (a, tit, un) => `<div class="secao-sens"><h3>${tit}</h3><div class="grade">
+      <label class="campo">Aumento por ${un} retirado (%)<input id="rg_p_${a}" inputmode="decimal" value="${f(R[a]?.percentual)}" ${pode ? '' : 'disabled'}></label>
+      <label class="campo">Teto do aumento (%)<input id="rg_t_${a}" inputmode="decimal" value="${f(R[a]?.teto)}" ${pode ? '' : 'disabled'}></label></div>
+      <p class="muted" style="font-size:12px;margin:4px 0 0" id="rg_x_${a}"></p></div>`;
+  const pr = modal('Regras da proposta online', `<p style="margin-top:0">Contratando tudo, vale o preço da proposta. Cada item que o cliente retira aumenta o valor dos que ficam (soma simples), até o teto. Zero = sem aumento.</p>
+    ${bloco('projeto', 'Propostas de projetos', 'projeto')}${bloco('equipamento', 'Propostas de equipamento e serviço', 'sistema')}
+    <p class="muted" style="font-size:12px">Vale para as propostas publicadas daqui em diante (ou publicadas de novo).</p>`, pode ? [['Cancelar', false], ['Salvar', true, 'pri']] : [['Fechar', false]]);
+  const ex = a => { const p = num($('#rg_p_' + a).value), t = num($('#rg_t_' + a).value), un = a === 'projeto' ? 'projeto' : 'sistema';
+    $('#rg_x_' + a).textContent = !p ? 'Sem aumento.' : `Ex.: um ${un} de R$ 1.000,00 — tirou 1: ${R$(1000 * (1 + Math.min(p, t) / 100))} · tirou 2: ${R$(1000 * (1 + Math.min(2 * p, t) / 100))} · tirou 3: ${R$(1000 * (1 + Math.min(3 * p, t) / 100))}${t < 3 * p ? ` (parou no teto de ${f(t)}%)` : ''}`; };
+  ['projeto', 'equipamento'].forEach(a => { ex(a); ['p', 't'].forEach(k => $(`#rg_${k}_${a}`).oninput = () => ex(a)); });
+  const ok = await pr;
+  if(!ok) return;
+  for(const a of ['projeto', 'equipamento']){
+    const x = await sb.rpc('proposta_regra_salvar', { p_area: a, p_percentual: num($('#rg_p_' + a)?.value ?? R[a]?.percentual), p_teto: num($('#rg_t_' + a)?.value ?? R[a]?.teto) });
+    if(x.error) return aviso('Não foi possível salvar', esc(erroBanco(x.error)));
+  }
+  toast('Regras salvas.');
 }
 
 /* =================== Pedidos do CIGAM (histórico) ===================
