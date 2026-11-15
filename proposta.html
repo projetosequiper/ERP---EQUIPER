@@ -230,6 +230,7 @@ tr.sub td{font-family:var(--f-display);font-weight:700;font-size:12px;text-trans
 .pacote b{color:var(--ink)}
 .figs s{font-size:12px;color:var(--muted);margin-left:6px}
 .split .acr{color:var(--red)}
+.split .stot{color:var(--ink);font-weight:600;border-top:1px solid var(--line);padding-top:6px;margin-top:4px}
 .tela{min-height:70vh;display:grid;place-items:center;text-align:center;padding:40px 16px}
 .tela h1{font-size:26px;margin-bottom:10px}.tela p{color:var(--muted);max-width:46ch;margin:0 auto}
 </style></head><body>
@@ -475,9 +476,11 @@ function render(){
     const pp = $('p-' + id); pp.hidden = !(k && c.ac > 0); pp.textContent = 'no pacote ' + brl(s.tot);
     return `<li class="${k ? '' : 'off'}"><span>${esc(nomeSis(s))}</span><span>${brl(vv)}</span></li>`; }).join('');
   const pj = SYS.every(s => s.mini);
+  // itens (abertura) → subtotal → ajustes somados à parte (acréscimo, frete, desconto) → total
   $('#split').innerHTML = (pj ? `<div><span>Projetos (preço de pacote)</span><span>${brl(c.sub)}</span></div>` : `<div><span>Equipamentos</span><span>${brl(c.eq)}</span></div><div><span>Mão de obra</span><span>${brl(c.mo)}</span></div><div><span>Material auxiliar</span><span>${brl(c.ma)}</span></div>`)
     + (c.acr > 0 ? `<div class="acr"><span>Acréscimo por retirada (+${String(c.ac).replace('.', ',')}%)</span><span>+ ${brl(c.acr)}</span></div>` : '')
-    + (c.fr ? `<div><span>Frete</span><span>${brl(c.fr)}</span></div>` : '') + (c.desc > 0 ? `<div class="dsc"><span>Desconto</span><span>− ${brl(c.desc)}</span></div>` : '');
+    + ((c.fr || c.desc > 0) ? `<div class="stot"><span>Subtotal ${pj ? 'dos projetos' : 'dos sistemas'}</span><span>${brl(c.sub + c.acr)}</span></div>`
+      + (c.fr ? `<div><span>Frete</span><span>+ ${brl(c.fr)}</span></div>` : '') + (c.desc > 0 ? `<div class="dsc"><span>Desconto</span><span>− ${brl(c.desc)}</span></div>` : '') : '');
   $('#sTot').textContent = brl(c.tot); $('#mTot').textContent = brl(c.tot);
   $('#count').textContent = `${c.n} de ${SYS.length} ${pj ? (SYS.length > 1 ? 'projetos selecionados' : 'projeto selecionado') : (SYS.length > 1 ? 'sistemas selecionados' : 'sistema selecionado')}`;
   const P = (D.parcelas && D.parcelas.length) ? D.parcelas : [['Parcela única', 100, '']]; let acc = 0;

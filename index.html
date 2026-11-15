@@ -5224,6 +5224,12 @@ async function telaOrc(){
   const [r, rpo] = await Promise.all([ sb.from('orcamentos_resumo').select('*').order('numero', { ascending:false }), sb.from('propostas_online').select('orcamento_id,situacao,ativa') ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const PO = Object.fromEntries((rpo.data || []).map(p => [p.orcamento_id, p]));
+  /* aprovado em parte: o valor que conta é o que foi aprovado (com o desconto proporcional), não o orçado inteiro */
+  const parc = (r.data || []).filter(o => o.etapa === 'aprovado_parcial').map(o => o.id), GP = {};
+  if(parc.length){ const gq = await sb.from('orcamento_grupos').select('orcamento_id,titulo,total,aprovado,ordem').in('orcamento_id', parc).order('ordem'); (gq.data || []).forEach(g => (GP[g.orcamento_id] ||= []).push(g)); }
+  (r.data || []).forEach(o => { const gs = GP[o.id]; if(!gs) return; const f = Number(o.total_bruto) ? Number(o.total) / Number(o.total_bruto) : 1;
+    o.orcado = Number(o.total); o.total = Math.round(gs.filter(g => g.aprovado).reduce((s, g) => s + Number(g.total), 0) * f * 100) / 100;
+    const fora = gs.filter(g => g.aprovado === false); o.grupos = gs.filter(g => g.aprovado).map(g => g.titulo).join(' · ') + (fora.length ? ` · <span class="muted">${fora.length} não contratado(s)</span>` : ''); o.gruposHtml = true; });
   const f = ST.orc, mes = hojeISO().slice(0,7), todos = (r.data || []).filter(o => ST.mostrarInativos || o.status !== 'inativo').filter(o => !f.tipo || o.tipo === f.tipo);
   const FILT = { abertos: o => ['elaboracao','enviado'].includes(o.etapa), elaboracao: o => o.etapa === 'elaboracao', enviado: o => o.etapa === 'enviado', aprovados: o => o.etapa.startsWith('aprovado'), perdidos: o => ['perdido','cancelado'].includes(o.etapa), todos: () => true };
   const l = todos.filter(FILT[f.etapa]).filter(o => !ST.busca || norm(numOrc(o.numero) + ' ' + (o.obra||'') + ' ' + (o.pagador||'') + ' ' + (o.pagador_apelido||'') + ' ' + ((o.pagador_codigos||[]).join(' ')) + ' ' + (o.referencia||'') + ' ' + (o.grupos||'')).includes(norm(ST.busca)));
@@ -5241,7 +5247,7 @@ async function telaOrc(){
       ${nivelTela('orc') === 4 ? '<button class="btn" id="btnRegPO" title="Aumento por item retirado na proposta online">⚙ Regras da proposta online</button>' : ''}<button class="btn pri" id="btnNovo">+ Novo orçamento</button></div>
     <table class="reg"><thead><tr><th>Nº</th><th>Tipo</th><th>Cliente · obra</th><th>Itens</th><th>Data</th><th style="text-align:right">Total</th><th>Situação</th></tr></thead><tbody>
     ${l.map(o => `<tr data-orc2="${o.id}" style="cursor:pointer"><td><b>${numOrc(o.numero)}</b></td><td>${TIPOS_ORC[o.tipo][1]} ${TIPOS_ORC[o.tipo][0]}</td><td><b>${esc(o.pagador || o.obra)}</b>${tagStatus(o.status)}${o.obra && o.pagador ? `<div class="muted" style="font-size:12px">🏠 ${esc(o.obra)}</div>` : !o.obra ? '<div class="muted" style="font-size:12px">obra criada ao aprovar</div>' : ''}</td>
-      <td style="font-size:12px">${esc(o.grupos||'')}</td><td>${dataBR(o.data_orcamento)}${o.etapa==='enviado'&&o.validade&&o.validade<hoje?'<div style="color:var(--verm);font-size:11px">validade vencida</div>':''}</td><td style="text-align:right">${R$(o.total)}</td><td>${tagOrc(o.etapa)}${PO[o.id] && PO[o.id].situacao !== 'rascunho' && (PO[o.id].situacao !== 'confirmada' || !o.etapa.startsWith('aprovado')) ? '<div>' + tagPO(PO[o.id].situacao) + '</div>' : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum orçamento.</td></tr>'}</tbody></table></div>`;
+      <td style="font-size:12px">${o.gruposHtml ? o.grupos : esc(o.grupos||'')}</td><td>${dataBR(o.data_orcamento)}${o.etapa==='enviado'&&o.validade&&o.validade<hoje?'<div style="color:var(--verm);font-size:11px">validade vencida</div>':''}</td><td style="text-align:right">${R$(o.total)}${o.orcado != null ? '<div class="muted" style="font-size:11px">valor aprovado</div>' : ''}</td><td>${tagOrc(o.etapa)}${PO[o.id] && PO[o.id].situacao !== 'rascunho' && (PO[o.id].situacao !== 'confirmada' || !o.etapa.startsWith('aprovado')) ? '<div>' + tagPO(PO[o.id].situacao) + '</div>' : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum orçamento.</td></tr>'}</tbody></table></div>`;
   ligaBarra(() => novoOrcamento(null));
   if($('#btnRegPO')) $('#btnRegPO').onclick = formRegrasProposta;
   document.querySelectorAll('[data-ft]').forEach(b => b.onclick = () => { f.tipo = b.dataset.ft; telaOrc(); });
@@ -5477,7 +5483,8 @@ async function formOrc(id, pre){
   /* destinos (depois de aprovado) */
   if(G.some(g => g.destino)){
     const rot = { proposta:['Proposta em Projetos','pj_propostas'], pedido:['Pedido em Obras e pedidos','sv_pedidos'], atividade:['Atividade na Agenda','sv_agenda'] };
-    $('#ocDestinos').innerHTML = `<div class="secao-sens"><h3>Para onde foi</h3>${G.filter(g => g.destino).map(g => `<div class="item"><div>✓ ${esc(g.titulo)} → <b>${rot[g.destino][0]}</b></div><div class="acoes"><button class="btn peq" data-ir3="${rot[g.destino][1]}">Abrir</button></div></div>`).join('')}</div>`;
+    const fAp = Number(O.total_bruto) ? Number(O.total) / Number(O.total_bruto) : 1, apv = G.filter(g => g.aprovado === true).reduce((s2, g) => s2 + Number(g.total), 0) * fAp, nc = G.filter(g => g.aprovado === false);
+    $('#ocDestinos').innerHTML = `${O.etapa === 'aprovado_parcial' ? `<div class="secao-sens"><h3>Valor aprovado</h3><p style="margin:0"><b style="font-size:17px;color:var(--verde)">${R$(Math.round(apv * 100) / 100)}</b> <span class="muted">o que o cliente fechou${Number(O.total) !== Number(O.total_bruto) ? ', com desconto' : ''}</span></p>${nc.length ? `<p class="muted" style="margin:4px 0 0;font-size:13px">Não contratado: ${nc.map(g => esc(g.titulo)).join(', ')} · ${R$(Math.round(nc.reduce((s2, g) => s2 + Number(g.total), 0) * fAp * 100) / 100)}</p>` : ''}</div>` : ''}<div class="secao-sens"><h3>Para onde foi</h3>${G.filter(g => g.destino).map(g => `<div class="item"><div>✓ ${esc(g.titulo)} → <b>${rot[g.destino][0]}</b></div><div class="acoes"><button class="btn peq" data-ir3="${rot[g.destino][1]}">Abrir</button></div></div>`).join('')}</div>`;
     document.querySelectorAll('[data-ir3]').forEach(b => b.onclick = async () => { fecharPainel(); ST.aba = b.dataset.ir3; await carregar(); desenhar(); });
   }
 
