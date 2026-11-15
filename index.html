@@ -229,7 +229,15 @@ footer{text-align:center;color:var(--texto2);font-size:11px;padding:20px}
 .kanban{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px;overflow:auto;align-items:start}
 .kcol{background:#ececf0;border-radius:var(--r);padding:10px;min-height:120px}
 .kcol.alvo{outline:2px dashed var(--preto)}
-.kcol.kfech{background:#fde9e9}.kcol.kfech h3 span:first-child{color:var(--verm)}
+.kcol.kfech{background:#fde9e9}
+.kmin-bt{border:0;background:none;cursor:pointer;font-size:12px;padding:0 4px 0 0;color:var(--texto2)}
+.kcol h3{align-items:center}.kcol h3 span:nth-child(2){flex:1}
+.kcol.kmin{min-height:0}
+.kgrp{background:rgba(255,255,255,.55);border:1px solid var(--borda);border-radius:12px;padding:6px 7px 2px;margin-bottom:8px}
+.kgrp-h{display:flex;gap:6px;align-items:baseline;cursor:pointer;font-size:13px;padding:2px 2px 4px;flex-wrap:wrap}
+.kgrp-h .seta{font-size:11px;color:var(--texto2);width:10px}.kgrp-h .muted{font-size:11.5px;margin-left:auto}
+.kgrp-resumo{display:flex;flex-wrap:wrap;gap:4px;padding:0 2px 6px}.kgrp-resumo .tag{margin:0;font-size:11px}
+.kcard.emgrp{margin-bottom:6px;padding:8px 9px}.kcard.emgrp .lin:first-of-type{margin-top:0}.kcol.kfech h3 span:nth-child(2){color:var(--verm)}
 .kcol h3{margin:2px 4px 10px;font-size:13px;display:flex;justify-content:space-between}
 .kcard{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:10px 11px;margin-bottom:8px;cursor:pointer;font-size:13px}
 .kcard:hover{border-color:#bbb}.kcard.atras{border-left:4px solid var(--verm)}.kcard.esp{border-left:4px solid var(--amar)}
@@ -1184,8 +1192,8 @@ async function telaTarefas(){
   const ativas = ST.tarefas.filter(t => t.status !== 'inativo' && !CONCL(t.etapa));
   const fq = l.filter(t => t.etapa === FQ), cols = fq.length ? [...ETAPAS, FQ] : ETAPAS;
   const ord = (a,b) => (a.ordem||0) - (b.ordem||0) || String(a.prazo||'9999').localeCompare(String(b.prazo||'9999'));
-  const card = t => `<div class="kcard ${t.atrasada?'atras':''} ${t.etapa==='Em espera'?'esp':''} ${t.etapa===FQ?(t.quadro_fechado?'esp':'atras'):''}" draggable="${podeProj()}" data-tar="${t.id}">
-      <div class="cli">${esc(t.cliente)}${t.avulsa?'<span class="tag">avulsa</span>':''}${tagStatus(t.status)}</div>
+  const card = (t, g) => `<div class="kcard${g?' emgrp':''} ${t.atrasada?'atras':''} ${t.etapa==='Em espera'?'esp':''} ${t.etapa===FQ?(t.quadro_fechado?'esp':'atras'):''}" draggable="${podeProj()}" data-tar="${t.id}">
+      ${g ? '' : `<div class="cli">${esc(t.cliente)}${t.avulsa?'<span class="tag">avulsa</span>':''}${tagStatus(t.status)}</div>`}
       <div class="lin"><span class="tag" style="margin:0">${esc(t.disciplina)}</span>${t.responsavel?'👤 '+esc(t.responsavel):'<span style="color:var(--amar)">sem responsável</span>'}</div>
       <div class="lin">${t.etapa===FQ ? (t.quadro_fechado ? '<b style="color:var(--amar)">⚠ quadro fechado</b>' + (t.quadro_fechado_em?' em '+dataBR(t.quadro_fechado_em):'') + ' · falta voltar para Concluído' : '<b style="color:var(--verm)">⚡ aguardando fechar quadro</b>') + ' · ✓ ' + dataBR(t.data_conclusao)
         : t.etapa==='Concluído' ? '✓ ' + dataBR(t.data_conclusao) + (t.enviado?' · <span style="color:var(--verde)">enviado</span>':' · <b style="color:var(--amar)">não enviado</b>')
@@ -1210,8 +1218,22 @@ async function telaTarefas(){
       <select id="fConc" style="max-width:240px">${[['30','Concluídas: últimos 30 dias'],['90','Concluídas: últimos 90 dias'],['nao','Concluídas não enviadas'],['todos','Concluídas: todas']].map(([v,r])=>`<option value="${v}" ${f.conc===v?'selected':''}>${r}</option>`).join('')}</select>
       ${podeProj()?'<button class="chip" id="bEquipe">👥 Equipe e disciplinas</button>':''}
       ${diretoria()?'<button class="chip" id="bImpTar">⤵ Trazer tarefas do app antigo</button>':''}</div>
-    <div class="kanban" style="grid-template-columns:repeat(${cols.length},minmax(${cols.length>4?190:220}px,1fr))">${cols.map(e => { const c = l.filter(t => t.etapa === e).sort(ord); return `<div class="kcol ${e==='Fechado'?'kfech':''}" data-col="${e}"><h3><span>${ROT_ET(e)}</span><span class="muted">${c.length}</span></h3>${c.map(card).join('') || '<div class="muted" style="font-size:12px;padding:6px">—</div>'}</div>`; }).join('')}</div></div>`;
+    <div class="kanban" style="grid-template-columns:repeat(${cols.length},minmax(${cols.length>4?190:220}px,1fr))">${cols.map(e => { const c = l.filter(t => t.etapa === e).sort(ord);
+      // agrupa por cliente (obra): cliente com mais de um projeto vira um grupo que abre/fecha
+      const grupos = []; c.forEach(t => { const k = (t.obra_id || 'a:' + t.id); let gq = grupos.find(x => x.k === k); if(!gq) grupos.push(gq = { k, cli: t.cliente, l: [] }); gq.l.push(t); });
+      const fechCol = KB_FECH.has('col:' + e);
+      return `<div class="kcol ${e==='Fechado'?'kfech':''} ${fechCol?'kmin':''}" data-col="${e}"><h3><button class="kmin-bt" data-kcol="${esc(e)}" title="${fechCol?'Abrir':'Minimizar'} a coluna">${fechCol?'▸':'▾'}</button><span>${ROT_ET(e)}</span><span class="muted">${c.length}</span></h3>
+        ${fechCol ? '' : grupos.map(gq => { if(gq.l.length === 1) return card(gq.l[0]);
+          const kk = e + '|' + gq.k, aberto = e === 'Fechado' ? KB_ABRE.has(kk) : !KB_FECH.has(kk);
+          return `<div class="kgrp ${aberto?'':'fech'}"><div class="kgrp-h" data-kgrp="${esc(kk)}" data-padrao="${e==='Fechado'?'f':'a'}"><span class="seta">${aberto?'▾':'▸'}</span><b>${esc(gq.cli)}</b><span class="muted">${gq.l.length} projetos</span></div>
+            ${aberto ? '' : `<div class="kgrp-resumo">${gq.l.map(t => `<span class="tag">${esc(t.disciplina)}</span>`).join('')}</div>`}
+            ${e==='Fechado' && podeProj() ? `<div class="mov" style="margin:4px 0 6px"><button class="btn peq pri" data-dtodos="${esc(gq.k)}">Distribuir os ${gq.l.length} → A fazer</button></div>` : ''}
+            ${aberto ? gq.l.map(t => card(t, true)).join('') : ''}</div>`; }).join('')}
+        ${!fechCol && !c.length ? '<div class="muted" style="font-size:12px;padding:6px">—</div>' : ''}</div>`; }).join('')}</div></div>`;
   ligaBarra(() => formTarefa(null));
+  document.querySelectorAll('[data-kgrp]').forEach(h => h.onclick = () => { const k = h.dataset.kgrp, set = h.dataset.padrao === 'f' ? KB_ABRE : KB_FECH; set.has(k) ? set.delete(k) : set.add(k); kbGuarda(); telaTarefas(); });
+  document.querySelectorAll('[data-kcol]').forEach(h => h.onclick = ev => { ev.stopPropagation(); const k = 'col:' + h.dataset.kcol; KB_FECH.has(k) ? KB_FECH.delete(k) : KB_FECH.add(k); kbGuarda(); telaTarefas(); });
+  document.querySelectorAll('[data-dtodos]').forEach(bt => bt.onclick = () => distribuirCliente(l.filter(t => t.etapa === 'Fechado' && (t.obra_id || 'a:' + t.id) === bt.dataset.dtodos)));
   $('#fResp').onchange = e => { f.resp = e.target.value; telaTarefas(); };
   $('#fDisc').onchange = e => { f.disc = e.target.value; telaTarefas(); };
   $('#fConc').onchange = e => { f.conc = e.target.value; telaTarefas(); };
@@ -1239,6 +1261,32 @@ async function telaTarefas(){
     await aviso('Pronto', `${r.data.importadas} tarefa(s) trazida(s).` + (r.data.sem_obra ? `<br>${r.data.sem_obra} ficaram como avulsas (cliente ainda não unificado) — abra a tarefa e escolha a obra.` : ''));
     telaTarefas();
   };
+}
+/* grupos do quadro abertos/fechados (lembra em cada computador). "Fechados pelo cliente" começa com os clientes fechados */
+const KB_ABRE = new Set(), KB_FECH = new Set();
+try{ const g = JSON.parse(localStorage.getItem('erp-kb') || '{}'); (g.a || []).forEach(x => KB_ABRE.add(x)); (g.f || []).forEach(x => KB_FECH.add(x)); }catch(e){}
+function kbGuarda(){ try{ localStorage.setItem('erp-kb', JSON.stringify({ a: [...KB_ABRE], f: [...KB_FECH] })); }catch(e){} }
+/* distribuir vários projetos do mesmo cliente de uma vez: um projetista para todos, ou um para cada */
+async function distribuirCliente(ts){
+  if(!ts.length) return;
+  const eq = (ST.equipe || []).filter(e => e.ativo);
+  if(!eq.length) return aviso('Sem projetistas', 'Cadastre a equipe em "Equipe e disciplinas" antes de distribuir.');
+  const ops = sel => `<option value="">— deixar em Fechados —</option>${eq.map(e => `<option value="${e.id}" ${sel===e.id?'selected':''}>${esc(e.nome)}</option>`).join('')}`;
+  const pr = modal('Distribuir projetos', `<p style="margin-top:0"><b>${esc(ts[0].cliente)}</b> · ${ts.length} projetos</p>
+    <div class="grade"><label class="campo">Projetista para todos<select id="dsTodos"><option value="">— escolha —</option>${eq.map(e => `<option value="${e.id}">${esc(e.nome)}</option>`).join('')}</select></label>
+      <label class="campo">Prazo (opcional)<input type="date" id="dsPrazo"></label></div>
+    <table class="reg" data-sem-ordem style="margin-top:8px"><thead><tr><th>Projeto</th><th>Projetista</th></tr></thead><tbody>
+      ${ts.map(t => `<tr><td>${esc(t.disciplina)}</td><td><select data-dsr="${t.id}">${ops(t.responsavel_id)}</select></td></tr>`).join('')}</tbody></table>
+    <p class="muted" style="font-size:12px">Os que ficarem sem projetista continuam em "Fechados pelo cliente".</p>`, [['Cancelar', false], ['Mandar para A fazer', true, 'pri']]);
+  $('#dsTodos').onchange = () => document.querySelectorAll('[data-dsr]').forEach(x => x.value = $('#dsTodos').value);
+  if(!await pr) return;
+  const esc2 = [...document.querySelectorAll('[data-dsr]')].filter(x => x.value).map(x => ({ id: x.dataset.dsr, r: x.value })), prazo = $('#dsPrazo').value || null;
+  if(!esc2.length) return aviso('Nada distribuído', 'Escolha o projetista de pelo menos um projeto.');
+  try{
+    for(const x of esc2){ const d = { etapa:'A fazer', responsavel_id: x.r, ordem: Date.now()/1000 }; if(prazo) d.prazo = prazo; const r = await sb.from('tarefas_projeto').update(d).eq('id', x.id); if(r.error) throw r.error; }
+    toast(`${esc2.length} projeto(s) de ${ts[0].cliente} → A fazer`);
+  }catch(e){ aviso('Erro', esc(erroBanco(e))); }
+  telaTarefas();
 }
 async function moverTarefa(t, etapa){
   const d = { etapa, ordem: Date.now()/1000 };
