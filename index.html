@@ -7580,7 +7580,7 @@ async function telaCompras(){
         ${peds.sort((a, b) => Object.keys(ETAPA_PED).indexOf(a.andamento_interno) - Object.keys(ETAPA_PED).indexOf(b.andamento_interno)).map(p => { const os = ocs.filter(o => o.pedido_id === p.id && o.situacao !== 'cancelada');
           return `<tr><td><b>${esc(p.numero || '—')}</b><div class="muted" style="font-size:11px">${esc(p.descricao || '')}</div></td><td>${esc(p.obra || '')}</td><td>${p.empresa || '—'}</td>
           <td>${p.andamento_interno === 'aguardando_sinal' ? '<span class="tag" style="background:#fff4d6;color:#7A6413">fechado · aguardando sinal</span>' : esc(ETAPA_PED[p.andamento_interno])}${p.em_deposito ? ' <span class="tag">em depósito</span>' : ''}</td><td>${os.map(o => `<a href="#" data-oc="${o.id}">OC ${o.numero}</a> ${tagOC(o.situacao)}`).join('<br>') || '—'}</td>
-          <td style="white-space:nowrap">${p.andamento_interno !== 'liberado_entrega' ? `<button class="btn peq pri" data-mc="${p.id}">Montar compra</button>` : `<button class="btn peq" data-dep="${p.id}" data-v="${p.em_deposito ? 0 : 1}">${p.em_deposito ? 'Saiu do depósito' : 'Fica em depósito'}</button><button class="btn peq pri" data-ent="${p.id}">Entregue</button>`}</td></tr>`; }).join('')
+          <td style="white-space:nowrap">${os.some(o => ['enviada','parcial'].includes(o.situacao)) ? `<button class="btn peq pri" data-chg="${p.id}" title="Registrar que o material chegou na empresa">📦 Chegou</button> ` : ''}${p.andamento_interno !== 'liberado_entrega' && os.length && !os.some(o => ['rascunho','enviada','parcial'].includes(o.situacao)) ? `<button class="btn peq pri" data-lib="${p.id}" title="Todas as OCs chegaram">✓ Liberar para instalar</button> ` : ''}${p.andamento_interno !== 'liberado_entrega' ? `<button class="btn peq ${os.length ? '' : 'pri'}" data-mc="${p.id}">Montar compra</button>` : `<button class="btn peq" data-dep="${p.id}" data-v="${p.em_deposito ? 0 : 1}">${p.em_deposito ? 'Saiu do depósito' : 'Fica em depósito'}</button><button class="btn peq pri" data-ent="${p.id}">Entregue</button>`}</td></tr>`; }).join('')
         || '<tr><td colspan="6" class="vazio">Nenhum pedido em compras. O pedido chega aqui quando o sinal é recebido.</td></tr>'}</tbody></table>`
       : `<div class="barra"><input type="search" id="busca" placeholder="Fornecedor, pedido, obra, nº da OC ou da nota…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
           <select id="cpSit" style="max-width:170px">${[['abertas','Em aberto'],['atrasadas','Atrasadas'],['recebidas','Recebidas'],['todas','Todas']].map(([k, t]) => `<option value="${k}" ${f.sit === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
@@ -7592,6 +7592,14 @@ async function telaCompras(){
   document.querySelectorAll('[data-ka]').forEach(k => k.onclick = () => { if(k.dataset.ka === 'atrasadas'){ f.aba = 'ocs'; f.sit = 'atrasadas'; } else f.aba = 'pedidos'; telaCompras(); });
   if($('#cpSit')) $('#cpSit').onchange = e => { f.sit = e.target.value; telaCompras(); };
   document.querySelectorAll('[data-oc]').forEach(a => a.onclick = ev => { ev.preventDefault(); verOC(a.dataset.oc); });
+  document.querySelectorAll('[data-lib]').forEach(b => b.onclick = async () => { const p = peds.find(x => x.id === b.dataset.lib);
+    const sug = (await sb.rpc('compras_sugestao', { p_pedido: p.id })).data || [], falta = sug.filter(x => Number(x.comprar) > 0);
+    if(!await modal('Liberar para instalar?', `Todas as OCs do pedido ${esc(p.numero || '')} chegaram.${falta.length ? `<br><br>Pelo orçamento ainda faltaria: <b>${falta.map(x => esc(x.descricao) + ' (' + numFmt(x.comprar).replace(/,00$/, '') + ')').join(', ')}</b>. Libere só se isso foi trocado, comprado por fora ou não vai mais.` : ''}<br><br>O pedido fica "Material chegou · combinar entrega", Serviços é avisado e a 2ª parcela vai para cobrança.`, [['Cancelar', false], ['Liberar', true, 'pri']])) return;
+    const r = await sb.rpc('compras_liberar_pedido', { p_pedido: p.id }); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); toast('Pedido liberado para instalar.'); atualizaSino(); telaCompras(); });
+  document.querySelectorAll('[data-chg]').forEach(b => b.onclick = async () => { const p = peds.find(x => x.id === b.dataset.chg), abertas = ocs.filter(o => o.pedido_id === p.id && ['enviada','parcial'].includes(o.situacao));
+    if(abertas.length === 1) return registrarChegada(abertas[0].id);
+    const ok = await modal('Qual OC chegou?', `<div class="grade">${abertas.map(o => `<label style="display:flex;gap:8px;align-items:center"><input type="radio" name="chgOc" value="${o.id}" style="width:auto"> OC ${o.numero} · ${esc(o.fornecedor || '')} · ${R$(o.total)}</label>`).join('')}</div>`, [['Cancelar', false], ['Continuar', true, 'pri']]);
+    const r = document.querySelector('input[name=chgOc]:checked'); if(ok && r) registrarChegada(r.value); });
   document.querySelectorAll('[data-mc]').forEach(b => b.onclick = async () => { const p = peds.find(x => x.id === b.dataset.mc);
     if(p.andamento_interno === 'aguardando_sinal' && !await modal('Sinal ainda não recebido', `O pedido ${esc(p.numero || '')} foi fechado, mas o cliente ainda não pagou o sinal. Montar a compra mesmo assim?`, [['Cancelar', false], ['Montar a compra', true, 'pri']])) return;
     montarCompra(p); });
@@ -7658,7 +7666,7 @@ async function verOC(id){
     <div class="card"><h2 style="font-size:15px">Notas do fornecedor</h2>
       ${(nf.data || []).map(n => `<div>NF-e ${esc(n.numero)} · ${R$(n.valor)} · ${n.conferida_em ? '<span class="tag ok">conferida</span>' : `<button class="btn peq pri" data-cf="${n.id}">Conferir recebimento</button>`}</div>`).join('') || '<p class="muted" style="font-size:13px">Nenhuma nota ligada ainda.</p>'}
       ${pend.filter(n => !n.ordem_id).length ? `<p style="font-size:13px;margin-top:8px">Notas deste fornecedor ainda não conferidas:</p>${pend.filter(n => !n.ordem_id).map(n => `<div>NF-e ${esc(n.numero)} · ${R$(n.valor)} · ${dataBR(String(n.data_emissao).slice(0, 10))} <button class="btn peq" data-cf="${n.id}">Conferir com esta OC</button></div>`).join('')}` : ''}</div>
-    <div class="rodape">${['rascunho','enviada','parcial'].includes(O.situacao) ? '<button class="btn" id="voCanc">Cancelar OC</button>' : ''}<button class="btn" id="voImp">Imprimir para o fornecedor</button>
+    <div class="rodape">${['rascunho','enviada','parcial'].includes(O.situacao) ? '<button class="btn" id="voCanc">Cancelar OC</button>' : ''}<button class="btn" id="voImp">Imprimir para o fornecedor</button>${['enviada','parcial'].includes(O.situacao) ? '<button class="btn pri" id="voChegou">📦 Chegou</button>' : ''}
       ${O.situacao !== 'recebida' && O.situacao !== 'cancelada' ? '<button class="btn" id="voSalvar">Salvar</button>' : ''}${O.situacao === 'rascunho' ? '<button class="btn pri" id="voEnviar">Enviar</button>' : ''}</div>`);
   $('#folha').style.width = 'min(960px,100%)';
   const salvar = async () => { const x = await sb.from('compras_ordens').update({ previsao_entrega: $('#voPrev').value || null, condicao: $('#voCond').value.trim() || null, frete: num($('#voFrete').value) || 0, valor_inicial: num($('#voIni').value) || null }).eq('id', id);
@@ -7672,6 +7680,42 @@ async function verOC(id){
     <table><thead><tr><th>Produto</th><th>Código</th><th style="text-align:right">Qtd</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>${its.map(i => `<tr><td>${esc(i.descricao)}</td><td>${esc(i.codigo_fornecedor || '')}</td><td style="text-align:right">${numFmt(i.quantidade).replace(/,00$/, '')} ${esc(i.unidade)}</td><td style="text-align:right">${R$(i.valor_unitario)}</td><td style="text-align:right">${R$(i.quantidade * i.valor_unitario)}</td></tr>`).join('')}
     ${Number(O.frete) ? `<tr><td colspan="4">Frete</td><td style="text-align:right">${R$(O.frete)}</td></tr>` : ''}<tr><td colspan="4"><b>Total</b></td><td style="text-align:right"><b>${R$(O.total)}</b></td></tr></tbody></table>`);
   document.querySelectorAll('#folha [data-cf]').forEach(b => b.onclick = () => conferirRecebimento(b.dataset.cf, id));
+  if($('#voChegou')) $('#voChegou').onclick = () => registrarChegada(id);
+}
+
+/* ---------- 📦 Chegou: registra o que chegou, com ou sem a nota do fornecedor ---------- */
+async function registrarChegada(ordemId){
+  const [o, it] = await Promise.all([ sb.from('compras_resumo').select('*').eq('id', ordemId).single(), sb.from('compras_itens').select('*').eq('ordem_id', ordemId).order('descricao') ]);
+  if(o.error) return aviso('Erro', esc(erroBanco(o.error)));
+  const O = o.data, its = (it.data || []).filter(i => Number(i.quantidade) > Number(i.recebido));
+  const fdoc = O.fornecedor_id ? ((await priv().from('pessoas_dados').select('documento').eq('pessoa_id', O.fornecedor_id).maybeSingle()).data || {}).documento : null;
+  const notas = fdoc ? ((await sb.from('notas_recebidas').select('id,numero,valor,data_emissao,ordem_id,conferida_em,situacao,tipo').eq('emitente_doc', fdoc).is('conferida_em', null)).data || []).filter(n => n.situacao === 'autorizada' && (!n.ordem_id || n.ordem_id === ordemId)) : [];
+  const q = v => numFmt(v).replace(/,00$/, '');
+  abrirPainel(`<div class="cab"><h2>📦 Chegou · OC ${O.numero} · ${esc(O.fornecedor || '')}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+    <div class="card" style="font-size:13px">${O.pedido_numero ? `Pedido <b>${esc(O.pedido_numero)}</b> · ${esc(O.obra || '')}. Os itens entram no estoque <b>reservados para este pedido</b>; quando todas as OCs do pedido chegarem, ele fica <b>"Material chegou · liberado para instalar"</b> e Serviços recebe o aviso.` : 'Compra para o estoque próprio.'}
+      <br>Confira quantidade, caixas e avarias. Se chegou só uma parte, informe só o que chegou.</div>
+    <div class="card"><table class="reg" data-sem-ordem><thead><tr><th>Item</th><th style="text-align:right">Comprado</th><th style="text-align:right">Já chegou</th><th>Chegou agora</th></tr></thead><tbody>
+      ${its.map(i => `<tr data-chi="${i.id}"><td><b>${esc(i.descricao)}</b>${i.codigo_fornecedor ? `<div class="muted" style="font-size:11px">cód. ${esc(i.codigo_fornecedor)}</div>` : ''}</td><td style="text-align:right">${q(i.quantidade)} ${esc(String(i.unidade || '').toLowerCase())}</td>
+        <td style="text-align:right">${q(i.recebido) || '0'}</td><td><input data-chq inputmode="decimal" value="${q(i.quantidade - i.recebido)}" style="width:80px"></td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Tudo desta OC já chegou.</td></tr>'}</tbody></table></div>
+    <div class="card"><div class="grade">
+      <label class="campo">Nota do fornecedor<select id="chNota"><option value="">Sem nota por enquanto (ligo depois)</option>${notas.filter(n => n.tipo !== 'nfse').map(n => `<option value="${n.id}">NF-e ${esc(n.numero || '')} · ${R$(n.valor)} · ${dataBR(String(n.data_emissao || '').slice(0, 10))}</option>`).join('')}</select></label>
+      <label class="campo largo">Observação<input id="chObs" placeholder="ex.: caixa amassada, falta 1 unidade, recebido por…"></label></div>
+      <p class="muted" style="font-size:12px;margin:6px 0 0">${notas.length ? 'A nota do fornecedor já está no ERP: escolhendo-a, a chegada e a nota ficam ligadas.' : 'A nota deste fornecedor ainda não entrou no ERP. Quando entrar, em "Conferir recebimento" aparece o botão para ligá-la a esta chegada (sem entrar de novo no estoque).'}</p></div>
+    <div class="rodape">${its.length ? '<button class="btn pri" id="chOk">Registrar chegada</button>' : ''}</div>`);
+  $('#folha').style.width = 'min(900px,100%)';
+  if(!$('#chOk')) return;
+  $('#chOk').onclick = async () => {
+    const itens = [...document.querySelectorAll('#folha [data-chi]')].map(tr => ({ compra_item_id: tr.dataset.chi, quantidade: num(tr.querySelector('[data-chq]').value) })).filter(x => x.quantidade > 0);
+    if(!itens.length) return aviso('Nada chegou?', 'Informe a quantidade que chegou de pelo menos um item.');
+    const nota = $('#chNota').value;
+    const r = nota ? await sb.rpc('compras_conferir', { p_nota: nota, p_ordem: ordemId, p_itens: itens })
+                   : await sb.rpc('compras_chegada', { p_ordem: ordemId, p_itens: itens, p_obs: $('#chObs').value.trim() || null });
+    if(r.error) return aviso('Não foi possível registrar', /compras_chegada/.test(r.error.message) ? 'Rode o script <b>43_compras_chegada.sql</b> no Supabase.' : esc(erroBanco(r.error)));
+    fecharPainel(); atualizaSino();
+    await aviso('Chegada registrada ✓', `${r.data.produtos} item(ns) no estoque${O.pedido_numero ? ', reservados para o pedido ' + esc(O.pedido_numero) : ''}.` +
+      (r.data.pedido === 'liberado_entrega' ? '<br><b>Todo o material do pedido chegou</b>: ele está liberado para instalar e Serviços foi avisado.' : r.data.ordem === 'parcial' ? '<br>Ainda falta chegar parte desta OC.' : ''));
+    if(ST.aba === 'cp_compras') telaCompras();
+  };
 }
 
 /* ---------- conferência: o que chegou × nota × OC ---------- */
@@ -7685,6 +7729,14 @@ async function conferirRecebimento(notaId, ordemId){
   const its = oid ? ((await sb.from('compras_itens').select('*').eq('ordem_id', oid)).data || []) : [];
   const itensEst = ((await sb.from('estoque_itens').select('id,nome,unidade,ativo').order('nome')).data || []).filter(x => x.ativo !== false);
   const prods = (n.dados?.itens || []);
+  const chs = oid ? ((await sb.from('compras_chegadas').select('id,em,itens,nota_id').eq('ordem_id', oid).is('nota_id', null).order('em')).data || []) : [];
+  if(chs.length){
+    const esc2 = await modal('Esta OC já teve chegada registrada', `O material desta OC já foi registrado como chegado (sem nota) em ${[...new Set(chs.map(c => new Date(c.em).toLocaleDateString('pt-BR')))].join(', ')}.<br><br>Esta nota é desse material? Então é só <b>ligar a nota à chegada</b> — nada entra de novo no estoque.`,
+      [['Cancelar', 0], ['Conferir item por item (outro material)', 2], ['Ligar à chegada', 1, 'pri']]);
+    if(!esc2) return;
+    if(esc2 === 1){ const r = await sb.rpc('compras_ligar_nota', { p_nota: notaId, p_chegada: chs[0].id }); if(r.error) return aviso('Erro', esc(erroBanco(r.error)));
+      toast(`NF-e ${n.numero || ''} ligada à chegada.`); fecharPainel(); atualizaSino(); if(ST.aba === 'cp_compras') telaCompras(); if(ST.aba === 'fn_recebidas') telaRecebidas(); return; }
+  }
   const casa = p => its.find(i => i.codigo_fornecedor && i.codigo_fornecedor === p.codigo) || its.find(i => norm(i.descricao) === norm(p.descricao)) || null;
   abrirPainel(`<div class="cab"><h2>Conferir recebimento · NF-e ${esc(n.numero || '')}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card" style="font-size:13px">${esc(n.emitente_nome || '')} · ${R$(n.valor)}<br>Confira quantidade, caixas e avarias. Itens da OC de um pedido entram <b>reservados para o pedido</b>; o resto vai para o estoque próprio (ou "não entra").
