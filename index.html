@@ -114,6 +114,10 @@ a.btn{display:inline-block;text-decoration:none;color:inherit}a.btn.pri{color:#f
 .item .nome{font-weight:600}
 .item .sub{font-size:12px;color:var(--texto2);margin-top:2px}
 .item .acoes{margin-left:auto;display:flex;gap:6px;flex-shrink:0}
+select.st-amar{background:#FCF0D0;border-color:#B5972F;color:#7A6413;font-weight:600}
+select.st-verd{background:#DEF2E2;border-color:#3F7D4F;color:#245C31;font-weight:600}
+select.st-verm{background:#F9DCD8;border-color:#9C3327;color:#7A241A;font-weight:600}
+select.st-amar option,select.st-verd option,select.st-verm option{background:#fff;color:#141414;font-weight:400}
 .tag{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;background:#f0f0f2;color:var(--texto2);margin-left:6px;vertical-align:1px}
 .tag.rasc{background:#fdf3e1;color:var(--amar)}
 .tag.inat{background:#f0f0f2;color:#999}
@@ -225,6 +229,7 @@ footer{text-align:center;color:var(--texto2);font-size:11px;padding:20px}
 .kanban{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px;overflow:auto;align-items:start}
 .kcol{background:#ececf0;border-radius:var(--r);padding:10px;min-height:120px}
 .kcol.alvo{outline:2px dashed var(--preto)}
+.kcol.kfech{background:#fde9e9}.kcol.kfech h3 span:first-child{color:var(--verm)}
 .kcol h3{margin:2px 4px 10px;font-size:13px;display:flex;justify-content:space-between}
 .kcard{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:10px 11px;margin-bottom:8px;cursor:pointer;font-size:13px}
 .kcard:hover{border-color:#bbb}.kcard.atras{border-left:4px solid var(--verm)}.kcard.esp{border-left:4px solid var(--amar)}
@@ -232,7 +237,7 @@ footer{text-align:center;color:var(--texto2);font-size:11px;padding:20px}
 .kcard .mov{display:flex;gap:4px;margin-top:7px;flex-wrap:wrap}.kcard .mov button{font-size:11px;padding:3px 7px}
 .discs{display:flex;flex-wrap:wrap;gap:6px}.discs label{display:flex;gap:5px;align-items:center;border:1px solid var(--borda);border-radius:999px;padding:5px 10px;background:#fff;font-size:13px}
 .discs input{width:auto}
-@media (max-width:860px){.kanban{grid-template-columns:repeat(4,240px)}}
+@media (max-width:860px){.kanban{grid-template-columns:repeat(5,240px)!important}}
 .tiles-area{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--texto2);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--borda)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:12px}
 .tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:96px;padding:14px 6px 12px;background:linear-gradient(180deg,#fff,#f2f2f5);border:1px solid #e4e4e9;border-radius:14px;text-align:center;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.05);transition:transform .1s,box-shadow .1s;user-select:none}
@@ -972,6 +977,12 @@ const DISC_ORC = ['Hidráulica','Elétrica','Esgoto','Água Pluvial','Gás','SPD
 const DISC_FASE = ['Hidráulica','Elétrica','Esgoto','Água pluvial','Gás','SPDA','Telefone','Piscina'];
 const FASES_DISC = ['Não tem','Pendente','Anteprojeto','Projeto Final'];
 const SIT_PARC = ['Aguardar','Cobrar','Recebido'];
+/* cores das fases e das parcelas, iguais às do app Projetos (Anteprojeto fica sem cor, como lá) */
+const COR_ST = { 'Pendente':'amar', 'Aguardar':'amar', 'Projeto Final':'verd', 'Recebido':'verd', 'Não tem':'verm', 'Cobrar':'verm' };
+function pintaStatus(raiz){ (raiz || document).querySelectorAll('select[data-fase],select[data-ps]').forEach(s => { s.classList.remove('st-amar','st-verd','st-verm'); const c = COR_ST[s.value]; if(c) s.classList.add('st-' + c); }); }
+document.addEventListener('change', e => { if(e.target.matches && e.target.matches('select[data-fase],select[data-ps]')) setTimeout(() => pintaStatus(), 0); });
+(function(){ let t; const obs = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => pintaStatus(), 30); });
+  const liga = () => { const f = document.getElementById('folha'); if(f) obs.observe(f, { childList:true, subtree:true }); else setTimeout(liga, 300); }; liga(); })();
 const R$ = n => Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const num = v => { let t = String(v??'').trim().replace(/[^\d,.-]/g,''); t = t.includes(',') ? t.replace(/\./g,'').replace(',','.') : (/^-?\d+\.\d{1,2}$/.test(t) ? t : t.replace(/\./g,'')); const n = parseFloat(t); return isNaN(n) ? 0 : n; };
 const numFmt = n => n ? Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
@@ -1146,7 +1157,8 @@ function pedirTexto(tit, txt, valor){
 }
 
 /* ================== Projetos · Projetos e tarefas (kanban) ================== */
-const ETAPAS = ['A fazer','Em espera','Em andamento','Concluído'];
+const ETAPAS = ['Fechado','A fazer','Em espera','Em andamento','Concluído'];
+const ROT_ET = e => e === 'Fechado' ? 'Fechados pelo cliente' : e;   // projetos que o cliente fechou, esperando escolher o projetista
 const FQ = 'Fechar quadro', CONCL = e => e === 'Concluído' || e === FQ;   // "Fechar quadro" conta como concluída (igual ao app)
 function zapFecharQuadro(t){
   const link = location.href.split('#')[0];
@@ -1178,11 +1190,12 @@ async function telaTarefas(){
       <div class="lin">${t.etapa===FQ ? (t.quadro_fechado ? '<b style="color:var(--amar)">⚠ quadro fechado</b>' + (t.quadro_fechado_em?' em '+dataBR(t.quadro_fechado_em):'') + ' · falta voltar para Concluído' : '<b style="color:var(--verm)">⚡ aguardando fechar quadro</b>') + ' · ✓ ' + dataBR(t.data_conclusao)
         : t.etapa==='Concluído' ? '✓ ' + dataBR(t.data_conclusao) + (t.enviado?' · <span style="color:var(--verde)">enviado</span>':' · <b style="color:var(--amar)">não enviado</b>')
         : t.etapa==='Em espera' ? '⏸ aguardando cliente' : t.prazo ? `<span style="${t.atrasada?'color:var(--verm);font-weight:600':''}">prazo ${dataBR(t.prazo)}${t.atrasada?' · atrasada':''}</span>` : 'sem prazo'}</div>
-      ${podeProj()&&t.etapa!==FQ?`<div class="mov">${ETAPAS.indexOf(t.etapa)>0?`<button class="btn peq" data-mv="${t.id}" data-d="-1">← ${ETAPAS[ETAPAS.indexOf(t.etapa)-1]}</button>`:''}${ETAPAS.indexOf(t.etapa)<3?`<button class="btn peq" data-mv="${t.id}" data-d="1">${ETAPAS[ETAPAS.indexOf(t.etapa)+1]} →</button>`:''}${t.etapa==='Concluído'&&!t.enviado?`<button class="btn peq" data-env="${t.id}">marcar enviado</button>`:''}${t.etapa==='Concluído'&&t.disciplina==='Elétrica'?`<button class="btn peq" data-pfq="${t.id}" title="O quadro elétrico ainda precisa ser fechado">⚡ precisa fechar quadro</button>`:''}</div>`:''}
+      ${podeProj()&&t.etapa!==FQ?`<div class="mov">${ETAPAS.indexOf(t.etapa)>1?`<button class="btn peq" data-mv="${t.id}" data-d="-1">← ${ETAPAS[ETAPAS.indexOf(t.etapa)-1]}</button>`:''}${ETAPAS.indexOf(t.etapa)<ETAPAS.length-1?`<button class="btn peq ${t.etapa==='Fechado'?'pri':''}" data-mv="${t.id}" data-d="1">${t.etapa==='Fechado'?'Distribuir → A fazer':ETAPAS[ETAPAS.indexOf(t.etapa)+1] + ' →'}</button>`:''}${t.etapa==='Concluído'&&!t.enviado?`<button class="btn peq" data-env="${t.id}">marcar enviado</button>`:''}${t.etapa==='Concluído'&&t.disciplina==='Elétrica'?`<button class="btn peq" data-pfq="${t.id}" title="O quadro elétrico ainda precisa ser fechado">⚡ precisa fechar quadro</button>`:''}</div>`:''}
       ${podeProj()&&t.etapa===FQ?`<div class="mov"><label style="display:flex;gap:5px;align-items:center;font-size:12px;cursor:pointer"><input type="checkbox" data-qf="${t.id}" style="width:auto" ${t.quadro_fechado?'checked':''}> quadro fechado</label><button class="btn peq" data-zfq="${t.id}" style="color:#1DA851">📲 WhatsApp</button><button class="btn peq" data-vfq="${t.id}">✓ voltar p/ Concluído</button></div>`:''}
     </div>`;
   $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px">
-      <div class="kpi"><span class="muted">Em aberto</span><b>${ativas.length}</b></div>
+      <div class="kpi ${ativas.some(t=>t.etapa==='Fechado')?'v':''}"><span class="muted">Fechados a distribuir</span><b>${ativas.filter(t=>t.etapa==='Fechado').length}</b></div>
+      <div class="kpi"><span class="muted">Em aberto</span><b>${ativas.filter(t=>t.etapa!=='Fechado').length}</b></div>
       <div class="kpi v"><span class="muted">Atrasadas</span><b>${ativas.filter(t=>t.atrasada).length}</b></div>
       <div class="kpi"><span class="muted">Aguardando cliente</span><b style="color:var(--amar)">${ativas.filter(t=>t.etapa==='Em espera').length}</b></div>
       <div class="kpi" data-naoenv><span class="muted">Concluídas não enviadas</span><b>${ST.tarefas.filter(t=>t.status!=='inativo'&&t.etapa==='Concluído'&&!t.enviado).length}</b></div>
@@ -1197,7 +1210,7 @@ async function telaTarefas(){
       <select id="fConc" style="max-width:240px">${[['30','Concluídas: últimos 30 dias'],['90','Concluídas: últimos 90 dias'],['nao','Concluídas não enviadas'],['todos','Concluídas: todas']].map(([v,r])=>`<option value="${v}" ${f.conc===v?'selected':''}>${r}</option>`).join('')}</select>
       ${podeProj()?'<button class="chip" id="bEquipe">👥 Equipe e disciplinas</button>':''}
       ${diretoria()?'<button class="chip" id="bImpTar">⤵ Trazer tarefas do app antigo</button>':''}</div>
-    <div class="kanban" style="grid-template-columns:repeat(${cols.length},minmax(${cols.length>4?200:220}px,1fr))">${cols.map(e => { const c = l.filter(t => t.etapa === e).sort(ord); return `<div class="kcol" data-col="${e}"><h3><span>${e}</span><span class="muted">${c.length}</span></h3>${c.map(card).join('') || '<div class="muted" style="font-size:12px;padding:6px">—</div>'}</div>`; }).join('')}</div></div>`;
+    <div class="kanban" style="grid-template-columns:repeat(${cols.length},minmax(${cols.length>4?190:220}px,1fr))">${cols.map(e => { const c = l.filter(t => t.etapa === e).sort(ord); return `<div class="kcol ${e==='Fechado'?'kfech':''}" data-col="${e}"><h3><span>${ROT_ET(e)}</span><span class="muted">${c.length}</span></h3>${c.map(card).join('') || '<div class="muted" style="font-size:12px;padding:6px">—</div>'}</div>`; }).join('')}</div></div>`;
   ligaBarra(() => formTarefa(null));
   $('#fResp').onchange = e => { f.resp = e.target.value; telaTarefas(); };
   $('#fDisc').onchange = e => { f.disc = e.target.value; telaTarefas(); };
@@ -1229,11 +1242,21 @@ async function telaTarefas(){
 }
 async function moverTarefa(t, etapa){
   const d = { etapa, ordem: Date.now()/1000 };
+  if(t.etapa === 'Fechado' && etapa !== 'Fechado'){   // distribuir: escolhe o projetista (e o prazo)
+    const eq = (ST.equipe || []).filter(e => e.ativo);
+    if(!eq.length) return aviso('Sem projetistas', 'Cadastre a equipe em "Equipe e disciplinas" antes de distribuir.');
+    const ok = await modal('Distribuir projeto', `<p style="margin-top:0"><b>${esc(t.disciplina)}</b> · ${esc(t.cliente)}</p>
+      <div class="grade"><label class="campo">Projetista<select id="dsResp"><option value="">— escolha —</option>${eq.map(e => `<option value="${e.id}" ${t.responsavel_id===e.id?'selected':''}>${esc(e.nome)}</option>`).join('')}</select></label>
+      <label class="campo">Prazo (opcional)<input type="date" id="dsPrazo" value="${t.prazo||''}"></label></div>`, [['Cancelar', false], ['Mandar para ' + ROT_ET(etapa), true, 'pri']]);
+    if(!ok) return;
+    const r = $('#dsResp').value; if(!r) return aviso('Falta o projetista', 'Escolha quem vai fazer o projeto.');
+    d.responsavel_id = r; if($('#dsPrazo').value) d.prazo = $('#dsPrazo').value;
+  }
   if(CONCL(t.etapa) && !CONCL(etapa)) d.enviado = false;
   if(CONCL(etapa) && !CONCL(t.etapa)) d.data_conclusao = hojeISO();   // de Concluído ↔ Fechar quadro a data não muda
   if(etapa === FQ) d.quadro_fechado = false;                          // entrou para fechar: começa "aguardando"
   if(etapa === FQ && t.disciplina !== 'Elétrica' && !await modal('Fechar quadro?', `Esta tarefa é de ${esc(t.disciplina)}, não de Elétrica. Mandar mesmo para "Fechar quadro"?`, [['Cancelar',false],['Mandar',true,'pri']])) return;
-  try{ await exec(sb.from('tarefas_projeto').update(d).eq('id', t.id), `${t.disciplina} · ${t.cliente} → ${etapa}`); telaTarefas(); }catch(e){}
+  try{ await exec(sb.from('tarefas_projeto').update(d).eq('id', t.id), `${t.disciplina} · ${t.cliente} → ${ROT_ET(etapa)}`); telaTarefas(); }catch(e){}
 }
 
 async function formTarefa(id){
@@ -1251,7 +1274,7 @@ async function formTarefa(id){
       ${novo ? `<div class="campo largo"><span>Disciplinas (pode marcar mais de uma — cria uma tarefa para cada)</span><div class="discs">${discs.map(d=>`<label><input type="checkbox" value="${esc(d.nome)}"> ${esc(d.nome)}</label>`).join('')}</div></div>`
              : `<label class="campo">Disciplina<select id="tfDisc">${discs.map(d=>`<option ${d.nome===T.disciplina?'selected':''}>${esc(d.nome)}</option>`).join('')}</select></label>`}
       <label class="campo">Responsável<select id="tfResp"><option value="">— ninguém ainda —</option>${ST.equipe.filter(e=>e.ativo||e.id===T.responsavel_id).map(e=>`<option value="${e.id}" ${e.id===T.responsavel_id?'selected':''}>${esc(e.nome)}</option>`).join('')}</select></label>
-      <label class="campo">Etapa<select id="tfEtapa">${[...ETAPAS, FQ].map(e=>`<option ${e===T.etapa?'selected':''}>${e}</option>`).join('')}</select></label>
+      <label class="campo">Etapa<select id="tfEtapa">${[...ETAPAS, FQ].map(e=>`<option value="${e}" ${e===T.etapa?'selected':''}>${ROT_ET(e)}</option>`).join('')}</select></label>
       <label class="campo" id="tfQfW" style="justify-content:flex-end"><span style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="tfQf" style="width:auto" ${T.quadro_fechado?'checked':''}> quadro fechado${T.quadro_fechado_em?' em '+dataBR(T.quadro_fechado_em):''}</span></label>
       <label class="campo" id="tfPrazoW">Prazo<input id="tfPrazo" type="date" value="${T.prazo||''}"></label>
       <label class="campo" id="tfConcW">Concluída em<input id="tfConc" type="date" value="${T.data_conclusao||''}"></label>
@@ -1670,6 +1693,8 @@ async function atualizaSino(){
     if(v.length) itens.push({ ord:4, aba:'fn_receber', ic:'alerta', txt:`<b>${v.length}</b> título(s) vencido(s) · ${R$(v.reduce((s, x) => s + Number(x.valor), 0))}` }); }));
   if('DAPG'.includes(l)) jobs.push(sb.from('tarefas_resumo').select('id,atrasada,etapa,status,quadro_fechado').then(r => { const ts = (r.data || []).filter(t => t.status !== 'inativo'), n = ts.filter(t => !['Concluído','Fechar quadro'].includes(t.etapa) && t.atrasada).length;
     if(n) itens.push({ ord:5, aba:'pj_projetos', ic:'relogio', txt:`<b>${n}</b> tarefa(s) de projeto atrasada(s)` });
+    const fc = ts.filter(t => t.etapa === 'Fechado').length;
+    if(fc && l !== 'G') itens.push({ ord:4.9, aba:'pj_projetos', ic:'alerta', txt:`<b>${fc}</b> projeto(s) fechado(s) pelo cliente para distribuir` });
     const q = ts.filter(t => t.etapa === 'Fechar quadro' && !t.quadro_fechado).length;
     if(q && l !== 'G') itens.push({ ord:5.1, aba:'pj_projetos', ic:'alerta', txt:`<b>${q}</b> quadro(s) elétrico(s) para fechar` }); }));
   if('DA'.includes(l) && typeof avisosFiscais === 'function') jobs.push(avisosFiscais().then(a => itens.push(...a)));
