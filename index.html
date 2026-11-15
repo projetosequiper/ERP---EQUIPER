@@ -1221,7 +1221,7 @@ async function telaTarefas(){
     <div class="kanban" style="grid-template-columns:repeat(${cols.length},minmax(${cols.length>4?190:220}px,1fr))">${cols.map(e => { const c = l.filter(t => t.etapa === e).sort(ord);
       // agrupa por cliente (obra): cliente com mais de um projeto vira um grupo que abre/fecha
       const grupos = []; c.forEach(t => { const k = (t.obra_id || 'a:' + t.id); let gq = grupos.find(x => x.k === k); if(!gq) grupos.push(gq = { k, cli: t.cliente, l: [] }); gq.l.push(t); });
-      const fechCol = KB_FECH.has('col:' + e);
+      const fechCol = e === 'Fechado' ? !KB_ABRE.has('col:Fechado') : KB_FECH.has('col:' + e);   // "Fechados pelo cliente" começa minimizada
       return `<div class="kcol ${e==='Fechado'?'kfech':''} ${fechCol?'kmin':''}" data-col="${e}"><h3><button class="kmin-bt" data-kcol="${esc(e)}" title="${fechCol?'Abrir':'Minimizar'} a coluna">${fechCol?'▸':'▾'}</button><span>${ROT_ET(e)}</span><span class="muted">${c.length}</span></h3>
         ${fechCol ? '' : grupos.map(gq => { if(gq.l.length === 1) return card(gq.l[0]);
           const kk = e + '|' + gq.k, aberto = e === 'Fechado' ? KB_ABRE.has(kk) : !KB_FECH.has(kk);
@@ -1229,10 +1229,10 @@ async function telaTarefas(){
             ${aberto ? '' : `<div class="kgrp-resumo">${gq.l.map(t => `<span class="tag">${esc(t.disciplina)}</span>`).join('')}</div>`}
             ${e==='Fechado' && podeProj() ? `<div class="mov" style="margin:4px 0 6px"><button class="btn peq pri" data-dtodos="${esc(gq.k)}">Distribuir os ${gq.l.length} → A fazer</button></div>` : ''}
             ${aberto ? gq.l.map(t => card(t, true)).join('') : ''}</div>`; }).join('')}
-        ${!fechCol && !c.length ? '<div class="muted" style="font-size:12px;padding:6px">—</div>' : ''}</div>`; }).join('')}</div></div>`;
+        ${fechCol && c.length ? `<div class="muted" style="font-size:12px;padding:2px 4px 4px;cursor:pointer" data-kcol="${esc(e)}">${grupos.length} cliente(s) · clique para abrir</div>` : ''}${!fechCol && !c.length ? '<div class="muted" style="font-size:12px;padding:6px">—</div>' : ''}</div>`; }).join('')}</div></div>`;
   ligaBarra(() => formTarefa(null));
   document.querySelectorAll('[data-kgrp]').forEach(h => h.onclick = () => { const k = h.dataset.kgrp, set = h.dataset.padrao === 'f' ? KB_ABRE : KB_FECH; set.has(k) ? set.delete(k) : set.add(k); kbGuarda(); telaTarefas(); });
-  document.querySelectorAll('[data-kcol]').forEach(h => h.onclick = ev => { ev.stopPropagation(); const k = 'col:' + h.dataset.kcol; KB_FECH.has(k) ? KB_FECH.delete(k) : KB_FECH.add(k); kbGuarda(); telaTarefas(); });
+  document.querySelectorAll('[data-kcol]').forEach(h => h.onclick = ev => { ev.stopPropagation(); const k = 'col:' + h.dataset.kcol, set = h.dataset.kcol === 'Fechado' ? KB_ABRE : KB_FECH; set.has(k) ? set.delete(k) : set.add(k); kbGuarda(); telaTarefas(); });
   document.querySelectorAll('[data-dtodos]').forEach(bt => bt.onclick = () => distribuirCliente(l.filter(t => t.etapa === 'Fechado' && (t.obra_id || 'a:' + t.id) === bt.dataset.dtodos)));
   $('#fResp').onchange = e => { f.resp = e.target.value; telaTarefas(); };
   $('#fDisc').onchange = e => { f.disc = e.target.value; telaTarefas(); };
