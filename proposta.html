@@ -379,8 +379,12 @@ async function iniciar(){
   // o que vem ligado: a aprovação (se já aprovou) › o que ele deixou da última vez › tudo
   let ini = null;
   if(travada && R.aprovacao) ini = R.aprovacao.sel;
-  else { try{ const l = JSON.parse(localStorage.getItem('prop-' + TOKEN) || 'null'); if(l && l.rev === R.revisao) ini = l.sel; }catch(e){}
-         if(!ini && Array.isArray(R.ultima_selecao) && R.ultima_selecao.length) ini = R.ultima_selecao; }
+  else {
+    // só aproveita uma seleção guardada se ela for desta versão da proposta (todos os itens existem e tem algum ligado);
+    // senão, tudo começa ligado
+    const ks = new Set(SYS.map(s => s.k)), vale = l => Array.isArray(l) && l.length && l.every(k => ks.has(k));
+    try{ const l = JSON.parse(localStorage.getItem('prop-' + TOKEN) || 'null'); if(l && l.rev === R.revisao && vale(l.sel)) ini = l.sel; }catch(e){}
+    if(!ini && vale(R.ultima_selecao)) ini = R.ultima_selecao; }
   SYS.forEach(s => on[s.k] = ini ? ini.includes(s.k) : true);
   montar(); render();
   $('#carregando').hidden = true; $('#pagina').hidden = false;
