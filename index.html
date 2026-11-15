@@ -1533,12 +1533,12 @@ function abrirDrop(btn, html){
     if(k === 'sair'){ await sb.auth.signOut(); location.reload(); return; }
     if(k === 'foto') return trocarMinhaFoto();
     if(k === 'instalar') return instalarApp();
-    ST.aba = k; ST.busca = ''; await carregar(); desenhar(); });
+    ST.aba = k; ST.busca = ''; await carregar(); desenhar(); if(b.dataset.orc && typeof abrirPropostaOnline === 'function') abrirPropostaOnline(b.dataset.orc); });
 }
 function desenhaAvisos(){
   const l = ST.avisos || [];
   return `<div class="dr-cab"><b>Avisos</b><span>${l.length ? 'o que precisa da sua atenção' : 'nada pendente agora'}</span></div>`
-    + (l.length ? l.map(a => `<button class="dr-it" data-dr="${a.aba}">${ico(a.ic)}<span>${a.txt}</span></button>`).join('') : '<div class="dr-vazio">Nenhum aviso. 👍</div>');
+    + (l.length ? l.map(a => `<button class="dr-it" data-dr="${a.aba}"${a.orc ? ` data-orc="${a.orc}"` : ''}>${ico(a.ic)}<span>${a.txt}</span></button>`).join('') : '<div class="dr-vazio">Nenhum aviso. 👍</div>');
 }
 async function contaChatNaoLidas(){
   const [lidos, ult] = await Promise.all([ sb.from('chat_lidos').select('*'), sb.from('chat_mensagens').select('canal,criado_em,de_id').order('criado_em', { ascending:false }).limit(500) ]);
@@ -1566,6 +1566,7 @@ async function atualizaSino(){
   if(l === 'D' && typeof avisosBackup === 'function') jobs.push(avisosBackup().then(a => itens.push(...a)).catch(() => {}));
   if('DA'.includes(l) && typeof avisosContasVariaveis === 'function') jobs.push(avisosContasVariaveis().then(a => itens.push(...a)).catch(() => {}));
   if('DAS'.includes(l) && typeof avisosCompras === 'function') jobs.push(avisosCompras().then(a => itens.push(...a)).catch(() => {}));
+  if(typeof avisosPropostas === 'function') jobs.push(avisosPropostas().then(a => itens.push(...a)).catch(() => {}));
   if('DAPS'.includes(l) && typeof avisosPendencias === 'function') jobs.push(avisosPendencias().then(a => itens.push(...a)).catch(() => {}));
   await Promise.all(jobs.map(j => j.catch(() => {})));
   ST.avisos = itens.sort((a, b) => a.ord - b.ord);
@@ -5131,8 +5132,9 @@ async function importarProdutos(){
 ST.orc = { tipo:'', etapa:'abertos' };
 async function telaOrc(){
   $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
-  const r = await sb.from('orcamentos_resumo').select('*').order('numero', { ascending:false });
+  const [r, rpo] = await Promise.all([ sb.from('orcamentos_resumo').select('*').order('numero', { ascending:false }), sb.from('propostas_online').select('orcamento_id,situacao,ativa') ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
+  const PO = Object.fromEntries((rpo.data || []).map(p => [p.orcamento_id, p]));
   const f = ST.orc, mes = hojeISO().slice(0,7), todos = (r.data || []).filter(o => ST.mostrarInativos || o.status !== 'inativo').filter(o => !f.tipo || o.tipo === f.tipo);
   const FILT = { abertos: o => ['elaboracao','enviado'].includes(o.etapa), elaboracao: o => o.etapa === 'elaboracao', enviado: o => o.etapa === 'enviado', aprovados: o => o.etapa.startsWith('aprovado'), perdidos: o => ['perdido','cancelado'].includes(o.etapa), todos: () => true };
   const l = todos.filter(FILT[f.etapa]).filter(o => !ST.busca || norm(numOrc(o.numero) + ' ' + (o.obra||'') + ' ' + (o.pagador||'') + ' ' + (o.pagador_apelido||'') + ' ' + ((o.pagador_codigos||[]).join(' ')) + ' ' + (o.referencia||'') + ' ' + (o.grupos||'')).includes(norm(ST.busca)));
@@ -5150,7 +5152,7 @@ async function telaOrc(){
       <button class="btn pri" id="btnNovo">+ Novo orçamento</button></div>
     <table class="reg"><thead><tr><th>Nº</th><th>Tipo</th><th>Cliente · obra</th><th>Itens</th><th>Data</th><th style="text-align:right">Total</th><th>Situação</th></tr></thead><tbody>
     ${l.map(o => `<tr data-orc2="${o.id}" style="cursor:pointer"><td><b>${numOrc(o.numero)}</b></td><td>${TIPOS_ORC[o.tipo][1]} ${TIPOS_ORC[o.tipo][0]}</td><td><b>${esc(o.pagador || o.obra)}</b>${tagStatus(o.status)}${o.obra && o.pagador ? `<div class="muted" style="font-size:12px">🏠 ${esc(o.obra)}</div>` : !o.obra ? '<div class="muted" style="font-size:12px">obra criada ao aprovar</div>' : ''}</td>
-      <td style="font-size:12px">${esc(o.grupos||'')}</td><td>${dataBR(o.data_orcamento)}${o.etapa==='enviado'&&o.validade&&o.validade<hoje?'<div style="color:var(--verm);font-size:11px">validade vencida</div>':''}</td><td style="text-align:right">${R$(o.total)}</td><td>${tagOrc(o.etapa)}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum orçamento.</td></tr>'}</tbody></table></div>`;
+      <td style="font-size:12px">${esc(o.grupos||'')}</td><td>${dataBR(o.data_orcamento)}${o.etapa==='enviado'&&o.validade&&o.validade<hoje?'<div style="color:var(--verm);font-size:11px">validade vencida</div>':''}</td><td style="text-align:right">${R$(o.total)}</td><td>${tagOrc(o.etapa)}${PO[o.id] && PO[o.id].situacao !== 'rascunho' && (PO[o.id].situacao !== 'confirmada' || !o.etapa.startsWith('aprovado')) ? '<div>' + tagPO(PO[o.id].situacao) + '</div>' : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum orçamento.</td></tr>'}</tbody></table></div>`;
   ligaBarra(() => novoOrcamento(null));
   document.querySelectorAll('[data-ft]').forEach(b => b.onclick = () => { f.tipo = b.dataset.ft; telaOrc(); });
   document.querySelectorAll('[data-fe]').forEach(b => b.onclick = () => { f.etapa = b.dataset.fe; telaOrc(); });
@@ -5219,7 +5221,7 @@ async function formOrc(id, pre){
         <div class="grade" style="margin-top:8px">${Object.entries(ROT_TEXTOS).map(([k, r]) => `<label class="campo largo">${r}<textarea data-tx="${k}" rows="${k==='apresentacao'||k==='vencimento'?2:4}">${esc(O.textos[k])}</textarea></label>`).join('')}</div></details>` : ''}
       ${O.etapa === 'perdido' && O.motivo_perda ? `<p style="color:var(--verm)">Motivo da perda: ${esc(O.motivo_perda)}</p>` : ''}
       <div id="ocDestinos"></div></div>
-    <div class="rodape">${id ? '<button class="btn" id="ocPdf">📄 PDF</button><button class="btn" id="ocDup">Duplicar</button>' : ''}
+    <div class="rodape">${id ? '<button class="btn" id="ocPdf">📄 PDF</button><button class="btn" id="ocOnline">🌐 Proposta online</button><button class="btn" id="ocDup">Duplicar</button>' : ''}
       ${id && !travado && O.etapa === 'elaboracao' ? '<button class="btn" id="ocEnv">Marcar enviado</button>' : ''}
       ${id && podeOrc(T) && ['elaboracao','enviado','aprovado_parcial'].includes(O.etapa) ? '<button class="btn" id="ocPerd">Perdido</button><button class="btn" id="ocAprov" style="border-color:var(--verde);color:var(--verde)">✓ Cliente aprovou</button>' : ''}
       ${travado ? '' : '<button class="btn pri" id="bSalvar">Salvar</button>'}</div>`);
@@ -5420,6 +5422,7 @@ async function formOrc(id, pre){
   if($('#bSalvar')) $('#bSalvar').onclick = async () => { const oid = await salvar(); if(oid){ fecharPainel(); if(ST.aba === 'orc') telaOrc(); formOrc(oid); } };
   if($('#ocPdf')) $('#ocPdf').onclick = async () => { if(!travado){ const oid = await salvar(true); if(!oid) return; } pdfOrcamento(id); };
   if($('#ocEnv')) $('#ocEnv').onclick = async () => { const oid = await salvar(true); if(!oid) return; try{ await exec(sb.from('orcamentos').update({ etapa:'enviado' }).eq('id', oid), 'Marcado como enviado ao cliente.'); fecharPainel(); telaOrc(); }catch(e){} };
+  if($('#ocOnline')) $('#ocOnline').onclick = async () => { if(!travado){ const oid = await salvar(true); if(!oid) return; } abrirPropostaOnline(id); };
   if($('#ocDup')) $('#ocDup').onclick = () => { const copia = G.map(g => ({ titulo: g.titulo, empresa: g.empresa, itens: g.itens.map(i => ({ produto_id: i.produto_id, codigo: i.codigo, descricao: i.descricao, tipo: i.tipo, disciplina: i.disciplina, escopo: i.escopo, unidade: i.unidade, kit_codigo: i.kit_codigo, quantidade: i.quantidade, preco_unit: i.preco_unit })) }));
     fecharPainel(); formOrc(null, { tipo: T, obra_id: O.obra_id, pagador_id: O.pagador_id, copiaGrupos: copia, area_m2: O.area_m2 }); toast('Cópia aberta — troque o cliente se for para outro e salve.'); };
   if($('#ocPerd')) $('#ocPerd').onclick = async () => { const m = await pedirTexto('Orçamento perdido', 'Por que o cliente não fechou? (preço, prazo, desistiu, fechou com outro…)'); if(m === null) return;
@@ -5533,6 +5536,170 @@ async function pdfOrcamento(id){
 }
 
 Object.assign(TELAS, { orc: telaOrc, produtos: telaProdutos });
+
+/* =================== Proposta online (script 39) ===================
+   Um link por orçamento (proposta.html?p=<token>): o cliente liga/desliga sistemas, aprova ou pede alteração.
+   A aprovação do cliente fica "Aprovado pelo cliente — confirmar" e o financeiro confirma aqui. */
+const PO_SIT = { rascunho:['Não publicada','#6e6e73'], publicada:['Publicada','#1d4ed8'], alteracao_pedida:['Cliente pediu alteração','#b45309'],
+  aprovada_cliente:['Aprovado pelo cliente — confirmar','#1f8a4c'], confirmada:['Aprovação confirmada','#1f8a4c'] };
+const tagPO = s => `<span class="tag" style="background:${PO_SIT[s][1]}1a;color:${PO_SIT[s][1]}">🌐 ${PO_SIT[s][0]}</span>`;
+const PO_ILL = { piscina:'Piscina', spa:'Spa / hidromassagem', aq:'Aquecimento de água', func:'Aquecimento (pequeno)', press:'Pressurização', sauna:'Sauna', recalque:'Recalque / drenagem', geral:'Outro' };
+const PO_TEXTOS = {
+  titulo: 'Sua proposta, do seu jeito.',
+  intro: 'Reunimos aqui os sistemas orçados para você. Ligue ou desligue cada um e veja o valor total e as parcelas atualizarem na hora. Os itens de cada sistema ficam logo abaixo do card.',
+  entrega: ['Fornecimento dos equipamentos listados em cada sistema', 'Montagem das casas de máquinas e instalação dos equipamentos', 'Kits de material auxiliar de cada sistema', 'Quadros de comando e automação indicados'],
+  fora: ['Obra civil (a Equiper não executa obra civil)']
+};
+const PO_EV = { publicou:'Publicou', abriu:'Cliente abriu', aprovou:'Cliente aprovou', pediu_alteracao:'Cliente pediu alteração', devolveu:'Aprovação devolvida ao cliente', confirmou:'Aprovação confirmada', desativou:'Link desativado', reativou:'Link reativado' };
+const poDH = t => t ? new Date(t).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+const poDoc = d => !d ? '' : d.length === 11 ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+const poBRL = c => R$((c || 0) / 100);
+const poLink = tk => new URL('proposta.html?p=' + tk, location.href).href;
+const poPodeConfirmar = T => podeOrc(T) || nivelTela('fn_receber') >= 3;
+
+function illPadrao(t){ t = norm(t || '');
+  if(/spa|hidro|ofuro/.test(t)) return 'spa';
+  if(/piscin|filtra/.test(t)) return 'piscina';
+  if(/sauna|vapor/.test(t)) return 'sauna';
+  if(/pressur/.test(t)) return 'press';
+  if(/recalq|drenag|submers|esgot/.test(t)) return 'recalque';
+  if(/aquec|boiler|solar|gas|calor|agua quente/.test(t)) return 'aq';
+  return 'geral'; }
+
+/* o que o cliente vai ver: só preços de venda (nada de custo) */
+function montarDadosProposta(O, G, cfg, marcas, end){
+  const cs = cfg.sist || {}, pg = pessoa(O.pagador_id) || {}, ob = obra(O.obra_id) || {}, x = end || {};
+  const local = [[x.logradouro, x.numero].filter(Boolean).join(', '), ob.bairro, [ob.municipio, ob.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ') || ob.nome || '';
+  const sistemas = G.filter(g => (g.itens || []).some(i => i.tipo !== 'titulo')).map(g => {
+    const c = cs[g.titulo] || {}, L = [], mats = [];
+    let ma = 0;
+    g.itens.forEach(it => { const v = Math.round(Number(it.quantidade) * Number(it.preco_unit) * 100);
+      if(it.tipo === 'titulo') return L.push(['#', it.descricao]);
+      const q = Number(it.quantidade), det = [q !== 1 ? q.toLocaleString('pt-BR') + ' ' + String(it.unidade || 'un').toLowerCase() : '', marcas[it.produto_id] || ''].filter(Boolean).join(' · ');
+      if(it.tipo === 'material'){ ma += v; mats.push(it.descricao); return; }
+      if(it.tipo === 'mao_obra') return L.push([it.descricao, det, 0, v, 0]);
+      L.push([it.descricao, det, v, 0, 0]); });
+    if(mats.length) L.push(['Material auxiliar', mats.slice(0, 4).join(' · ') + (mats.length > 4 ? ` e mais ${mats.length - 4}` : ''), 0, 0, ma]);
+    (c.ni || []).filter(Boolean).forEach(n => L.push([n, null, 'NI']));
+    const b = [...new Set(g.itens.map(i => marcas[i.produto_id]).filter(Boolean))];
+    return { k: g.ordem + '|' + g.titulo, area: (c.area || '').trim(), ill: c.ill || illPadrao(g.titulo), t: c.nome || cap(g.titulo), d: c.d || '', b, L, note: c.note || '' };
+  });
+  return { numero: numOrc(O.numero), cliente: pg.nome || '', local, att: O.aos_cuidados || '', data: O.data_orcamento, validade: cfg.validade || O.validade || null,
+    empresa: O.empresa || '', titulo: cfg.titulo || PO_TEXTOS.titulo, intro: cfg.intro || PO_TEXTOS.intro,
+    entrega: (cfg.entrega || PO_TEXTOS.entrega).filter(Boolean), fora: (cfg.fora || PO_TEXTOS.fora).filter(Boolean),
+    prazo: O.prazo_texto || '', obs: O.observacoes || '', vendedor: O.vendedor || '',
+    parcelas: (O.parcelas || []).map(p => [p.nome, Number(p.percentual) || 0, p.quando || '']),
+    total: Math.round(Number(O.total) * 100), bruto: Math.round(Number(O.total_bruto) * 100), frete: Math.round(Number(O.frete || 0) * 100), sistemas };
+}
+const cap = s => String(s || '').toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/\b(De|Da|Do|Das|Dos|E|Com|Para)\b/g, x => x.toLowerCase());
+
+async function abrirPropostaOnline(id){
+  const [a, b, c, e] = await Promise.all([ sb.from('orcamentos').select('*').eq('id', id).single(), sb.from('orcamento_grupos').select('*, orcamento_itens(*)').eq('orcamento_id', id).order('ordem'),
+    sb.from('propostas_online').select('*').eq('orcamento_id', id).maybeSingle(), sb.from('proposta_eventos').select('*').eq('orcamento_id', id).order('em', { ascending:false }).limit(60) ]);
+  if(a.error) return aviso('Erro', esc(erroBanco(a.error)));
+  if(c.error && /propostas_online/.test(c.error.message)) return aviso('Proposta online', 'Rode o script <b>39_proposta_online.sql</b> no Supabase.');
+  const O = a.data, G = (b.data || []).map(g => ({ ...g, itens: (g.orcamento_itens || []).sort((x, y) => x.ordem - y.ordem) })), R = c.data, EV = e.data || [], T = O.tipo;
+  const pode = podeOrc(T), aberto = ['elaboracao','enviado'].includes(O.etapa), sit = R ? R.situacao : 'rascunho';
+  const pids = [...new Set(G.flatMap(g => g.itens.map(i => i.produto_id)).filter(Boolean))], marcas = {};
+  const end = O.obra_id ? ((await sb.schema('privado').from('obras_endereco').select('logradouro,numero').eq('obra_id', O.obra_id).maybeSingle()).data || null) : null;
+  if(pids.length){ const p = await sb.from('produtos').select('id,marca').in('id', pids); (p.data || []).forEach(x => { if(x.marca) marcas[x.id] = cap(x.marca); }); }
+  const cfg = JSON.parse(JSON.stringify(R?.config || {})); cfg.sist = cfg.sist || {};
+  const GS = G.filter(g => g.itens.some(i => i.tipo !== 'titulo'));
+  const travado = !pode || !aberto || ['aprovada_cliente','confirmada'].includes(sit);
+  const linhas = l => (l || []).join('\n');
+  const ap = R?.aprovacao, pub = R?.dados;
+
+  const blocoAprov = !ap ? '' : `<div class="card" style="border:2px solid var(--verde)"><h2 style="color:var(--verde)">${sit === 'confirmada' ? '✓ Aprovação confirmada' : 'O cliente aprovou — falta confirmar'}</h2>
+    <div class="grade"><div class="campo"><span class="muted">Quem aprovou</span><b>${esc(ap.nome)}</b></div><div class="campo"><span class="muted">CPF/CNPJ</span><b>${poDoc(ap.doc)}</b></div>
+      <div class="campo"><span class="muted">E-mail</span><b>${esc(ap.email)}</b></div>${ap.tel ? `<div class="campo"><span class="muted">Telefone</span><b>${esc(ap.tel)}</b></div>` : ''}
+      <div class="campo"><span class="muted">Quando</span><b>${poDH(ap.em)} · revisão ${ap.revisao}</b></div></div>
+    <table class="reg" data-sem-ordem style="margin-top:10px"><thead><tr><th>Sistemas que o cliente marcou</th><th style="text-align:right">Valor</th></tr></thead><tbody>
+      ${(ap.dados?.sistemas || []).map(s => { const on = (ap.sel || []).includes(s.k), v = s.L.reduce((t, l) => t + (typeof l[2] === 'number' ? l[2] + (l[3] || 0) + (l[4] || 0) : 0), 0);
+        return `<tr style="${on ? '' : 'color:#999;text-decoration:line-through'}"><td>${on ? '✓' : '✕'} ${esc(s.area ? s.area + ' · ' : '')}${esc(s.t)}</td><td style="text-align:right">${poBRL(v)}</td></tr>`; }).join('')}
+      <tr><td><b>Total aprovado${ap.dados && ap.dados.total !== ap.dados.bruto ? ' (com desconto)' : ''}</b></td><td style="text-align:right"><b>${poBRL(ap.total)}</b></td></tr></tbody></table>
+    ${sit === 'aprovada_cliente' && poPodeConfirmar(T) ? `<p class="muted" style="font-size:13px">Confira com o cliente se precisar. Ao confirmar, roda a aprovação de sempre só com os sistemas marcados (pedidos e A receber).</p>
+      <div class="barra"><button class="btn" id="poDevolver">Devolver ao cliente</button><button class="btn pri" id="poConfirmar" style="background:var(--verde);border-color:var(--verde)">✓ Confirmar aprovação</button></div>` : ''}</div>`;
+
+  abrirPainel(`<div class="cab"><h2>🌐 Proposta online · nº ${numOrc(O.numero)}</h2>${tagPO(sit)}${R && !R.ativa ? '<span class="tag">link desativado</span>' : ''}<button class="btn peq" style="margin-left:auto" id="poVoltar">Voltar ao orçamento</button></div>
+    ${blocoAprov}
+    <div class="card"><h2>Link do cliente</h2>
+      ${R && R.revisao ? `<div class="barra"><input id="poLink" readonly value="${esc(poLink(R.token))}" style="flex:1;min-width:260px"><button class="btn" id="poCopiar">Copiar</button><button class="btn" id="poAbrir">Abrir</button><button class="btn" id="poZap">WhatsApp</button></div>
+        <p class="muted" style="font-size:13px;margin:6px 0 0">Revisão ${R.revisao} publicada em ${poDH(R.publicada_em)}${R.validade ? ` · válida até ${dataBR(R.validade)}` : ''} · aberta <b>${R.aberturas}</b> vez(es)${R.ultima_abertura ? `, a última em ${poDH(R.ultima_abertura)}` : ''}.</p>
+        <p id="poDif" style="font-size:13px;margin:6px 0 0"></p>
+        ${R.ultima_selecao && sit !== 'confirmada' && !ap ? `<p class="muted" style="font-size:13px;margin:6px 0 0">O cliente deixou ligado: <b>${esc((pub?.sistemas || []).filter(s => R.ultima_selecao.includes(s.k)).map(s => s.t).join(', ') || 'nenhum')}</b> (${poDH(R.selecao_em)}).</p>` : ''}
+        ${pode ? `<div class="barra" style="margin-top:8px"><button class="btn peq" id="poAtiva">${R.ativa ? 'Desativar o link' : 'Reativar o link'}</button></div>` : ''}`
+      : `<p class="muted" style="margin:0">Ainda não publicada. Confira os textos abaixo e clique em <b>Publicar</b>: o ERP gera um link único para mandar ao cliente.</p>`}</div>
+    <div class="card"><h2>Como os sistemas aparecem</h2>
+      <p class="muted" style="font-size:13px;margin-top:0">Os itens e valores vêm do orçamento. Aqui você escreve o que o cliente lê. A área agrupa os sistemas na página (ex.: <i>Casa principal</i>, <i>Piscina e spa</i>).</p>
+      ${GS.map((g, i) => { const s = cfg.sist[g.titulo] || {}; return `<div class="secao-sens" data-poi="${i}"><h3>${esc(g.titulo)} <span class="muted" style="font-weight:400">· ${R$(g.total)}</span></h3><div class="grade">
+        <label class="campo">Nome na proposta<input data-pf="nome" value="${esc(s.nome || cap(g.titulo))}"></label>
+        <label class="campo">Área<input data-pf="area" value="${esc(s.area || '')}" placeholder="opcional"></label>
+        <label class="campo">Desenho<select data-pf="ill">${Object.entries(PO_ILL).map(([k, r]) => `<option value="${k}" ${(s.ill || illPadrao(g.titulo)) === k ? 'selected' : ''}>${r}</option>`).join('')}</select></label>
+        <label class="campo largo">Descrição (o que o sistema faz)<textarea data-pf="d" rows="2">${esc(s.d || '')}</textarea></label>
+        <label class="campo largo">Não incluso neste sistema (um por linha)<textarea data-pf="ni" rows="2">${esc(linhas(s.ni))}</textarea></label>
+        <label class="campo largo">Observação<input data-pf="note" value="${esc(s.note || '')}"></label></div></div>`; }).join('') || '<p class="muted">O orçamento não tem itens.</p>'}</div>
+    <div class="card"><h2>Textos da página</h2><div class="grade">
+      <label class="campo largo">Título<input id="poTit" value="${esc(cfg.titulo || PO_TEXTOS.titulo)}"></label>
+      <label class="campo largo">Apresentação<textarea id="poIntro" rows="3">${esc(cfg.intro || PO_TEXTOS.intro)}</textarea></label>
+      <label class="campo largo">O que a Equiper entrega (um por linha)<textarea id="poEntrega" rows="4">${esc(linhas(cfg.entrega || PO_TEXTOS.entrega))}</textarea></label>
+      <label class="campo largo">Fora desta proposta (um por linha)<textarea id="poFora" rows="3">${esc(linhas(cfg.fora || PO_TEXTOS.fora))}</textarea></label>
+      <label class="campo">Link válido até<input id="poVal" type="date" value="${R?.validade || O.validade || ''}"></label></div></div>
+    <div class="card"><h2>Acompanhamento</h2>${EV.length ? `<table class="reg" data-sem-ordem><thead><tr><th>Quando</th><th>O quê</th><th>Detalhe</th></tr></thead><tbody>${EV.map(v => `<tr><td style="white-space:nowrap">${poDH(v.em)}</td><td>${PO_EV[v.tipo] || v.tipo}</td><td style="font-size:13px">${
+        v.tipo === 'pediu_alteracao' ? `<b>${esc(v.dados?.nome || '')}</b>: ${esc(v.dados?.msg || '')}` : v.tipo === 'aprovou' ? `${esc(v.dados?.nome || '')} · ${poBRL(v.dados?.total)}` : v.tipo === 'devolveu' ? esc(v.dados?.motivo || '') : v.dados?.revisao ? 'revisão ' + v.dados.revisao : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted" style="margin:0">Nada ainda.</p>'}</div>
+    <div class="rodape">${pode && aberto && !['aprovada_cliente','confirmada'].includes(sit) ? `<button class="btn" id="poSalvar">Salvar textos</button><button class="btn pri" id="poPub">${R && R.revisao ? `Publicar alterações (revisão ${R.revisao + 1})` : 'Publicar'}</button>` : ''}</div>`);
+  $('#folha').style.width = 'min(900px,100%)';
+  if(travado) document.querySelectorAll('#folha textarea,#folha [data-pf],#poTit,#poVal').forEach(x => x.disabled = true);
+  $('#poVoltar').onclick = () => { fecharPainel(); formOrc(id); };
+
+  const ler = () => { const n = JSON.parse(JSON.stringify(cfg)), ls = v => v.split('\n').map(x => x.trim()).filter(Boolean);
+    GS.forEach((g, i) => { const box = document.querySelector(`[data-poi="${i}"]`), v = k => box.querySelector(`[data-pf="${k}"]`).value;
+      n.sist[g.titulo] = { nome: v('nome').trim(), area: v('area').trim(), ill: v('ill'), d: v('d').trim(), ni: ls(v('ni')), note: v('note').trim() }; });
+    Object.assign(n, { titulo: $('#poTit').value.trim(), intro: $('#poIntro').value.trim(), entrega: ls($('#poEntrega').value), fora: ls($('#poFora').value), validade: $('#poVal').value || null });
+    return n; };
+  const canon = v => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']' : v && typeof v === 'object' ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}' : JSON.stringify(v ?? null);
+  const semData = d => d && canon({ ...d, validade: null });
+  const atualizaDif = () => { const el = $('#poDif'); if(!el || !pub) return; const igual = semData(montarDadosProposta(O, G, ler(), marcas, end)) === semData(pub);
+    el.innerHTML = igual ? '<span style="color:var(--verde)">✓ O cliente está vendo a versão atual do orçamento.</span>' : '<span style="color:#b45309">⚠ O orçamento ou os textos mudaram depois da última publicação. O cliente ainda vê a versão anterior.</span>'; };
+  atualizaDif(); document.querySelectorAll('#folha input,#folha textarea,#folha select').forEach(x => x.addEventListener('input', atualizaDif));
+
+  async function salvar(publicar){ const c2 = ler(), d = montarDadosProposta(O, G, c2, marcas, end);
+    if(publicar && !d.sistemas.length) return aviso('Nada para publicar', 'O orçamento não tem itens.');
+    const r = await sb.rpc('proposta_salvar', { p_orc: id, p_config: c2, p_dados: publicar ? d : null, p_validade: c2.validade, p_publicar: !!publicar });
+    if(r.error) return aviso('Não foi possível ' + (publicar ? 'publicar' : 'salvar'), esc(erroBanco(r.error)));
+    if(publicar && O.etapa === 'elaboracao') await sb.from('orcamentos').update({ etapa:'enviado' }).eq('id', id);
+    toast(publicar ? `Publicada (revisão ${r.data.revisao}). O link é o mesmo.` : 'Textos salvos.'); abrirPropostaOnline(id); }
+  if($('#poSalvar')) $('#poSalvar').onclick = () => salvar(false);
+  if($('#poPub')) $('#poPub').onclick = async () => { if(R && R.revisao && !await modal('Publicar alterações?', 'O cliente passa a ver a versão nova no mesmo link.', [['Cancelar', false], ['Publicar', true, 'pri']])) return; salvar(true); };
+  if($('#poCopiar')) $('#poCopiar').onclick = async () => { try{ await navigator.clipboard.writeText($('#poLink').value); toast('Link copiado.'); }catch(e){ $('#poLink').select(); toast('Selecione e copie o link.'); } };
+  if($('#poAbrir')) $('#poAbrir').onclick = () => window.open($('#poLink').value, '_blank');
+  if($('#poZap')) $('#poZap').onclick = () => { const nome = (pessoa(O.pagador_id) || {}).apelido || ''; window.open('https://wa.me/?text=' + encodeURIComponent(`Olá${nome ? ' ' + nome : ''}! Segue a proposta da Equiper nº ${numOrc(O.numero)}. Nela você pode escolher os sistemas, ver os valores e aprovar: ${$('#poLink').value}`), '_blank'); };
+  if($('#poAtiva')) $('#poAtiva').onclick = async () => { const r = await sb.rpc('proposta_ativar', { p_orc: id, p_ativa: !R.ativa }); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); toast(R.ativa ? 'Link desativado: o cliente não consegue mais abrir.' : 'Link reativado.'); abrirPropostaOnline(id); };
+  if($('#poDevolver')) $('#poDevolver').onclick = async () => { const m = await pedirTexto('Devolver ao cliente', 'A aprovação sai do orçamento (fica no histórico) e o cliente pode mexer e aprovar de novo. Motivo (opcional):'); if(m === null) return;
+    const r = await sb.rpc('proposta_devolver', { p_orc: id, p_motivo: m }); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); toast('Devolvida ao cliente.'); atualizaSino && atualizaSino(); abrirPropostaOnline(id); };
+  if($('#poConfirmar')) $('#poConfirmar').onclick = async () => {
+    if(!await modal('Confirmar a aprovação?', `Vai aprovar o orçamento nº ${numOrc(O.numero)} com os sistemas que o cliente marcou (${poBRL(ap.total)}), na data em que ele aprovou. Isso cria os pedidos e o A receber.`, [['Cancelar', false], ['Confirmar', true, 'pri']])) return;
+    const r = await sb.rpc('proposta_confirmar', { p_orc: id }); if(r.error) return aviso('Não foi possível confirmar', esc(erroBanco(r.error)));
+    await aviso('Aprovação confirmada ✓', `${r.data.aprovados} parte(s) enviada(s): ${(r.data.criados || []).map(c => esc(c.titulo)).join(', ')}.`);
+    typeof atualizaSino === 'function' && atualizaSino(); fecharPainel(); await carregar(); if(ST.aba === 'orc') telaOrc(); formOrc(id); };
+}
+
+/* ---------- sino ---------- */
+async function avisosPropostas(){
+  const r = await sb.from('propostas_online').select('orcamento_id,situacao,aprovacao,orcamentos(numero,tipo)').in('situacao', ['aprovada_cliente','alteracao_pedida']);
+  if(r.error) return [];
+  const out = [], fin = nivelTela('fn_receber') >= 3;
+  (r.data || []).forEach(p => { const o = p.orcamentos || {}, n = numOrc(o.numero);
+    if(p.situacao === 'aprovada_cliente' && (fin || podeOrc(o.tipo))) out.push({ ord: 0.5, aba:'orc', orc: p.orcamento_id, ic:'orc', txt: `<b>${esc(p.aprovacao?.nome || 'Cliente')}</b> aprovou a proposta <b>${n}</b> (${poBRL(p.aprovacao?.total)}) — confirmar` });
+    if(p.situacao === 'alteracao_pedida' && podeOrc(o.tipo)) out.push({ ord: 0.6, aba:'orc', orc: p.orcamento_id, ic:'orc', txt: `Cliente pediu alteração na proposta <b>${n}</b>` }); });
+  if(nivelTela('orc') >= 3){
+    const e = await sb.from('proposta_eventos').select('orcamento_id,em,orcamentos(numero,tipo,pagador_id)').eq('tipo', 'abriu').gte('em', new Date(Date.now() - 864e5).toISOString()).order('em', { ascending:false });
+    const vis = new Set();
+    (e.data || []).forEach(v => { if(vis.has(v.orcamento_id) || !podeOrc(v.orcamentos?.tipo)) return; vis.add(v.orcamento_id);
+      const nm = (pessoa(v.orcamentos?.pagador_id) || {}).apelido || (pessoa(v.orcamentos?.pagador_id) || {}).nome || 'O cliente';
+      out.push({ ord: 6, aba:'orc', orc: v.orcamento_id, ic:'orc', txt: `${esc(nm)} abriu a proposta <b>${numOrc(v.orcamentos?.numero)}</b> · ${new Date(v.em).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}` }); });
+  }
+  return out;
+}
 
 /* =================== Pedidos do CIGAM (histórico) ===================
    Importa a exportação de pedidos do CIGAM (PEDIDOS.csv, ; ) e mostra como consulta.
