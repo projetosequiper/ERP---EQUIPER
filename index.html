@@ -539,7 +539,33 @@ async function iniciar(){
   window.__erpEu = { nome: u.nome, perfil: u.perfil, email: user.email };   // login único nos apps
   montaTopo();
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
-  await Promise.all([carregar(), carregaFavoritos()]); desenhar(); atualizaSino();
+  await Promise.all([carregar(), carregaFavoritos()]);
+  lembrarTelaLiga(); const volta = lembrarTelaLe();
+  desenhar(); atualizaSino(); lembrarTelaVolta(volta);
+}
+
+/* ================== F5 volta para o mesmo lugar ==================
+   O endereço guarda a tela e o registro aberto (#orc/formOrc/<id>); a posição da rolagem fica guardada na aba do navegador. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function lembrarTelaGrava(){ try{ const h = '#' + ST.aba + (ST.formAberto ? '/' + ST.formAberto.join('/') : ''); if(location.hash !== h) history.replaceState(null, '', h); }catch(e){} }
+function lembrarTelaLiga(){
+  if(window.__lembrarLigado) return; window.__lembrarLigado = true;
+  // toda função form…(id) registra o registro aberto
+  Object.keys(window).filter(k => /^form[A-Z]/.test(k) && typeof window[k] === 'function').concat(['abrirPropostaOnline']).forEach(k => {
+    const fn = window[k]; if(typeof fn !== 'function' || fn.__lembra) return;
+    const w = function(...a){ ST.formAberto = typeof a[0] === 'string' && UUID_RE.test(a[0]) ? [k, a[0]] : null; lembrarTelaGrava(); return fn.apply(this, a); };
+    w.__lembra = true; window[k] = w; });
+  const fp = window.fecharPainel; window.fecharPainel = function(...a){ ST.formAberto = null; lembrarTelaGrava(); return fp.apply(this, a); };
+  addEventListener('beforeunload', () => { try{ sessionStorage.setItem('erp-rolagem', JSON.stringify({ aba: ST.aba, y: scrollY, f: $('#folha') ? $('#folha').scrollTop : 0 })); }catch(e){} });
+}
+function lembrarTelaLe(){ const [aba, fn, id] = decodeURIComponent(location.hash.slice(1)).split('/');
+  if(aba && itensVisiveis().some(g => g.itens.some(i => i[0] === aba))) ST.aba = aba;
+  return fn && id && UUID_RE.test(id) && typeof window[fn] === 'function' ? [fn, id] : null; }
+async function lembrarTelaVolta(volta){
+  let r = null; try{ r = JSON.parse(sessionStorage.getItem('erp-rolagem') || 'null'); }catch(e){}
+  await new Promise(ok => setTimeout(ok, 700));
+  if(r && r.aba === ST.aba && r.y) scrollTo(0, r.y);
+  if(volta){ try{ await window[volta[0]](volta[1]); setTimeout(() => { if(r && r.f && $('#folha')) $('#folha').scrollTop = r.f; }, 900); }catch(e){} }
 }
 
 /* ================== Dados ================== */
@@ -585,7 +611,8 @@ function desenhaSoMenu(){ const l = menuFechados(); let g = null;
 function desenhar(){
   registrarTelas();
   if(ST._abaAtual && ST._abaAtual !== ST.aba && !ST._voltando){ (ST.hist = ST.hist || []).push(ST._abaAtual); if(ST.hist.length > 50) ST.hist.shift(); }
-  ST._voltando = false; ST._abaAtual = ST.aba; atualizaVoltar();
+  if(ST._abaAtual !== ST.aba){ ST.formAberto = null; const c = $('#conteudo'); if(c) c.dataset.tela = ''; }
+  ST._voltando = false; ST._abaAtual = ST.aba; atualizaVoltar(); if(window.__lembrarLigado) lembrarTelaGrava();
   const vis = itensVisiveis(), todos = vis.flatMap(g => g.itens);
   if(!todos.some(i => i[0] === ST.aba)) ST.aba = todos[0][0];
   document.body.classList.add('comMenu');
@@ -614,8 +641,10 @@ function barraBusca(rotuloNovo, fnNovo){
     <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" id="vInat" style="width:auto" ${ST.mostrarInativos?'checked':''}> mostrar inativos</label>
     ${rotuloNovo && (humano()||ST.eu.perfil==='agente') ? `<button class="btn pri" id="btnNovo">+ ${rotuloNovo}</button>`:''}</div>`;
 }
+/* "Carregando…" só quando entra numa tela; redesenhar a mesma tela (busca, filtro) não pisca */
+function carregandoTela(){ const c = $('#conteudo'); if(c.dataset.tela === ST.aba && c.children.length) return; c.innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>'; c.dataset.tela = ST.aba; }
 function ligaBarra(fnNovo){
-  const b=$('#busca'); b.oninput=()=>{ ST.busca=b.value; clearTimeout(b._t); b._t=setTimeout(()=>{ Promise.resolve(desenhar()).then(()=>{ const n=$('#busca'); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } }); },250); };
+  const b=$('#busca'); b.oninput=()=>{ ST.busca=b.value; clearTimeout(b._t); b._t=setTimeout(()=>{ const y = scrollY; Promise.resolve(desenhar()).then(() => scrollTo(0, y)).then(()=>{ const n=$('#busca'); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } }); },250); };
   $('#vInat').onchange=e=>{ ST.mostrarInativos=e.target.checked; desenhar(); };
   if($('#btnNovo')) $('#btnNovo').onclick=fnNovo;
 }
@@ -878,7 +907,7 @@ function telaFila(){
 
 /* ================== Registro de ações (diretoria) ================== */
 async function telaRegistro(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [r,u] = await Promise.all([ sb.from('registro_acoes').select('*').order('quando',{ascending:false}).limit(200), sb.from('usuarios').select('id,nome') ]);
   if(r.error) return aviso('Erro', esc(erroBanco(r.error)));
   const nomes = Object.fromEntries((u.data||[]).map(x=>[x.id,x.nome]));
@@ -911,7 +940,7 @@ const VINC = {
 };
 ST.vincApp = 'projetos';
 async function telaVinculos(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const K = VINC[ST.vincApp];
   const [c, v] = await Promise.all([
     sb.from(K.visao).select(K.campos),
@@ -1000,7 +1029,7 @@ const podeProj = () => (ST.aba || '').startsWith('pj_') ? nivelTela(ST.aba) >= 2
 ST.propFiltro = 'todas';
 
 async function telaPropostas(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const r = await sb.from('propostas_resumo').select('*').order('obra');
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const todas = (r.data||[]).filter(p => ST.mostrarInativos || p.status !== 'inativo');
@@ -1181,7 +1210,7 @@ async function carregaEquipe(){
   ST.equipe = e.data || []; ST.disciplinas = d.data || [];
 }
 async function telaTarefas(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [r] = await Promise.all([ sb.from('tarefas_resumo').select('*').order('ordem'), carregaEquipe() ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   ST.tarefas = r.data || [];
@@ -2729,7 +2758,7 @@ function imprimir(titulo, corpo, op = {}){
 /* =================== Visitas e considerações =================== */
 ST.visAba = 'rel';
 async function telaVisitas(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const rel = ST.visAba === 'rel';
   const r = await sb.from(rel ? 'relatorios_visita' : 'consideracoes_iniciais').select(rel ? 'id,obra_id,cliente_texto,data,autor,modo,status,fotos,itens' : 'id,obra_id,cliente_texto,data_preenchimento,tipo_edificacao,autor,status').order(rel ? 'data' : 'data_preenchimento', { ascending:false });
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
@@ -2864,7 +2893,7 @@ async function formConsideracao(id){
 
 /* =================== ART =================== */
 async function telaArt(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [p, a] = await Promise.all([ sb.from('propostas_resumo').select('*').order('obra'), sb.from('registros_art').select('*').order('data_emissao', { ascending:false }) ]);
   if(p.error || a.error) return aviso('Erro ao carregar', esc(erroBanco(p.error || a.error)));
   const props = (p.data || []).filter(x => x.status !== 'inativo'), arts = (a.data || []).filter(x => ST.mostrarInativos || x.status !== 'inativo');
@@ -2915,7 +2944,7 @@ async function telaCalendario(){
   if(!ST.cal){ const h = new Date(); ST.cal = { a: h.getFullYear(), m: h.getMonth() }; }
   const { a, m } = ST.cal, ini = new Date(a, m, 1), fim = new Date(a, m + 1, 0), iso = d => d.toISOString().slice(0,10);
   const i0 = iso(new Date(a, m, 1 - ((ini.getDay() + 6) % 7) + 0)), i1 = iso(new Date(a, m + 1, 7));
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [t, f, r, p] = await Promise.all([ sb.from('tarefas_resumo').select('id,cliente,disciplina,responsavel,prazo,etapa,status').gte('prazo', i0).lte('prazo', i1),
     sb.from('ferias_equipe').select('*').lte('inicio', i1).gte('fim', i0), sb.from('reunioes_projetos').select('*').gte('data', i0).lte('data', i1),
     sb.from('propostas_resumo').select('id,obra,data_entrega,status').gte('data_entrega', i0).lte('data_entrega', i1), carregaEquipe() ]);
@@ -2979,7 +3008,7 @@ ST.com = null;
 ST.dimObra = null;
 async function telaDimensionamento(){
   if(ST.dimObra) return abrirDimensionamento(ST.dimObra);
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const r = await sb.from('dimensionamentos').select('obra_id,atualizado_em');
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const tem = Object.fromEntries((r.data||[]).map(x => [x.obra_id, x.atualizado_em]));
@@ -3030,7 +3059,7 @@ function chatCanais(){
   return l;
 }
 async function telaChat(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [p, , lidos, ult] = await Promise.all([ sb.rpc('usuarios_chat'), carregaEquipe(), sb.from('chat_lidos').select('*'), sb.from('chat_mensagens').select('canal,criado_em,de_id').order('criado_em', { ascending:false }).limit(500) ]);
   CHAT.pessoas = (p.data || []).filter(x => x.id !== ST.eu.id);
   const lido = Object.fromEntries((lidos.data || []).map(x => [x.canal, x.lido_ate])), naoLidas = {};
@@ -3326,7 +3355,7 @@ ST.ag = { semana: null, tec: '' };
 async function telaAgenda(){
   if(ehTecnico()) return telaMinhaAgenda();
   const s = ST.ag.semana || (ST.ag.semana = inicioSemana(hojeISO())), f = somaDias(s, 6);
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [r, sem] = await Promise.all([ sb.from('agenda_servicos').select('id,obra_id,cliente,data,descricao,tecnicos,tecnicos_nomes,etapa,status,check_in,check_out,contrato_id,oficina_id,retorno_de_id').gte('data', s).lte('data', f).order('data'),
     sb.from('agenda_servicos').select('id,obra_id,cliente,descricao,tecnicos,tecnicos_nomes,etapa,status,retorno_de_id').is('data', null), carregaTecnicos() ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
@@ -3422,7 +3451,7 @@ async function filaEnviar(){
 }
 window.addEventListener('online', filaEnviar); setInterval(filaEnviar, 30000);
 async function telaMinhaAgenda(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const ini = somaDias(hojeISO(), -7), fim = somaDias(hojeISO(), 14);
   const r = await sb.from('agenda_servicos').select('*').or(`data.is.null,and(data.gte.${ini},data.lte.${fim})`).order('data');
   const fila = filaLer(), pend = Object.fromEntries(fila.map(x => [x.id, x.patch]));
@@ -3460,7 +3489,7 @@ function campoAtividade(A){
 /* =================== Ordens de serviço (cobrar ou não) =================== */
 ST.osAba = 'a_decidir';
 async function telaOS(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [r] = await Promise.all([ sb.from('agenda_servicos').select('id,obra_id,cliente,data,descricao,tecnicos_nomes,os_situacao,os_numero,os_valor,os_empresa,concluido_em,status,contrato_id').eq('etapa', 'concluido').order('concluido_em', { ascending:false }), carregaTecnicos() ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const todas = (r.data || []).filter(a => a.status !== 'inativo'), cont = k => todas.filter(a => a.os_situacao === k).length;
@@ -3498,7 +3527,7 @@ async function formOS(id){
 /* =================== Orçamentos =================== */
 ST.orcAba = 'abertos';
 async function telaOrcamentos(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const r = await sb.from('orcamentos_servico').select('id,obra_id,cliente_texto,sistemas,data_limite,responsavel,etapa,feito_em,enviado_em,status,numero_pedido').order('data_limite');
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const ab = ['aberto','feito'], todos = filtra(r.data || [], o => cliTxt(o) + ' ' + (o.responsavel||'') + ' ' + o.sistemas.map(rotSis).join(' '));
@@ -3559,7 +3588,7 @@ const SIT_PS = [['nao_liberado','Não liberado'],['a_cobrar','A cobrar'],['envia
 const TIPOS_PS = ['Sinal', '1ª parcela'].concat([...Array(11)].map((_, i) => (i + 2) + 'ª parcela'), ['Saldo','Parcela única','Restante','Outro']);
 ST.pedAba = 'andamento';
 async function telaPedidos(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const r = await sb.from('pedidos_resumo').select('*').order('obra');
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const todos = filtra(r.data || [], p => p.obra + ' ' + (p.numero||'') + ' ' + (p.descricao||''));
@@ -3639,7 +3668,7 @@ async function formPedido(id, pre){
 
 /* =================== Manutenções e contratos =================== */
 async function telaContratos(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const r = await sb.from('contratos_resumo').select('*').order('proxima_visita');
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const l = filtra(r.data || [], c => c.cliente + ' ' + (c.local||'')), hoje = hojeISO(), em30 = somaDias(hoje, 30);
@@ -3691,7 +3720,7 @@ const ETAPAS_OF = [['retirado','Retirado / na oficina'],['vistoria_iniciada','Vi
   ['manutencao_concluida','Manutenção concluída'],['teste_iniciado','Em teste'],['liberado_reinstalacao','Liberado para reinstalar'],['reinstalacao_pendente','Reinstalação agendada'],['reinstalado','Reinstalado'],['devolvido_sem_reparo','Devolvido sem reparo']];
 const rotOf = k => (ETAPAS_OF.find(x => x[0] === k) || [, k])[1];
 async function telaOficina(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const r = await sb.from('oficina_equipamentos').select('id,obra_id,cliente_texto,equipamento,etapa,status,orcamento_numero,orcamento_enviado,criado_em,atualizado_em').order('criado_em', { ascending:false });
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const l = filtra(r.data || [], e => cliTxt(e) + ' ' + e.equipamento), fim = ['reinstalado','devolvido_sem_reparo'];
@@ -3742,7 +3771,7 @@ async function formOficina(id){
 
 /* =================== Estoque =================== */
 async function telaEstoque(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [r, m] = await Promise.all([ sb.from('estoque_itens').select('*').order('nome'), podeSv() ? sb.from('estoque_movimentos').select('*').order('criado_em', { ascending:false }).limit(60) : Promise.resolve({ data:[] }) ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const l = (r.data || []).filter(i => (ST.mostrarInativos || i.ativo) && (!ST.busca || norm(i.nome + ' ' + (i.categoria||'')).includes(norm(ST.busca))));
@@ -3799,7 +3828,7 @@ const tagSit = s => `<span class="tag" style="margin:0;background:${SIT_REC[s]?.
 ST.rec = { emp:'', sit:'abertos', orig:'' };
 
 async function telaReceber(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const r = await sb.from('receber_geral').select('*').order('vencimento', { nullsFirst:false });
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const nfs = typeof notasPorOrigem === 'function' ? await notasPorOrigem().catch(() => ({})) : {};
@@ -3885,7 +3914,7 @@ async function formAvulso(id){
 /* =================== A pagar =================== */
 ST.pag = { sit:'aberto', emp:'' };
 async function telaPagar(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const r = await sb.from('titulos_pagar').select('*').order('vencimento');
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const hoje = hojeISO(), em7 = somaDias(hoje, 7), mes = hoje.slice(0,7), f = ST.pag, todos = (r.data || []).filter(x => x.situacao !== 'cancelado' && (!f.emp || x.empresa === f.emp));
@@ -3961,7 +3990,7 @@ async function formPagar(id){
 
 /* =================== Faturamento por CNPJ (Simples Nacional) =================== */
 async function telaFaturamento(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const mesAtual = hojeISO().slice(0,7) + '-01';
   const [fm, rb] = await Promise.all([ sb.from('faturamento_mensal').select('*'), sb.rpc('rbt12', { p_mes: mesAtual }) ]);
   if(fm.error || rb.error) return aviso('Erro ao carregar', esc(erroBanco(fm.error || rb.error)));
@@ -4060,7 +4089,7 @@ async function baixarTitulo(origem, x, depois){
 /* =================== Cobrança =================== */
 ST.cob = { tipo:'', so:'' };
 async function telaCobranca(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   await Promise.all([carregaFin(), carregaUsuariosFin()]);
   const [r, pd] = await Promise.all([ sb.from('fin_cobranca').select('*'), sb.from('fin_pendencias').select('id,origem,titulo_id,motivo,responsavel,situacao,criada_em').eq('situacao', 'aberta') ]);
   if(r.error) return $('#conteudo').innerHTML = semScript22();
@@ -4195,7 +4224,7 @@ async function telaPosicao(){
 
 /* =================== Recibos =================== */
 async function telaRecibos(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const r = await sb.from('fin_recibos').select('id,numero,modelo,recebido_de,data,total,pessoa_id').order('numero', { ascending:false });
   if(r.error) return $('#conteudo').innerHTML = semScript22();
   const l = (r.data || []).filter(x => !ST.busca || norm(x.recebido_de + ' ' + x.numero).includes(norm(ST.busca)));
@@ -4303,7 +4332,7 @@ async function escolherCliente(){
 /* =================== Caixa e bancos =================== */
 ST.cx = { conta:'', mes: hojeISO().slice(0, 7) };
 async function telaCaixa(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   await carregaFin(true);
   if(!temFin()) return $('#conteudo').innerHTML = semScript22();
   const f = ST.cx, contas = ST.fin.contas.filter(c => c.ativo).sort((a, b) => (a.socio - b.socio) || ((a.tipo === 'cartao') - (b.tipo === 'cartao')) || a.empresa.localeCompare(b.empresa) || a.nome.localeCompare(b.nome));
@@ -4417,7 +4446,7 @@ function relatorioCaixa(C, mes, saldoIni, movs){
 /* =================== Fluxo diário (calendário) =================== */
 ST.fx = { mes: hojeISO().slice(0, 7), modo:'mes', emp:'' };
 async function telaFluxo(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   await carregaFin(true);
   if(!temFin()) return $('#conteudo').innerHTML = semScript22();
   sb.rpc('fin_gerar_recorrentes', {}).then(() => {});        // contas fixas dos próximos meses
@@ -4502,7 +4531,7 @@ async function telaFluxo(){
 /* =================== Relatório gerencial =================== */
 ST.ger = { mes: hojeISO().slice(0, 7), emp:'' };
 async function telaGerencial(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   await carregaFin(true);
   if(!temFin()) return $('#conteudo').innerHTML = semScript22();
   const f = ST.ger, contas = ST.fin.contas.filter(c => contaEmpresa(c) && (!f.emp || c.empresa === f.emp)), ids = contas.map(c => c.id);
@@ -4734,7 +4763,7 @@ ST.pc = { ver: 'contabil' };
 const clKey = c => (c.classificacao && c.classificacao !== 'ERP' ? c.classificacao : 'zzz.' + c.codigo).split('.').map(x => /^\d+$/.test(x) ? x.padStart(4, '0') : x).join('.');
 const NAT_PC = { receita:'Receita', despesa:'Despesa', patrimonial:'Patrimonial', gerencial:'Gerencial (centro de custo)', transferencia:'Transferência' };
 async function telaPlano(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [p, u] = await Promise.all([ sb.from('fin_plano').select('*'), sb.from('fin_plano_uso').select('*') ]);
   if(p.error) return $('#conteudo').innerHTML = semScript22();
   if(!(p.data || []).some(x => x.classificacao)) return $('#conteudo').innerHTML = '<div class="card"><h2>Plano de contas</h2><div class="vazio">Falta rodar o script <b>31_plano_contas.sql</b> (plano do CIGAM).</div></div>';
@@ -5085,7 +5114,7 @@ const pagadorPadrao = obraId => obraId ? ((ST.pagadores.find(g => g.obra_id === 
 /* =================== Produtos e preços =================== */
 ST.prod = { tipo:'', busca:'' };
 async function telaProdutos(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [r, c] = await Promise.all([ consultaProdutos({ q: ST.busca, tipo: ST.prod.tipo || null, ativos: !ST.mostrarInativos, lim: 200 }), sb.from('produtos').select('id', { count:'exact', head:true }) ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const pode = ['diretoria','administrativo','projetos','servicos'].includes(ST.eu.perfil);
@@ -5293,7 +5322,7 @@ async function importarProdutos(){
 /* =================== Orçamentos =================== */
 ST.orc = { tipo:'', etapa:'abertos' };
 async function telaOrc(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [r, rpo] = await Promise.all([ sb.from('orcamentos_resumo').select('*').order('numero', { ascending:false }), sb.from('propostas_online').select('orcamento_id,situacao,ativa') ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const PO = Object.fromEntries((rpo.data || []).map(p => [p.orcamento_id, p]));
@@ -6317,7 +6346,7 @@ function conferirNota(F, E, P, T){
 
 /* =================== Lista de notas =================== */
 async function telaNotas(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [r] = await Promise.all([ tudo(() => sb.from('notas_fiscais').select('id,ref,tipo,empresa,ambiente,status,numero,valor,tomador_nome,obra_id,origem,descricao,mensagem,url_pdf,url_xml,criado_em,autorizada_em').order('criado_em', { ascending:false }).order('id')), carregaFiscal() ]);
   if(r.error) return $('#conteudo').innerHTML = `<div class="card"><h2>Notas fiscais</h2><div class="vazio">${semScript20(r.error) ? 'Falta rodar o script <b>20_fiscal.sql</b> no Supabase.' : esc(erroBanco(r.error))}</div></div>`;
   const f = ST.nf, hoje = hojeISO(), mes = hoje.slice(0, 7), todas = r.data || [];
@@ -6707,7 +6736,7 @@ const opts = (l, v) => l.map(([k, t]) => `<option value="${k}" ${String(v) === S
 
 /* =================== Configuração fiscal =================== */
 async function telaFiscalConfig(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [, dg] = await Promise.all([carregaFiscal(), sb.rpc('fiscal_diagnostico')]);
   if(ST.fiscal.erro) return $('#conteudo').innerHTML = `<div class="card"><h2>Configuração fiscal</h2><div class="vazio">${semScript20(ST.fiscal.erro) ? 'Falta rodar o script <b>20_fiscal.sql</b> no Supabase.' : esc(erroBanco(ST.fiscal.erro))}</div></div>`;
   const d = dg.data || {}, dir = diretoria(), feitos = ST.fiscal.emit.length, comToken = ST.fiscal.tokens.filter(t => t.teste_ok).length;
@@ -6894,7 +6923,7 @@ function formPerfil(p){
 
 /* =================== Certificados digitais =================== */
 async function telaCertificados(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [r] = await Promise.all([ sb.from('certificados_digitais').select('*').order('valido_ate'), ST.fiscal ? null : carregaFiscal() ]);
   if(r.error) return $('#conteudo').innerHTML = `<div class="card"><h2>Certificados digitais</h2><div class="vazio">${semScript20(r.error) ? 'Falta rodar o script <b>20_fiscal.sql</b> no Supabase.' : esc(erroBanco(r.error))}</div></div>`;
   const l = (r.data || []).filter(c => ST.mostrarInativos || c.ativo);
@@ -6996,7 +7025,7 @@ const tagRec = n => n.situacao !== 'autorizada' ? `<span class="tag" style="back
 const semScript21 = e => /notas_recebidas|fiscal_sincronia|recebidas|does not exist|schema cache/i.test(erroBanco(e));
 
 async function telaRecebidas(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [r, s, ag] = await Promise.all([
     tudo(() => sb.from('notas_recebidas').select('id,empresa,tipo,chave,numero,serie,emitente_doc,emitente_nome,valor,data_emissao,situacao,manifestacao,status,mensagem,lancada_em,completa').order('data_emissao', { ascending:false }).order('id')),
     sb.from('fiscal_sincronia').select('*'), sb.rpc('fiscal_recebidas_agenda'), ST.fiscal ? null : carregaFiscal() ]);
@@ -7530,9 +7559,9 @@ ST.cmp = { aba:'pedidos', sit:'abertas' };
 const semScript23 = () => '<div class="card"><h2>Compras</h2><div class="vazio">Falta rodar o script <b>23_compras_estoque.sql</b> no Supabase.</div></div>';
 
 async function telaCompras(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [oc, pe] = await Promise.all([ sb.from('compras_resumo').select('*').order('numero', { ascending:false }),
-    sb.from('pedidos_servico').select('id,numero,obra_id,descricao,empresa,andamento_interno,em_deposito,material_recebido_em,valor,status').in('andamento_interno', ['aguardando_compra','comprado','liberado_entrega']) ]);
+    sb.from('pedidos_servico').select('id,numero,obra_id,descricao,empresa,andamento_interno,em_deposito,material_recebido_em,valor,status').in('andamento_interno', ['aguardando_sinal','aguardando_compra','comprado','liberado_entrega']) ]);
   if(oc.error) return $('#conteudo').innerHTML = semScript23();
   const f = ST.cmp, ocs = oc.data || [], peds = (pe.data || []).filter(p => p.status !== 'inativo').map(p => ({ ...p, obra: obra(p.obra_id)?.nome || '' })), mes = hojeISO().slice(0, 7);
   const econ = ocs.filter(o => o.situacao !== 'cancelada' && o.valor_inicial && String(o.enviada_em || '').slice(0, 4) === mes.slice(0, 4)).reduce((s, o) => s + Math.max(0, Number(o.valor_inicial) - Number(o.total)), 0);
@@ -7540,7 +7569,7 @@ async function telaCompras(){
   const filtro = { abertas: o => ['rascunho','enviada','parcial'].includes(o.situacao), atrasadas: o => o.atrasada, recebidas: o => o.situacao === 'recebida', todas: () => true };
   const lo = ocs.filter(filtro[f.sit] || filtro.abertas).filter(o => !ST.busca || norm([o.fornecedor, o.pedido_numero, o.obra, o.numero, o.notas].join(' ')).includes(norm(ST.busca)));
   $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px">
-      <div class="kpi v" data-ka="pedidos"><span class="muted">Pedidos para comprar</span><b>${peds.filter(p => p.andamento_interno === 'aguardando_compra').length}</b></div>
+      <div class="kpi v" data-ka="pedidos"><span class="muted">Pedidos para comprar</span><b>${peds.filter(p => p.andamento_interno === 'aguardando_compra').length}</b>${peds.some(p => p.andamento_interno === 'aguardando_sinal') ? `<span class="muted" style="font-size:12px">+ ${peds.filter(p => p.andamento_interno === 'aguardando_sinal').length} fechado(s) aguardando o sinal</span>` : ''}</div>
       <div class="kpi" data-ka="atrasadas"><span class="muted">OCs atrasadas</span><b style="color:var(--verm)">${ocs.filter(o => o.atrasada).length}</b><span class="muted" style="font-size:12px">${abertas.length} OC(s) em aberto</span></div>
       <div class="kpi" data-ka="chegou"><span class="muted">Material chegou · entregar</span><b style="color:var(--verde)">${peds.filter(p => p.andamento_interno === 'liberado_entrega').length}</b></div>
       <div class="kpi"><span class="muted">Economia nas negociações (${mes.slice(0, 4)})</span><b style="color:var(--verde)">${R$(econ)}</b></div></div>
@@ -7550,7 +7579,7 @@ async function telaCompras(){
       ${f.aba === 'pedidos' ? `<table class="reg"><thead><tr><th>Pedido</th><th>Obra</th><th>Empresa</th><th>Etapa</th><th>OCs</th><th></th></tr></thead><tbody>
         ${peds.sort((a, b) => Object.keys(ETAPA_PED).indexOf(a.andamento_interno) - Object.keys(ETAPA_PED).indexOf(b.andamento_interno)).map(p => { const os = ocs.filter(o => o.pedido_id === p.id && o.situacao !== 'cancelada');
           return `<tr><td><b>${esc(p.numero || '—')}</b><div class="muted" style="font-size:11px">${esc(p.descricao || '')}</div></td><td>${esc(p.obra || '')}</td><td>${p.empresa || '—'}</td>
-          <td>${esc(ETAPA_PED[p.andamento_interno])}${p.em_deposito ? ' <span class="tag">em depósito</span>' : ''}</td><td>${os.map(o => `<a href="#" data-oc="${o.id}">OC ${o.numero}</a> ${tagOC(o.situacao)}`).join('<br>') || '—'}</td>
+          <td>${p.andamento_interno === 'aguardando_sinal' ? '<span class="tag" style="background:#fff4d6;color:#7A6413">fechado · aguardando sinal</span>' : esc(ETAPA_PED[p.andamento_interno])}${p.em_deposito ? ' <span class="tag">em depósito</span>' : ''}</td><td>${os.map(o => `<a href="#" data-oc="${o.id}">OC ${o.numero}</a> ${tagOC(o.situacao)}`).join('<br>') || '—'}</td>
           <td style="white-space:nowrap">${p.andamento_interno !== 'liberado_entrega' ? `<button class="btn peq pri" data-mc="${p.id}">Montar compra</button>` : `<button class="btn peq" data-dep="${p.id}" data-v="${p.em_deposito ? 0 : 1}">${p.em_deposito ? 'Saiu do depósito' : 'Fica em depósito'}</button><button class="btn peq pri" data-ent="${p.id}">Entregue</button>`}</td></tr>`; }).join('')
         || '<tr><td colspan="6" class="vazio">Nenhum pedido em compras. O pedido chega aqui quando o sinal é recebido.</td></tr>'}</tbody></table>`
       : `<div class="barra"><input type="search" id="busca" placeholder="Fornecedor, pedido, obra, nº da OC ou da nota…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
@@ -7563,7 +7592,9 @@ async function telaCompras(){
   document.querySelectorAll('[data-ka]').forEach(k => k.onclick = () => { if(k.dataset.ka === 'atrasadas'){ f.aba = 'ocs'; f.sit = 'atrasadas'; } else f.aba = 'pedidos'; telaCompras(); });
   if($('#cpSit')) $('#cpSit').onchange = e => { f.sit = e.target.value; telaCompras(); };
   document.querySelectorAll('[data-oc]').forEach(a => a.onclick = ev => { ev.preventDefault(); verOC(a.dataset.oc); });
-  document.querySelectorAll('[data-mc]').forEach(b => b.onclick = () => montarCompra(peds.find(p => p.id === b.dataset.mc)));
+  document.querySelectorAll('[data-mc]').forEach(b => b.onclick = async () => { const p = peds.find(x => x.id === b.dataset.mc);
+    if(p.andamento_interno === 'aguardando_sinal' && !await modal('Sinal ainda não recebido', `O pedido ${esc(p.numero || '')} foi fechado, mas o cliente ainda não pagou o sinal. Montar a compra mesmo assim?`, [['Cancelar', false], ['Montar a compra', true, 'pri']])) return;
+    montarCompra(p); });
   document.querySelectorAll('[data-dep]').forEach(b => b.onclick = async () => { try{ await exec(sb.from('pedidos_servico').update({ em_deposito: b.dataset.v === '1' }).eq('id', b.dataset.dep), 'Atualizado.'); telaCompras(); }catch(e){} });
   document.querySelectorAll('[data-ent]').forEach(b => b.onclick = async () => { if(!await confirmaDuplo('Pedido entregue', 'Marcar como entregue? O material reservado para este pedido sai do estoque.', 'Entregue')) return;
     try{ await exec(sb.from('pedidos_servico').update({ andamento_interno:'entregue' }).eq('id', b.dataset.ent), 'Pedido entregue.'); telaCompras(); }catch(e){} });
@@ -7698,7 +7729,7 @@ async function inventario(){
 
 /* ---------- preços de compra ---------- */
 async function telaPrecosCompra(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const r = await sb.from('compras_precos').select('*').order('atualizado_em', { ascending:false });
   if(r.error) return $('#conteudo').innerHTML = semScript23();
   const prods = (await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,custo,margem'))).data || [];
@@ -7777,7 +7808,7 @@ const csvLinha = c => c.map(x => { const t = String(x ?? ''); return /[;"\n]/.te
 
 ST.ctb = { mes: (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7); })(), aba:'entrada' };
 async function telaContabil(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const f = ST.ctb, ini = f.mes + '-01', fim = somaDias2(new Date(new Date(ini + 'T12:00:00').getFullYear(), new Date(ini + 'T12:00:00').getMonth() + 1, 1).toISOString().slice(0, 10), 0);
   let corpo = '', linhas = [], cab = [];
   if(f.aba === 'entrada'){
@@ -7816,7 +7847,7 @@ async function telaContabil(){
 
 /* ---------- regras fiscais (CFOP) ---------- */
 async function telaRegrasFiscais(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   const [rg, op] = await Promise.all([ sb.from('fiscal_regras').select('*'), sb.from('tipos_operacao').select('codigo,cfop,descricao,saida,st').eq('ativo', true).order('codigo') ]);
   if(rg.error) return $('#conteudo').innerHTML = '<div class="card"><h2>Regras fiscais</h2><div class="vazio">Falta rodar o script <b>24_regras_fiscais.sql</b>.</div></div>';
   const ops = (op.data || []).filter(o => o.saida), regras = rg.data || [];
@@ -7896,7 +7927,7 @@ function unzipBin(buf){
 const fmtBytes = b => b > 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
 
 async function telaBackup(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   if(!diretoria()) return $('#conteudo').innerHTML = '<div class="card"><h2>Backup</h2><div class="vazio">Só a diretoria faz backup.</div></div>';
   const [h, c, t] = await Promise.all([ sb.from('backups').select('*').order('feito_em', { ascending:false }).limit(30), sb.from('backup_config').select('*').eq('id', 1).maybeSingle(), sb.rpc('backup_tabelas') ]);
   if(h.error || t.error) return $('#conteudo').innerHTML = `<div class="card"><h2>Backup</h2><div class="vazio">Falta rodar o script <b>28_backup.sql</b> no Supabase.<br><span class="muted">${esc(erroBanco(h.error || t.error))}</span></div></div>`;
@@ -8037,7 +8068,7 @@ const selPessoa = (id, lista, sel, todos) => `<select id="${id}" style="max-widt
 
 /* =================== Técnicos =================== */
 async function telaComissoesTecP(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   await diaCorte(); const P = await periodoCom(), pode = ['diretoria','administrativo'].includes(ST.eu.perfil);
   const [rg, cm, tc, at] = await Promise.all([ sb.from('comissao_regras').select('*'),
     sb.from('comissoes_tecnicos').select('*').gte('data_atividade', P.de).lte('data_atividade', P.ate),
@@ -8105,7 +8136,7 @@ async function telaComissoesTecP(){
 
 /* =================== Projetistas =================== */
 async function telaComissoesProjP(){
-  $('#conteudo').innerHTML = '<div class="card"><div class="vazio">Carregando…</div></div>';
+  carregandoTela();
   await diaCorte(); const P = await periodoCom(), pode = ['diretoria','administrativo'].includes(ST.eu.perfil);
   const [c, , pend] = await Promise.all([ sb.rpc('comissoes_projeto_periodo', { p_de: P.de, p_ate: P.ate }), carregaEquipe(),
     pode ? sb.from('tarefas_resumo').select('id,cliente,disciplina,responsavel,responsavel_id,data_conclusao,obra_id,comissao_liberada,status,etapa').in('etapa', ['Concluído','Fechar quadro']).eq('comissao_liberada', false).lte('data_conclusao', P.ate).order('data_conclusao', { ascending:false }) : Promise.resolve({ data: [] }) ]);
