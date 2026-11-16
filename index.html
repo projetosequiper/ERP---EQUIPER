@@ -3807,7 +3807,8 @@ async function telaCRM(){
     if(!await pr) return; try{ await exec(sb.from('crm_contatos').update({ proximo_em: $('#crmNova').value }).eq('id', c.id), 'Retorno adiado.'); telaCRM(); }catch(e){} });
 }
 
-function pickEmpresa(alvo, inicial, aoEscolher){
+function pickEmpresa(alvo, inicial, aoEscolher, opt = {}){
+  const papelNovo = opt.papel || 'potencial', rotNovo = opt.rotulo || 'cliente potencial';
   let pid = inicial || '';
   const desenha = () => { const p = pessoa(pid);
     alvo.innerHTML = p ? `<div style="display:flex;gap:8px;align-items:center"><b style="flex:1">${esc(p.nome)}${p.apelido ? ' <span class="muted">(' + esc(p.apelido) + ')</span>' : ''}</b><button type="button" class="btn peq" id="pkTroca">Trocar</button></div>`
@@ -3816,9 +3817,9 @@ function pickEmpresa(alvo, inicial, aoEscolher){
     const lista = () => { const q = norm($('#pkBusca').value), ws = q.split(/\s+/).filter(Boolean);
       const l = ws.length ? ST.pessoas.filter(x => x.status !== 'inativo' && ws.every(w => norm(x.nome + ' ' + (x.apelido || '') + ' ' + (x.codigos_cigam || []).join(' ')).includes(w))).slice(0, 25) : [];
       $('#pkLista').innerHTML = l.map(x => `<div data-pk="${x.id}" style="padding:6px;cursor:pointer;border-bottom:1px solid var(--borda)">${esc(x.nome)}${x.apelido ? ' <span class="muted">(' + esc(x.apelido) + ')</span>' : ''}</div>`).join('')
-        + (q ? `<div data-pknovo style="padding:6px;cursor:pointer;color:var(--verm)">+ Cadastrar "${esc($('#pkBusca').value)}" como cliente potencial</div>` : '');
+        + (q ? `<div data-pknovo style="padding:6px;cursor:pointer;color:var(--verm)">+ Cadastrar "${esc($('#pkBusca').value)}" como ${rotNovo}</div>` : '');
       document.querySelectorAll('[data-pk]').forEach(d => d.onclick = () => { pid = d.dataset.pk; desenha(); aoEscolher && aoEscolher(pid); });
-      const nv = document.querySelector('[data-pknovo]'); if(nv) nv.onclick = async () => { const n = await cadastroRapidoEmpresa($('#pkBusca') ? $('#pkBusca').value : '', 'potencial'); if(n && n.id){ await carregar(); pid = n.id; desenha(); aoEscolher && aoEscolher(pid); } }; };
+      const nv = document.querySelector('[data-pknovo]'); if(nv) nv.onclick = async () => { const n = await cadastroRapidoEmpresa($('#pkBusca') ? $('#pkBusca').value : '', papelNovo); if(n && n.id){ await carregar(); pid = n.id; desenha(); aoEscolher && aoEscolher(pid); } }; };
     $('#pkBusca').oninput = lista; };
   desenha();
   return () => pid;
@@ -4636,11 +4637,11 @@ async function telaPagar(){
       <div class="kpi"><span class="muted">Em aberto (total)</span><b>${R$(soma(x => x.situacao === 'aberto'))}</b></div>
       <div class="kpi"><span class="muted">Pago no mês</span><b style="color:var(--verde)">${R$(soma(x => x.situacao === 'pago' && String(x.pago_em).slice(0,7) === mes))}</b></div></div>
     <div class="card"><h2>Lançamentos</h2>
-    <div class="barra"><input type="search" id="busca" placeholder="Buscar favorecido, descrição, categoria…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
+    <div class="barra"><input type="search" id="busca" placeholder="Buscar empresa, descrição, categoria…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <select id="pEmp" style="max-width:170px"><option value="">EQP + Equiper</option><option ${f.emp==='EQP'?'selected':''}>EQP</option><option ${f.emp==='Equiper'?'selected':''}>Equiper</option></select>
       <select id="pSit" style="max-width:150px">${[['aberto','Em aberto'],['pago','Pagas'],['todos','Todas']].map(([k,r]) => `<option value="${k}" ${f.sit===k?'selected':''}>${r}</option>`).join('')}</select>
       ${typeof formRecorrentes === 'function' ? '<button class="btn" id="pFixas">Contas fixas</button>' : ''}<button class="btn pri" id="btnNovo">+ Lançamento</button></div>
-    <table class="reg"><thead><tr><th>Vencimento</th><th>Favorecido</th><th>Descrição</th><th>Categoria</th><th>Empresa</th><th style="text-align:right">Valor</th><th></th></tr></thead><tbody>
+    <table class="reg"><thead><tr><th>Vencimento</th><th>Empresa</th><th>Descrição</th><th>Categoria</th><th>Empresa</th><th style="text-align:right">Valor</th><th></th></tr></thead><tbody>
     ${l.map(x => `<tr data-sel="pagar|${x.id}|${x.situacao==='aberto'&&!x.valor_estimado?1:0}"><td style="${x.situacao==='aberto'&&x.vencimento<hoje?'color:var(--verm);font-weight:600':''}">${x.situacao==='pago'?'✓ '+dataBR(x.pago_em):dataBR(x.vencimento)}</td><td data-tp="${x.id}" style="cursor:pointer"><b>${esc(x.favorecido)}</b></td><td>${esc(x.descricao||'')}${x.nota_recebida_id && typeof verRecebida === 'function' ? ` <span class="tag" data-nrp="${x.nota_recebida_id}" style="cursor:pointer" title="Ver a nota do fornecedor">🧾 nota</span>` : ''}${/Vencimento estimado/.test(x.observacao || '') ? ' <span class="tag" style="background:#f59e0b22;color:#b45309" title="A nota não trazia as parcelas: confira o vencimento">venc. estimado</span>' : ''}${typeof tagEstimado === 'function' ? tagEstimado(x) : ''}</td><td>${esc(x.categoria)}</td><td>${x.empresa||''}</td>
       <td style="text-align:right;white-space:nowrap">${x.valor_estimado&&x.situacao==='aberto'?'~ ':''}${R$(x.valor)}</td><td style="white-space:nowrap">${x.situacao==='aberto'&&x.valor_estimado?`<button class="btn peq pri" data-lvp="${x.id}">Lançar valor</button>`:''}${x.situacao==='aberto'&&!x.valor_estimado?`<button class="btn peq" data-pg="${x.id}">Pago</button>`:''}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nada aqui.</td></tr>'}</tbody>
     <tfoot><tr><td colspan="5" style="text-align:right"><b>Total da lista</b></td><td style="text-align:right"><b>${R$(l.reduce((s, x) => s + Number(x.valor), 0))}</b></td><td></td></tr></tfoot></table></div>`;
@@ -4663,11 +4664,12 @@ async function formPagar(id){
     <div class="card"><div class="grade">
       <label class="campo">Categoria<select id="cpCat">${['Fornecedor','Técnico','Imposto','Salário','Aluguel','Serviço','Consumo','Outros'].map(c => `<option ${T.categoria===c?'selected':''}>${c}</option>`).join('')}</select></label>
       <label class="campo" id="cpTecW">Técnico<select id="cpTec"><option value="">—</option>${tecs.map(t => `<option value="${t.id}" ${T.tecnico_id===t.id?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></label>
-      <label class="campo largo">Favorecido<input id="cpFav" value="${esc(T.favorecido)}"></label>
+      <div class="campo largo"><span>Empresa *</span><div id="cpPes"></div><input type="hidden" id="cpFav" value="${esc(T.favorecido)}">
+        ${T.favorecido && !T.pessoa_id ? `<small class="muted" id="cpFavAnt">Escrito antes: <b>${esc(T.favorecido)}</b> — escolha a empresa do cadastro.</small>` : ''}</div>
       <label class="campo largo">Descrição<input id="cpDesc" value="${esc(T.descricao)}"></label>
       <label class="campo">Valor (R$)<input id="cpVal" inputmode="decimal" value="${numFmt(T.valor)}"></label>
       <label class="campo">Vencimento<input id="cpVenc" type="date" value="${T.vencimento||''}"></label>
-      <label class="campo">Empresa<select id="cpEmp"><option value="">—</option>${['EQP','Equiper'].map(e => `<option ${T.empresa===e?'selected':''}>${e}</option>`).join('')}</select></label>
+      <label class="campo">Paga pela<select id="cpEmp"><option value="">—</option>${['EQP','Equiper'].map(e => `<option ${T.empresa===e?'selected':''}>${e}</option>`).join('')}</select></label>
       <label class="campo">Situação<select id="cpSit">${[['aberto','Em aberto'],['pago','Paga'],['cancelado','Cancelada']].map(([k,r]) => `<option value="${k}" ${T.situacao===k?'selected':''}>${r}</option>`).join('')}</select></label>
       <label class="campo">Pago em<input id="cpPago" type="date" value="${T.pago_em||''}"></label>
       <label class="campo">Forma<select id="cpForma"><option value="">—</option>${['PIX','Transferência','Boleto','Cartão','Cheque','Dinheiro','Débito automático','Outro'].map(x => `<option ${T.forma===x?'selected':''}>${x}</option>`).join('')}</select></label>
@@ -4704,14 +4706,19 @@ async function formPagar(id){
   if($('#cpAnx') && typeof anexosPagar === 'function') anexosPagar(id, $('#cpAnx'));
   if($('#cpCodCp')) $('#cpCodCp').onclick = () => { navigator.clipboard?.writeText($('#cpCod').value.replace(/\s/g, '')); toast('Código copiado.'); };
   if($('#cpLancar')) $('#cpLancar').onclick = () => lancarValorMes(T, () => { fecharPainel(); telaPagar(); });
-  $('#cpTec').onchange = () => { if($('#cpTec').value && !$('#cpFav').value) $('#cpFav').value = $('#cpTec').selectedOptions[0].textContent; };
+  const pesIni = T.pessoa_id || T.fornecedor_id || (T.favorecido ? (ST.pessoas.find(p => norm(p.nome) === norm(T.favorecido) || norm(p.apelido || '') === norm(T.favorecido)) || {}).id : '') || '';
+  let pegaPes = pickEmpresa($('#cpPes'), pesIni, pid => { $('#cpFav').value = pid ? (pessoa(pid)?.nome || '') : ''; if(pid && $('#cpFavAnt')) $('#cpFavAnt').remove(); }, { papel: 'fornecedor', rotulo: 'fornecedor novo' });
+  if(pesIni) $('#cpFav').value = pessoa(pesIni)?.nome || T.favorecido || '';
+  $('#cpTec').onchange = () => { const t = tecs.find(x => x.id === $('#cpTec').value); if(t && t.pessoa_id && !pegaPes()){ pegaPes = pickEmpresa($('#cpPes'), t.pessoa_id, pid => { $('#cpFav').value = pid ? (pessoa(pid)?.nome || '') : ''; }, { papel: 'fornecedor', rotulo: 'fornecedor novo' }); $('#cpFav').value = pessoa(t.pessoa_id)?.nome || t.nome; } };
   $('#bSalvar').onclick = async () => { const d = { categoria: $('#cpCat').value, tecnico_id: $('#cpCat').value === 'Técnico' ? ($('#cpTec').value || null) : null, favorecido: $('#cpFav').value.trim(),
       descricao: $('#cpDesc').value.trim() || null, valor: num($('#cpVal').value), vencimento: $('#cpVenc').value, empresa: $('#cpEmp').value || null, situacao: $('#cpSit').value,
       pago_em: $('#cpSit').value === 'pago' ? ($('#cpPago').value || null) : null, forma: $('#cpForma').value || null, documento: $('#cpDoc').value.trim() || null, ...(cpNotaId !== (T.nota_recebida_id || null) ? { nota_recebida_id: cpNotaId } : {}), obra_id: $('#cpObra').value || null, observacao: $('#cpObs').value.trim() || null };
     if($('#cpCod')) d.codigo_barras = $('#cpCod').value.trim() || null;
     if(T.valor_estimado && d.situacao === 'pago' && Number(d.valor) === Number(T.valor) && !await modal('Valor estimado', `O valor desta conta ainda é a estimativa (${R$(T.valor)}). É esse mesmo o valor da fatura?`, [['Corrigir', false], ['Sim, é esse', true, 'pri']])) return;
     if(T.valor_estimado && Number(d.valor) === Number(T.valor) && d.situacao === 'pago'){ const c = await sb.rpc('fin_lancar_valor_mes', { p_id: id, p_valor: d.valor }); if(c.error) return aviso('Erro', esc(erroBanco(c.error))); }
-    if(!d.favorecido || !(d.valor > 0) || !d.vencimento) return aviso('Faltam dados', 'Preencha favorecido, valor e vencimento.');
+    d.pessoa_id = pegaPes() || null; if(d.pessoa_id){ d.favorecido = pessoa(d.pessoa_id)?.nome || d.favorecido; if(d.categoria === 'Fornecedor' && !T.fornecedor_id) d.fornecedor_id = d.pessoa_id; }
+    if(!d.pessoa_id) return aviso('Falta a empresa', 'Escolha a empresa no cadastro (ou cadastre uma nova pela própria busca).');
+    if(!(d.valor > 0) || !d.vencimento) return aviso('Faltam dados', 'Preencha valor e vencimento.');
     try{ if(id) await exec(sb.from('titulos_pagar').update(d).eq('id', id), 'Salvo.');
       else { const n = Math.min(36, Math.max(1, parseInt($('#cpRep').value) || 1)), rows = [...Array(n)].map((_, i) => { const v = new Date(d.vencimento + 'T12:00'); v.setMonth(v.getMonth() + i);
           return { ...d, vencimento: v.toISOString().slice(0,10), descricao: n > 1 ? ((d.descricao || '') + ` (${i+1}/${n})`).trim() : d.descricao, situacao: i ? 'aberto' : d.situacao, pago_em: i ? null : d.pago_em }; });
