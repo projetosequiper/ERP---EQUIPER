@@ -391,6 +391,15 @@ footer{text-align:center;color:var(--texto2);font-size:11px;padding:20px}
   .calc-cient{grid-template-rows:none}.calc-cient .calc-k{min-height:32px;font-size:13px}.calc-k{min-height:50px}.calc-visor{min-height:92px}
   #calc.cient .calc-base .calc-k:not(.m){min-height:42px}#calc.cient .calc-acoes{margin:6px 0}
 }
+.mnGrade{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(380px,100%),1fr));gap:14px;align-items:start}
+.mnGrupo{border:1px solid #e5e5ea;border-radius:12px;background:#fafafa;overflow:hidden}
+.mnCab{display:flex;gap:6px;align-items:center;padding:8px 10px;background:#1c1c1e;border-bottom:3px solid var(--verm)}
+.mnCab input{background:#fff;padding:6px 8px}.mnCab b.muted{color:#c7c7cc;font-size:13px}
+.mnItens{min-height:44px;padding:6px}.mnItens.mnSobre{background:#fee2e2}
+.mnItem{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid #e5e5ea;border-radius:9px;padding:6px 8px;margin:4px 0;font-size:13px}
+.mnItem select{width:104px;flex:none;font-size:12px;padding:3px 4px}.mnItem .btn.peq{padding:3px 7px;min-width:0;flex:none}.mnItem>span:nth-of-type(2),.mnItem>span:last-of-type{min-width:0}.mnItem .ic,.mnItem svg{width:18px;height:18px;flex:none}
+.mnItem.mnArr{opacity:.4}.mnItem.mnAntes{box-shadow:0 -3px 0 var(--verm)}
+.mnPega{cursor:grab;color:#aeaeb2;letter-spacing:-2px;user-select:none}
 </style>
 </head>
 <body>
@@ -590,7 +599,7 @@ async function iniciar(){
   window.__erpEu = { nome: u.nome, perfil: u.perfil, email: user.email };   // login único nos apps
   montaTopo();
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
-  await Promise.all([carregar(), carregaFavoritos()]);
+  await Promise.all([carregar(), carregaFavoritos(), typeof carregaLayoutMenu === 'function' ? carregaLayoutMenu() : 0]);
   lembrarTelaLiga(); const volta = lembrarTelaLe();
   desenhar(); atualizaSino(); lembrarTelaVolta(volta);
 }
@@ -2531,6 +2540,94 @@ const CONSIDERACAO_ESQUEMA = [
       {chave:'numBicos', label:'Se tiver hidromassagem, nº de bicos e marcar em planta', tipo:'texto'}
     ]}
   ];
+
+/* =================== Organizar o menu (script 47) ===================
+   A diretoria escolhe a ordem dos grupos, o nome de cada grupo e em que grupo cada função fica.
+   Vale para todos. Os acessos não mudam: quem não vê uma função continua sem ver.
+   Funções novas (de atualizações futuras) entram no grupo de origem até alguém mudar. */
+IC.adm_menu = '<path d="M4 6h10M4 12h16M4 18h12"/><path d="M18 3l3 3-3 3"/>';
+MENU.find(g => g.area === 'Administração').itens.splice(1, 0, ['adm_menu', '🧭', 'Organizar menu', 'D']);
+const MENU_PADRAO = MENU.map(g => ({ area: g.area, itens: g.itens.slice() }));
+ST.menuLayout = null;
+
+function aplicaLayoutMenu(L){
+  const porChave = new Map(MENU_PADRAO.flatMap(g => g.itens.map(i => [i[0], i])));
+  const origem = new Map(MENU_PADRAO.flatMap(g => g.itens.map(i => [i[0], g.area])));
+  let novo;
+  if(!L || !Array.isArray(L.grupos) || !L.grupos.length) novo = MENU_PADRAO.map(g => ({ area: g.area, itens: g.itens.slice() }));
+  else {
+    const usados = new Set();
+    novo = L.grupos.map(g => ({ area: String(g.nome || ''), itens: (g.itens || []).filter(k => porChave.has(k) && !usados.has(k) && usados.add(k)).map(k => porChave.get(k)) }));
+    // funções que não estão no layout: vão para o grupo de origem (ou um grupo novo com esse nome)
+    for(const [k, it] of porChave) if(!usados.has(k)){ const a = origem.get(k); let g = novo.find(x => x.area === a); if(!g){ g = { area: a, itens: [] }; novo.push(g); } g.itens.push(it); }
+    if(!novo.some(g => g.itens.some(i => i[0] === 'adm_menu'))) (novo.find(g => g.area === 'Administração') || novo[novo.length - 1]).itens.push(porChave.get('adm_menu'));
+    novo = novo.filter(g => g.itens.length);
+  }
+  MENU.splice(0, MENU.length, ...novo);
+}
+async function carregaLayoutMenu(){
+  try{ const r = await sb.from('menu_layout').select('layout').eq('id', 1).maybeSingle(); if(!r.error){ ST.menuLayout = (r.data && r.data.layout) || null; aplicaLayoutMenu(ST.menuLayout); } }catch(e){}
+}
+
+function telaOrganizarMenu(){
+  const pode = ST.eu.perfil === 'diretoria';
+  let G = MENU.map(g => ({ nome: g.area, itens: g.itens.map(i => i[0]) }));
+  const rot = new Map(MENU_PADRAO.flatMap(g => g.itens.map(i => [i[0], i])));
+  const icone = k => { const i = rot.get(k); return IC[k] ? ico(k) : `<span class="ic">${i ? i[1] : ''}</span>`; };
+  const nomeG = (g, gi) => gi === 0 && !g.nome ? '(topo do menu, sem título)' : g.nome;
+  let arrasta = null;
+  function desenha(){
+    $('#conteudo').innerHTML = `<div class="card"><div class="cx-cab"><h2>Organizar menu</h2><span class="muted" style="font-size:12px">vale para todos · os acessos de cada um não mudam</span></div>
+      <p class="muted" style="font-size:13px;margin-top:0">${pode ? 'Arraste as funções de um grupo para outro (ou use a lista "Grupo" e as setas). Renomeie, crie e reordene os grupos. Depois clique em <b>Salvar</b>.' : 'Só a diretoria muda a organização do menu.'}</p>
+      ${pode ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="btn pri" id="mnSalvar">Salvar</button><button class="btn" id="mnNovo">+ Novo grupo</button><button class="btn" id="mnPadrao">Voltar ao padrão</button></div>` : ''}
+      <div class="mnGrade">${G.map((g, gi) => `<div class="mnGrupo" data-g="${gi}">
+        <div class="mnCab">${gi === 0 && !g.nome ? `<b class="muted" style="flex:1">${esc(nomeG(g, gi))}</b>` : `<input data-nome="${gi}" value="${esc(g.nome)}" ${pode ? '' : 'disabled'} style="flex:1;font-weight:700">`}
+          ${pode ? `<button class="btn peq" data-gs="${gi}" title="Subir o grupo" ${gi > (G[0].nome ? 0 : 1) ? '' : 'disabled'}>↑</button><button class="btn peq" data-gd="${gi}" title="Descer o grupo" ${gi < G.length - 1 && (gi || G[0].nome) ? '' : 'disabled'}>↓</button>${g.itens.length ? '' : `<button class="btn peq" data-gx="${gi}" title="Apagar o grupo vazio">✕</button>`}` : ''}</div>
+        <div class="mnItens" data-solta="${gi}">${g.itens.map((k, ii) => { const it = rot.get(k) || [k, '', k];
+          return `<div class="mnItem" ${pode ? 'draggable="true"' : ''} data-k="${k}" data-gi="${gi}" data-ii="${ii}">${pode ? '<span class="mnPega" title="Arraste">⋮⋮</span>' : ''}${icone(k)}<span style="flex:1">${esc(it[2])}</span>
+            ${pode ? `<select data-mv="${gi}-${ii}" title="Mudar de grupo">${G.map((x, xi) => `<option value="${xi}" ${xi === gi ? 'selected' : ''}>${esc(xi === 0 && !x.nome ? 'Topo' : x.nome)}</option>`).join('')}</select>
+            <button class="btn peq" data-is="${gi}-${ii}" ${ii ? '' : 'disabled'}>↑</button><button class="btn peq" data-id="${gi}-${ii}" ${ii < g.itens.length - 1 ? '' : 'disabled'}>↓</button>` : ''}</div>`; }).join('') || '<div class="muted" style="font-size:12px;padding:8px">Arraste funções para cá</div>'}</div></div>`).join('')}</div></div>`;
+    if(!pode) return;
+    const lerNomes = () => document.querySelectorAll('[data-nome]').forEach(i => G[+i.dataset.nome].nome = i.value.trim());
+    const tira = (gi, ii) => G[gi].itens.splice(ii, 1)[0];
+    document.querySelectorAll('[data-nome]').forEach(i => i.onchange = lerNomes);
+    document.querySelectorAll('[data-mv]').forEach(s => s.onchange = () => { lerNomes(); const [gi, ii] = s.dataset.mv.split('-').map(Number); G[+s.value].itens.push(tira(gi, ii)); desenha(); });
+    document.querySelectorAll('[data-is]').forEach(b => b.onclick = () => { lerNomes(); const [gi, ii] = b.dataset.is.split('-').map(Number); const l = G[gi].itens; [l[ii - 1], l[ii]] = [l[ii], l[ii - 1]]; desenha(); });
+    document.querySelectorAll('[data-id]').forEach(b => b.onclick = () => { lerNomes(); const [gi, ii] = b.dataset.id.split('-').map(Number); const l = G[gi].itens; [l[ii + 1], l[ii]] = [l[ii], l[ii + 1]]; desenha(); });
+    document.querySelectorAll('[data-gs]').forEach(b => b.onclick = () => { lerNomes(); const i = +b.dataset.gs; [G[i - 1], G[i]] = [G[i], G[i - 1]]; desenha(); });
+    document.querySelectorAll('[data-gd]').forEach(b => b.onclick = () => { lerNomes(); const i = +b.dataset.gd; [G[i + 1], G[i]] = [G[i], G[i + 1]]; desenha(); });
+    document.querySelectorAll('[data-gx]').forEach(b => b.onclick = () => { lerNomes(); G.splice(+b.dataset.gx, 1); desenha(); });
+    // arrastar e soltar (computador)
+    document.querySelectorAll('.mnItem').forEach(el => {
+      el.ondragstart = e => { arrasta = { gi: +el.dataset.gi, ii: +el.dataset.ii }; e.dataTransfer.effectAllowed = 'move'; try{ e.dataTransfer.setData('text/plain', el.dataset.k); }catch(_){} el.classList.add('mnArr'); };
+      el.ondragend = () => el.classList.remove('mnArr');
+    });
+    document.querySelectorAll('[data-solta]').forEach(z => {
+      z.ondragover = e => { if(!arrasta) return; e.preventDefault(); z.classList.add('mnSobre');
+        z.querySelectorAll('.mnItem').forEach(x => x.classList.remove('mnAntes')); const alvo = [...z.querySelectorAll('.mnItem')].find(x => e.clientY < x.getBoundingClientRect().top + x.offsetHeight / 2); if(alvo) alvo.classList.add('mnAntes'); };
+      z.ondragleave = () => { z.classList.remove('mnSobre'); z.querySelectorAll('.mnItem').forEach(x => x.classList.remove('mnAntes')); };
+      z.ondrop = e => { e.preventDefault(); if(!arrasta) return; lerNomes();
+        const gi = +z.dataset.solta, itens = [...z.querySelectorAll('.mnItem')], alvo = itens.find(x => e.clientY < x.getBoundingClientRect().top + x.offsetHeight / 2);
+        let pos = alvo ? +alvo.dataset.ii : G[gi].itens.length;
+        const k = tira(arrasta.gi, arrasta.ii); if(arrasta.gi === gi && arrasta.ii < pos) pos--;
+        G[gi].itens.splice(pos, 0, k); arrasta = null; desenha(); };
+    });
+    $('#mnNovo').onclick = async () => { lerNomes(); const pr = modal('Novo grupo', '<label class="campo">Nome do grupo<input id="mnNome" placeholder="ex.: Fiscal"></label>', [['Cancelar', false], ['Criar', true, 'pri']]);
+      setTimeout(() => $('#mnNome') && $('#mnNome').focus(), 50); if(!await pr) return; const n = $('#mnNome').value.trim(); if(!n) return;
+      if(G.some(g => g.nome.toLowerCase() === n.toLowerCase())) return aviso('Já existe', 'Já há um grupo com esse nome.'); G.push({ nome: n, itens: [] }); desenha(); };
+    $('#mnPadrao').onclick = async () => { if(!await modal('Voltar ao padrão?', 'O menu volta a ser como veio no ERP (vale para todos depois de salvar).', [['Cancelar', false], ['Voltar ao padrão', true, 'pri']])) return;
+      G = MENU_PADRAO.map(g => ({ nome: g.area, itens: g.itens.map(i => i[0]) })); desenha(); };
+    $('#mnSalvar').onclick = async () => { lerNomes();
+      const semNome = G.findIndex((g, gi) => !g.nome && gi !== 0); if(semNome >= 0) return aviso('Grupo sem nome', 'Dê um nome a todos os grupos (só o primeiro, do topo, pode ficar sem título).');
+      const nomes = G.map(g => g.nome.toLowerCase()); if(nomes.some((n, i) => nomes.indexOf(n) !== i)) return aviso('Nomes repetidos', 'Dois grupos têm o mesmo nome.');
+      const layout = { grupos: G.filter(g => g.itens.length).map(g => ({ nome: g.nome, itens: g.itens })) };
+      const r = await sb.from('menu_layout').update({ layout, atualizado_em: new Date().toISOString() }).eq('id', 1).select();
+      if(r.error || !(r.data || []).length) return aviso('Não foi possível salvar', r.error ? esc(erroBanco(r.error)) : 'Rode o script 47 no Supabase.');
+      ST.menuLayout = layout; aplicaLayoutMenu(layout); G = MENU.map(g => ({ nome: g.area, itens: g.itens.map(i => i[0]) })); desenhar(); toast('Menu salvo. Os outros veem na próxima vez que abrirem o ERP.'); };
+  }
+  carregaLayoutMenu().then(() => { G = MENU.map(g => ({ nome: g.area, itens: g.itens.map(i => i[0]) })); desenha(); });
+}
+Object.assign(TELAS, { adm_menu: telaOrganizarMenu });
 
 /* ================== Relatório (PDF) e Excel em todas as listas ==================
    Toda tela com lista ganha os botões "📄 Relatório" e "📊 Excel" no topo.
