@@ -646,7 +646,7 @@ const MENU = [
   { area:'Projetos', itens:[ ['pj_propostas','📄','Propostas e parcelas','DAPG'], ['pj_projetos','📋','Projetos e tarefas','DAPG'], ['pj_cal','📅','Calendário','DAPG'], ['pj_visitas','📝','Visitas e considerações','DAPG'], ['pj_art','📐','ART','DAPG'], ['pj_com','💵','Comissões','DAPG'], ['pj_dim','🧮','Dimensionamento','DAPG'] ] },
   { area:'Serviços', itens:[ ['sv_agenda','📅','Agenda e atividades','DSAT'], ['sv_os','🧾','Ordens de serviço','DSA'], ['sv_orc','📥','Solicitações de orçamento','DSA'], ['sv_pedidos','🏗️','Obras e pedidos','DSA'], ['sv_manut','🔧','Manutenções e contratos','DSA'], ['sv_oficina','🛠️','Oficina','DSAT'], ['sv_estoque','📦','Estoque','DSAT'], ['sv_comissoes','💵','Comissões dos técnicos','DA'] ] },
   { area:'Suprimentos', itens:[ ['cp_compras','🛒','Compras','DAS'], ['cp_precos','🏷️','Preços de compra','DA'] ] },
-  { area:'Financeiro', itens:[ ['fn_painel','📊','Painel de resultados','DA'], ['fn_cobranca','📞','Cobrança','DA'], ['fn_fluxo','🗓️','Fluxo diário','DA'], ['fn_caixa','🏦','Caixa e bancos','DA'], ['fn_receber','💰','A receber','DA'], ['fn_pagar','💸','A pagar','DA'], ['fn_posicao','👤','Posição do cliente','DA'], ['fn_recibos','🧾','Recibos','DA'], ['fn_notas','🧾','Notas fiscais','DA'], ['fn_plano','📒','Plano de contas','DA'], ['fn_recebidas','📥','Notas recebidas','DA'], ['fn_gerencial','📈','Relatório gerencial','DA'], ['fn_contabil','📚','Relatórios para a contabilidade','DA'], ['fn_cnpj','📊','Faturamento por CNPJ','DA'], ['fn_pendencias','⚠️','Pendências de clientes','DAPS'] ] },
+  { area:'Financeiro', itens:[ ['fn_painel','📊','Painel de resultados','DA'], ['fn_cobranca','📞','Cobrança','DA'], ['fn_fluxo','🗓️','Fluxo diário','DA'], ['fn_caixa','🏦','Caixa e bancos','DA'], ['fn_receber','💰','A receber','DA'], ['fn_pagar','💸','Lançamentos','DA'], ['fn_posicao','👤','Posição do cliente','DA'], ['fn_recibos','🧾','Recibos','DA'], ['fn_notas','🧾','Notas fiscais','DA'], ['fn_plano','📒','Plano de contas','DA'], ['fn_recebidas','📥','Notas recebidas','DA'], ['fn_gerencial','📈','Relatório gerencial','DA'], ['fn_contabil','📚','Relatórios para a contabilidade','DA'], ['fn_cnpj','📊','Faturamento por CNPJ','DA'], ['fn_pendencias','⚠️','Pendências de clientes','DAPS'] ] },
   { area:'Administração', itens:[ ['adm_usuarios','👥','Usuários e acessos','D'], ['adm_fiscal','⚙️','Configuração fiscal','DA'], ['adm_cert','🔐','Certificados digitais','DA'], ['adm_regras','⚖️','Regras fiscais (CFOP)','DA'], ['registro','🗂️','Registro de ações','D'], ['adm_backup','💾','Backup','D'], ['vinculos','🔗','Migração dos apps','DAPS'], ['projetos','🗄️','App Projetos (antigo)','DAP'], ['servicos','🗄️','App Serviços (antigo)','DAST'] ] }
 ];
 const LETRA = { diretoria:'D', administrativo:'A', projetos:'P', servicos:'S', tecnico:'T', agente:'G' };
@@ -760,6 +760,7 @@ async function formPessoa(p){
       <label class="campo">CPF / CNPJ<input id="sDoc" inputmode="numeric" value="${esc(S.documento?fmtDoc(S.documento):'')}"></label>
       <label class="campo">Inscrição estadual<input id="sIe" value="${esc(S.ie)}"></label>
       <label class="campo">Inscrição municipal<input id="sIm" value="${esc(S.im)}"></label>
+      <div class="campo largo" style="margin-top:6px"><b style="color:#1c1c1e;font-size:13px">Endereço principal · cobrança</b><span>vai no recibo, na nota fiscal e na cobrança</span></div>
       <label class="campo">CEP<input id="sCep" placeholder="digite e o endereço se preenche" inputmode="numeric" value="${esc(S.cep)}"></label>
       <label class="campo largo">Endereço<input id="sLog" placeholder="Rua / avenida" value="${esc(S.logradouro)}"></label>
       <label class="campo">Número<input id="sNum" value="${esc(S.numero)}"></label>
@@ -770,6 +771,7 @@ async function formPessoa(p){
       <label class="campo largo">Telefones (um por linha)<textarea id="sTel">${esc((S.telefones||[]).join('\n'))}</textarea></label>
       <label class="campo largo">E-mails (um por linha)<textarea id="sMail">${esc((S.emails||[]).join('\n'))}</textarea></label>
     </div></div>`:`<p class="muted" style="margin-top:14px">🔒 CPF/CNPJ, telefones, e-mails e endereço são preenchidos pelo escritório na aprovação.</p>`}
+    ${!novo && humano() ? '<div id="pEnds"></div>' : ''}
     <div id="pPedCigam"></div>
     </div>
     <div class="rodape">${!novo&&diretoria()&&p.status!=='inativo'?'<button class="btn" id="bInat">Inativar</button>':''}${!novo&&humano()&&p.status==='inativo'?'<button class="btn" id="bReat">Reativar</button>':''}
@@ -777,6 +779,7 @@ async function formPessoa(p){
       ${ro?'':'<button class="btn pri" id="bSalvar">Salvar</button>'}</div>`);
   $('#pTipo').value = p.tipo || 'PF';
   if(!novo) pedidosCigamDaEmpresa(p.id);
+  if($('#pEnds') && typeof enderecosDaEmpresa === 'function') enderecosDaEmpresa(p.id, $('#pEnds'), ro);
   if(!novo && typeof verPosicao === 'function' && ['diretoria','administrativo'].includes(ST.eu.perfil)){ const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Posição financeira'; b.onclick = () => verPosicao(p.id); $('#folha .rodape').prepend(b); }
   let fotoNova; const fotoAtual = () => fotoNova === undefined ? p.foto : fotoNova;
   const mostraFoto = () => { const f = fotoAtual(); $('#pFotoVer').innerHTML = f ? `<img src="${f}" alt="">` : ico('usuario'); if($('#pFotoTirar')) $('#pFotoTirar').style.display = f ? '' : 'none';
@@ -2873,7 +2876,7 @@ const fotoParaDataURL = (arq, max = 1600, q = 0.68) => new Promise((ok, erro) =>
     ok(c.toDataURL('image/jpeg', q)); }; im.onerror = erro; im.src = fr.result; };
   fr.onerror = erro; fr.readAsDataURL(arq);
 });
-const opcoesObra = (sel, vazio) => `<option value="">${vazio}</option>` + ST.obras.filter(o => o.status !== 'inativo' || o.id === sel).map(o => `<option value="${o.id}" ${o.id===sel?'selected':''}>${esc(o.nome)}</option>`).join('');
+const opcoesObra = (sel, vazio) => `<option value="">${vazio}</option>` + ST.obras.filter(o => o.status !== 'inativo' || o.id === sel).map(o => `<option value="${o.id}" ${o.id===sel?'selected':''}>${esc(typeof rotuloObra === 'function' ? rotuloObra(o) : o.nome)}</option>`).join('');
 const nomeCliente = r => obra(r.obra_id)?.nome || r.cliente_texto || '—';
 function galeria(fotos, alvo, ro, aoMudar){
   const el = typeof alvo === 'string' ? $(alvo) : alvo;
@@ -3453,6 +3456,66 @@ async function cadastroRapidoEmpresa(nomeInicial, papel = 'cliente'){
   }catch(e){ return null; }
 }
 
+/* =================== Endereços da empresa ===================
+   Principal = endereço de cobrança (dados da empresa). Outros endereços = casas/obras do cliente
+   (cada um é uma obra ligada à empresa como pagadora) — são eles que aparecem para instalação e manutenção. */
+CEP_CAMPOS.neCep = { log:'neLog', bairro:'neBai', mun:'neMun', uf:'neUf', num:'neNum', comp:'neComp' };
+const obrasDaEmpresa = pid => ST.pagadores.filter(g => g.pessoa_id === pid).map(g => obra(g.obra_id)).filter(o => o && o.status !== 'inativo');
+const rotuloObra = o => o.nome + ([o.bairro, o.municipio].filter(Boolean).length ? ' — ' + [o.bairro, o.municipio].filter(Boolean).join(', ') : '');
+
+async function enderecosDaEmpresa(pid, alvo, ro){
+  const os = obrasDaEmpresa(pid);
+  const ends = os.length ? ((await priv().from('obras_endereco').select('*').in('obra_id', os.map(o => o.id))).data || []) : [];
+  const E = Object.fromEntries(ends.map(e => [e.obra_id, e]));
+  alvo.innerHTML = `<div class="secao-sens"><h3>Outros endereços</h3><p class="muted" style="font-size:12px;margin:-4px 0 8px">Casas e obras deste cliente. Aparecem na instalação, na manutenção, no orçamento e na agenda.</p>
+    ${os.length ? `<table class="reg" data-sem-ordem><thead><tr><th>Local</th><th>Endereço</th><th></th></tr></thead><tbody>${os.map(o => { const e = E[o.id] || {};
+      return `<tr><td><b>${esc(o.nome)}</b></td><td style="font-size:13px">${esc([[e.logradouro, e.numero].filter(Boolean).join(', '), e.complemento, o.bairro, [o.municipio, o.uf].filter(Boolean).join('/'), e.cep].filter(Boolean).join(' · ') || '—')}</td>
+        <td style="text-align:right"><button class="btn peq" data-abreobra="${o.id}">Abrir</button></td></tr>`; }).join('')}</tbody></table>` : '<p class="muted" style="margin:0 0 6px">Nenhum outro endereço ainda.</p>'}
+    ${ro ? '' : '<button class="btn peq pri" id="neNovo" type="button">+ Adicionar endereço</button>'}</div>`;
+  alvo.querySelectorAll('[data-abreobra]').forEach(b => b.onclick = () => formObra(obra(b.dataset.abreobra)));
+  if($('#neNovo')) $('#neNovo').onclick = () => novoEnderecoEmpresa(pid, () => enderecosDaEmpresa(pid, alvo, ro));
+}
+
+async function novoEnderecoEmpresa(pid, depois){
+  const p = pessoa(pid) || {};
+  const pr = modal('Novo endereço de ' + esc(p.apelido || p.nome || ''), `<div class="grade">
+      <label class="campo largo">Nome do local *<input id="neNome" placeholder="ex.: Casa de Itaipava, Cobertura Leblon"></label>
+      <label class="campo">CEP<input id="neCep" inputmode="numeric" placeholder="digite e o endereço se preenche"></label>
+      <label class="campo largo">Endereço<input id="neLog" placeholder="Rua / avenida / estrada"></label>
+      <label class="campo">Número<input id="neNum"></label><label class="campo">Complemento<input id="neComp"></label>
+      <label class="campo">Bairro<input id="neBai"></label><label class="campo">Município<input id="neMun"></label>
+      <label class="campo">UF<select id="neUf"><option value=""></option>${UFS.map(u => `<option>${u}</option>`).join('')}</select></label>
+      <label class="campo largo">Referência (como chegar, portaria…)<input id="neRef"></label></div>
+    <button class="btn peq" type="button" id="neCopia" style="margin-top:6px">Usar o endereço principal (cobrança)</button>`, [['Cancelar', false], ['Adicionar', true, 'pri']]);
+  $('#neCopia').onclick = async () => { const s = (await priv().from('pessoas_dados').select('*').eq('pessoa_id', pid).maybeSingle()).data || {};
+    [['neCep','cep'],['neLog','logradouro'],['neNum','numero'],['neComp','complemento'],['neBai','bairro'],['neMun','municipio'],['neUf','uf']].forEach(([i, k]) => { if(s[k]) $('#' + i).value = s[k]; });
+    if(!$('#neNome').value) $('#neNome').value = 'Endereço principal'; };
+  if(!await pr) return;
+  const v = i => $('#' + i).value.trim(), nome = v('neNome');
+  if(!nome) return aviso('Falta o nome', 'Dê um nome para o local (ex.: Casa de Itaipava).');
+  try{
+    const o = await sb.from('obras').insert({ nome, bairro: v('neBai') || null, municipio: v('neMun') || null, uf: v('neUf') || null, status: humano() ? 'ativo' : 'rascunho' }).select().single();
+    if(o.error) throw o.error;
+    const e = await priv().from('obras_endereco').insert({ obra_id: o.data.id, logradouro: v('neLog') || null, numero: v('neNum') || null, complemento: v('neComp') || null,
+      cep: dig(v('neCep')).replace(/^(\d{5})(\d{3})$/, '$1-$2') || null, referencia: v('neRef') || null });
+    if(e.error) throw e.error;
+    const g = await sb.from('obra_pagadores').insert({ obra_id: o.data.id, pessoa_id: pid, padrao: true }); if(g.error) throw g.error;
+    toast('Endereço adicionado.'); await carregar(); depois && depois();
+  }catch(err){ aviso('Não foi possível adicionar', esc(erroBanco(err))); }
+}
+
+/* escolher o local da instalação/manutenção pelo cliente: primeiro a empresa, depois um dos endereços dela */
+function opcoesObraDe(pid, sel, vazio){
+  const l = pid ? obrasDaEmpresa(pid) : ST.obras.filter(o => o.status !== 'inativo' || o.id === sel);
+  if(sel && !l.some(o => o.id === sel) && obra(sel)) l.unshift(obra(sel));
+  return `<option value="">${vazio}</option>` + l.map(o => `<option value="${o.id}" ${o.id === sel ? 'selected' : ''}>${esc(rotuloObra(o))}</option>`).join('');
+}
+function clienteDaObra(oid){ const g = ST.pagadores.filter(x => x.obra_id === oid); return (g.find(x => x.padrao) || g[0] || {}).pessoa_id || ''; }
+function opcoesEmpresasComEndereco(sel){
+  const ids = [...new Set(ST.pagadores.map(g => g.pessoa_id))].map(pessoa).filter(p => p && p.status !== 'inativo').sort((a, b) => a.nome.localeCompare(b.nome));
+  return `<option value="">— todos os clientes —</option>` + ids.map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.nome)}${p.apelido ? ' (' + esc(p.apelido) + ')' : ''}</option>`).join('');
+}
+
 /* ================== Serviços (script 11) ==================
    Agenda e atividades · Minha agenda (técnico, funciona sem internet) · OS · Orçamentos
    Obras e pedidos · Manutenções e contratos · Oficina · Estoque */
@@ -3479,9 +3542,18 @@ async function enderecoDaObra(obraId){
   return [[e.logradouro, e.numero].filter(Boolean).join(', '), e.complemento, o.bairro, o.municipio].filter(Boolean).join(' · ');
 }
 const cliTxt = r => obra(r.obra_id)?.nome || r.cliente || r.cliente_texto || '—';
-const linhaCliente = (prefixo, obraId, texto) => `<label class="campo largo">Obra (cliente)<select id="${prefixo}Obra">${opcoesObra(obraId, '— cliente ainda sem obra —')}</select></label>
-  <label class="campo largo" id="${prefixo}CliW" style="${obraId?'display:none':''}">Nome do cliente<input id="${prefixo}Cli" value="${esc(texto)}"></label>`;
-const ligaCliente = (prefixo, aoMudar) => { $(`#${prefixo}Obra`).addEventListener('change', () => { $(`#${prefixo}CliW`).style.display = $(`#${prefixo}Obra`).value ? 'none' : ''; aoMudar && aoMudar(); }); };
+const linhaCliente = (prefixo, obraId, texto) => { const emp = clienteDaObra(obraId);
+  return `<label class="campo largo">Cliente<select id="${prefixo}Emp">${opcoesEmpresasComEndereco(emp)}</select></label>
+  <label class="campo largo">Endereço (local do serviço)<span style="display:flex;gap:6px"><select id="${prefixo}Obra">${opcoesObraDe(emp, obraId, '— cliente ainda sem endereço —')}</select><button type="button" class="btn peq" id="${prefixo}NovoEnd" title="Adicionar um endereço a este cliente" style="${emp ? '' : 'display:none'}">+ endereço</button></span></label>
+  <label class="campo largo" id="${prefixo}CliW" style="${obraId?'display:none':''}">Nome do cliente<input id="${prefixo}Cli" value="${esc(texto)}"></label>`; };
+const ligaCliente = (prefixo, aoMudar) => {
+  const so = $(`#${prefixo}Obra`), se = $(`#${prefixo}Emp`), bn = $(`#${prefixo}NovoEnd`);
+  const mudouObra = () => { $(`#${prefixo}CliW`).style.display = so.value ? 'none' : ''; aoMudar && aoMudar(); };
+  so.addEventListener('change', mudouObra);
+  if(se) se.addEventListener('change', () => { const l = obrasDaEmpresa(se.value); so.innerHTML = opcoesObraDe(se.value, l.length === 1 ? l[0].id : '', se.value ? (l.length ? '— escolha o endereço —' : '— este cliente ainda não tem endereço —') : '— cliente ainda sem endereço —');
+    if(bn) bn.style.display = se.value ? '' : 'none'; if(se.value && !$(`#${prefixo}Cli`).value) $(`#${prefixo}Cli`).value = pessoa(se.value)?.nome || ''; mudouObra(); });
+  if(bn) bn.onclick = () => novoEnderecoEmpresa(se.value, () => { const l = obrasDaEmpresa(se.value), novo = l[l.length - 1]; so.innerHTML = opcoesObraDe(se.value, novo ? novo.id : '', '— escolha o endereço —'); mudouObra(); });
+};
 const lerCliente = prefixo => { const o = $(`#${prefixo}Obra`).value || null, c = $(`#${prefixo}Cli`).value.trim(); return { obra_id: o, cliente_texto: o ? null : (c || null) }; };
 
 /* =================== Agenda e atividades =================== */
@@ -3538,7 +3610,7 @@ async function formAtividade(id, pre){
     </div>
     <div class="rodape">${id&&A.etapa==='concluido'?'<button class="btn" id="bImp">🖨 Relatório</button>':''}${id&&podeSv()&&A.status!=='inativo'?'<button class="btn" id="bInat">Inativar</button>':''}
       ${id&&podeSv()&&A.etapa!=='concluido'?'<button class="btn" id="bConcluir">Concluir pelo escritório</button>':''}${ro?'':'<button class="btn pri" id="bSalvar">Salvar</button>'}</div>`);
-  ligaCliente('at', async () => { if(!$('#atEnd').value) $('#atEnd').value = await enderecoDaObra($('#atObra').value); });
+  ligaCliente('at', async () => { const e = await enderecoDaObra($('#atObra').value); if(e || !$('#atEnd').value) $('#atEnd').value = e; });
   galeria(fotosI, '#atFotosI', ro); if(id) galeria(A.fotos || [], '#atFotos', true);
   if(ro) document.querySelectorAll('#folha input,#folha select,#folha textarea').forEach(e => e.disabled = true);
   const dados = () => ({ ...lerCliente('at'), endereco: $('#atEnd').value.trim() || null, data: $('#atData').value || null, os_empresa: $('#atEmp').value || null,
@@ -3700,7 +3772,7 @@ async function formOrcamento(id){
     <div class="rodape">${id&&podeSv()&&O.status!=='inativo'?'<button class="btn" id="bInat">Inativar</button>':''}${id&&['aberto','feito'].includes(O.etapa)&&O.obra_id?'<button class="btn" id="bMontar">📑 Montar orçamento</button>':''}${id&&O.etapa==='aprovado'&&podeSv()&&O.obra_id?'<button class="btn" id="bPed">→ Criar pedido</button>':''}${ro?'':'<button class="btn pri" id="bSalvar">Salvar</button>'}</div>`);
   const desAnx = () => { $('#orAnx').innerHTML = anexos.map((a, i) => `<div class="item" style="padding:6px 0"><div><a href="${a.dados}" download="${esc(a.nome)}">📄 ${esc(a.nome)}</a></div>${ro?'':`<div class="acoes"><button class="btn peq" data-xa="${i}">✕</button></div>`}</div>`).join('') || '<span class="muted">Nenhum.</span>';
     document.querySelectorAll('[data-xa]').forEach(b => b.onclick = () => { anexos.splice(+b.dataset.xa, 1); desAnx(); }); };
-  desAnx(); ligaCliente('or', async () => { if(!$('#orEnd').value) $('#orEnd').value = await enderecoDaObra($('#orObra').value); });
+  desAnx(); ligaCliente('or', async () => { const e = await enderecoDaObra($('#orObra').value); if(e || !$('#orEnd').value) $('#orEnd').value = e; });
   if($('#orArq')) $('#orArq').onchange = async e => { for(const f of e.target.files){ if(f.size > 3*1024*1024){ toast(f.name + ' passa de 3 MB.'); continue; }
     anexos.push({ nome: f.name, tipo: f.type, dados: await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(f); }) }); } desAnx(); };
   if(ro) document.querySelectorAll('#folha input,#folha select,#folha textarea').forEach(e => e.disabled = true);
@@ -3839,7 +3911,7 @@ async function formContrato(id){
       <label class="campo largo">Observações<textarea id="ctObs" rows="2">${esc(C.observacoes)}</textarea></label></div>
     ${hist.length ? `<div class="secao-sens"><h3>Visitas</h3>${hist.map(h => `<div class="item"><div><div class="nome">${dataBR(h.data)||'sem data'} · ${esc(h.descricao)}</div><div class="sub">${tagEtapa(h.etapa)} ${esc(h.tecnicos_nomes||'')}</div></div></div>`).join('')}</div>` : ''}</div>
     <div class="rodape">${id&&podeSv()&&C.status!=='inativo'?'<button class="btn" id="bInat">Encerrar contrato</button>':''}${ro?'':'<button class="btn pri" id="bSalvar">Salvar</button>'}</div>`);
-  ligaCliente('ct', async () => { if(!$('#ctLocal').value) $('#ctLocal').value = await enderecoDaObra($('#ctObra').value); });
+  ligaCliente('ct', async () => { const e = await enderecoDaObra($('#ctObra').value); if(e || !$('#ctLocal').value) $('#ctLocal').value = e; });
   if(ro) document.querySelectorAll('#folha input,#folha select,#folha textarea').forEach(e => e.disabled = true);
   if($('#bSalvar')) $('#bSalvar').onclick = async () => { const d = { ...lerCliente('ct'), contato_texto: $('#ctCont').value.trim() || null, local: $('#ctLocal').value.trim() || null,
       sistemas: [...document.querySelectorAll('#folha .discs input:checked')].map(i => i.value), intervalo_meses: Math.min(24, Math.max(1, parseInt($('#ctInt').value) || 3)),
@@ -4060,11 +4132,11 @@ async function telaPagar(){
       <div class="kpi"><span class="muted">Próximos 7 dias</span><b>${R$(soma(x => x.situacao === 'aberto' && x.vencimento >= hoje && x.vencimento <= em7))}</b></div>
       <div class="kpi"><span class="muted">Em aberto (total)</span><b>${R$(soma(x => x.situacao === 'aberto'))}</b></div>
       <div class="kpi"><span class="muted">Pago no mês</span><b style="color:var(--verde)">${R$(soma(x => x.situacao === 'pago' && String(x.pago_em).slice(0,7) === mes))}</b></div></div>
-    <div class="card"><h2>A pagar</h2>
+    <div class="card"><h2>Lançamentos</h2>
     <div class="barra"><input type="search" id="busca" placeholder="Buscar favorecido, descrição, categoria…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <select id="pEmp" style="max-width:170px"><option value="">EQP + Equiper</option><option ${f.emp==='EQP'?'selected':''}>EQP</option><option ${f.emp==='Equiper'?'selected':''}>Equiper</option></select>
       <select id="pSit" style="max-width:150px">${[['aberto','Em aberto'],['pago','Pagas'],['todos','Todas']].map(([k,r]) => `<option value="${k}" ${f.sit===k?'selected':''}>${r}</option>`).join('')}</select>
-      ${typeof formRecorrentes === 'function' ? '<button class="btn" id="pFixas">Contas fixas</button>' : ''}<button class="btn pri" id="btnNovo">+ Conta a pagar</button></div>
+      ${typeof formRecorrentes === 'function' ? '<button class="btn" id="pFixas">Contas fixas</button>' : ''}<button class="btn pri" id="btnNovo">+ Lançamento</button></div>
     <table class="reg"><thead><tr><th>Vencimento</th><th>Favorecido</th><th>Descrição</th><th>Categoria</th><th>Empresa</th><th style="text-align:right">Valor</th><th></th></tr></thead><tbody>
     ${l.map(x => `<tr><td style="${x.situacao==='aberto'&&x.vencimento<hoje?'color:var(--verm);font-weight:600':''}">${x.situacao==='pago'?'✓ '+dataBR(x.pago_em):dataBR(x.vencimento)}</td><td data-tp="${x.id}" style="cursor:pointer"><b>${esc(x.favorecido)}</b></td><td>${esc(x.descricao||'')}${x.nota_recebida_id && typeof verRecebida === 'function' ? ` <span class="tag" data-nrp="${x.nota_recebida_id}" style="cursor:pointer" title="Ver a nota do fornecedor">🧾 nota</span>` : ''}${/Vencimento estimado/.test(x.observacao || '') ? ' <span class="tag" style="background:#f59e0b22;color:#b45309" title="A nota não trazia as parcelas: confira o vencimento">venc. estimado</span>' : ''}${typeof tagEstimado === 'function' ? tagEstimado(x) : ''}</td><td>${esc(x.categoria)}</td><td>${x.empresa||''}</td>
       <td style="text-align:right;white-space:nowrap">${x.valor_estimado&&x.situacao==='aberto'?'~ ':''}${R$(x.valor)}</td><td style="white-space:nowrap">${x.situacao==='aberto'&&x.valor_estimado?`<button class="btn peq pri" data-lvp="${x.id}">Lançar valor</button>`:''}${x.situacao==='aberto'&&!x.valor_estimado?`<button class="btn peq" data-pg="${x.id}">Pago</button>`:''}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nada aqui.</td></tr>'}</tbody>
@@ -4083,7 +4155,7 @@ async function formPagar(id){
   let T = { categoria:'Fornecedor', situacao:'aberto', vencimento: hojeISO() };
   if(id){ const r = await sb.from('titulos_pagar').select('*').eq('id', id).single(); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); T = r.data; }
   const tecs = await carregaTecnicos();
-  abrirPainel(`<div class="cab"><h2>${id ? 'Conta a pagar' : 'Nova conta a pagar'}</h2>${typeof tagEstimado === 'function' ? tagEstimado(T) : ''}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+  abrirPainel(`<div class="cab"><h2>${id ? 'Lançamento' : 'Novo lançamento'}</h2>${typeof tagEstimado === 'function' ? tagEstimado(T) : ''}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     ${T.valor_estimado && T.situacao === 'aberto' ? `<div class="card" style="background:#fff7ed;border-color:#f59e0b55;font-size:13px">Conta que varia: <b>${R$(T.valor)}</b> é uma estimativa (média dos últimos meses). Digite o valor da fatura no campo Valor — ou use <button class="btn peq pri" id="cpLancar">Lançar valor do mês</button></div>` : ''}
     <div class="card"><div class="grade">
       <label class="campo">Categoria<select id="cpCat">${['Fornecedor','Técnico','Imposto','Salário','Aluguel','Serviço','Consumo','Outros'].map(c => `<option ${T.categoria===c?'selected':''}>${c}</option>`).join('')}</select></label>
@@ -4096,13 +4168,35 @@ async function formPagar(id){
       <label class="campo">Situação<select id="cpSit">${[['aberto','Em aberto'],['pago','Paga'],['cancelado','Cancelada']].map(([k,r]) => `<option value="${k}" ${T.situacao===k?'selected':''}>${r}</option>`).join('')}</select></label>
       <label class="campo">Pago em<input id="cpPago" type="date" value="${T.pago_em||''}"></label>
       <label class="campo">Forma<select id="cpForma"><option value="">—</option>${['PIX','Transferência','Boleto','Cartão','Cheque','Dinheiro','Débito automático','Outro'].map(x => `<option ${T.forma===x?'selected':''}>${x}</option>`).join('')}</select></label>
-      <label class="campo">Documento (NF / boleto)<input id="cpDoc" value="${esc(T.documento)}"></label>
+      <label class="campo">Documento (NF / boleto)<span style="display:flex;gap:6px"><input id="cpDoc" value="${esc(T.documento)}"><button type="button" class="btn peq" id="cpNota" style="white-space:nowrap"></button></span></label>
       ${T.codigo_barras !== undefined ? `<label class="campo largo">Código de barras / linha digitável<span style="display:flex;gap:6px"><input id="cpCod" value="${esc(T.codigo_barras)}"><button type="button" class="btn peq" id="cpCodCp" title="Copiar">⧉</button></span></label>` : ''}
       <label class="campo largo">Obra (opcional)<select id="cpObra">${opcoesObra(T.obra_id, '—')}</select></label>
       <label class="campo largo">Observação<input id="cpObs" value="${esc(T.observacao)}"></label>
       ${id ? '' : '<label class="campo">Repetir por (meses)<input id="cpRep" type="number" min="1" max="36" value="1"></label>'}</div>
       ${id && T.codigo_barras !== undefined ? '<div id="cpAnx" style="margin-top:10px"></div>' : ''}</div>
     <div class="rodape"><button class="btn pri" id="bSalvar">Salvar</button></div>`);
+  let cpNotaId = T.nota_recebida_id || null;
+  const btNota = () => { const b = $('#cpNota'); b.textContent = cpNotaId ? '🧾 Abrir nota' : '🔎 Achar nota'; b.title = cpNotaId ? 'Abrir a nota fiscal deste lançamento' : 'Procurar a nota fiscal pelo número e ligar a este lançamento'; b.className = 'btn peq' + (cpNotaId ? ' pri' : ''); };
+  btNota();
+  $('#cpDoc').addEventListener('input', () => { if(cpNotaId && T.nota_recebida_id !== cpNotaId) { cpNotaId = null; btNota(); } });
+  $('#cpNota').onclick = async () => {
+    if(cpNotaId) return verRecebida(cpNotaId);
+    const num = String(Number(dig($('#cpDoc').value)) || ''), fav = $('#cpFav').value.trim();
+    let q = sb.from('notas_recebidas').select('id,numero,serie,emitente_nome,emitente_doc,valor,data_emissao,fornecedor_id').order('data_emissao', { ascending: false }).limit(30);
+    if(num) q = q.eq('numero', num); else if(T.fornecedor_id) q = q.eq('fornecedor_id', T.fornecedor_id); else if(fav) q = q.ilike('emitente_nome', '%' + fav + '%'); else return aviso('Digite o número da nota', 'Escreva o número da NF no campo Documento e clique de novo.');
+    const r = await q; if(r.error) return aviso('Erro', esc(erroBanco(r.error)));
+    let l = r.data || []; if(num && l.length > 1 && T.fornecedor_id) { const f = l.filter(n => n.fornecedor_id === T.fornecedor_id); if(f.length) l = f; }
+    if(num && l.length > 1 && fav) { const F = fav.toUpperCase(), tem = w => l.filter(n => (n.emitente_nome || '').toUpperCase().includes(w)), f = tem(F).length ? tem(F) : tem(F.split(/\s+/)[0]); if(f.length) l = f; }
+    if(!l.length) return aviso('Nota não encontrada', num ? `Nenhuma nota recebida com o número <b>${esc(num)}</b>. Confira o número ou importe a nota em Notas recebidas.` : 'Nenhuma nota recebida deste fornecedor.');
+    let esc1 = l[0];
+    if(l.length > 1){
+      const pr = modal('Qual nota?', `<div class="lista">${l.map((n, i) => `<label class="item" style="cursor:pointer"><input type="radio" name="cpNr" value="${i}" ${i ? '' : 'checked'} style="width:auto;margin-right:8px"><div class="nome">NF ${esc(n.numero)}${n.serie ? '/' + esc(n.serie) : ''} · ${esc(n.emitente_nome || '')}<div class="muted" style="font-size:12px">${dataBR(n.data_emissao)} · ${R$(n.valor)}</div></div></label>`).join('')}</div>`, [['Cancelar', false], ['Ligar e abrir', true, 'pri']]);
+      if(!await pr) return; esc1 = l[Number(document.querySelector('[name=cpNr]:checked')?.value || 0)];
+    }
+    cpNotaId = esc1.id; if(!$('#cpDoc').value.trim()) $('#cpDoc').value = 'NF ' + esc1.numero;
+    if(id) { try{ await exec(sb.from('titulos_pagar').update({ nota_recebida_id: cpNotaId }).eq('id', id), 'Nota ligada ao lançamento.'); T.nota_recebida_id = cpNotaId; }catch(e){ cpNotaId = T.nota_recebida_id || null; } }
+    btNota(); if(cpNotaId) verRecebida(cpNotaId);
+  };
   const cat = () => { $('#cpTecW').style.display = $('#cpCat').value === 'Técnico' ? '' : 'none'; }; $('#cpCat').onchange = cat; cat();
   if($('#cpAnx') && typeof anexosPagar === 'function') anexosPagar(id, $('#cpAnx'));
   if($('#cpCodCp')) $('#cpCodCp').onclick = () => { navigator.clipboard?.writeText($('#cpCod').value.replace(/\s/g, '')); toast('Código copiado.'); };
@@ -4110,7 +4204,7 @@ async function formPagar(id){
   $('#cpTec').onchange = () => { if($('#cpTec').value && !$('#cpFav').value) $('#cpFav').value = $('#cpTec').selectedOptions[0].textContent; };
   $('#bSalvar').onclick = async () => { const d = { categoria: $('#cpCat').value, tecnico_id: $('#cpCat').value === 'Técnico' ? ($('#cpTec').value || null) : null, favorecido: $('#cpFav').value.trim(),
       descricao: $('#cpDesc').value.trim() || null, valor: num($('#cpVal').value), vencimento: $('#cpVenc').value, empresa: $('#cpEmp').value || null, situacao: $('#cpSit').value,
-      pago_em: $('#cpSit').value === 'pago' ? ($('#cpPago').value || null) : null, forma: $('#cpForma').value || null, documento: $('#cpDoc').value.trim() || null, obra_id: $('#cpObra').value || null, observacao: $('#cpObs').value.trim() || null };
+      pago_em: $('#cpSit').value === 'pago' ? ($('#cpPago').value || null) : null, forma: $('#cpForma').value || null, documento: $('#cpDoc').value.trim() || null, ...(cpNotaId !== (T.nota_recebida_id || null) ? { nota_recebida_id: cpNotaId } : {}), obra_id: $('#cpObra').value || null, observacao: $('#cpObs').value.trim() || null };
     if($('#cpCod')) d.codigo_barras = $('#cpCod').value.trim() || null;
     if(T.valor_estimado && d.situacao === 'pago' && Number(d.valor) === Number(T.valor) && !await modal('Valor estimado', `O valor desta conta ainda é a estimativa (${R$(T.valor)}). É esse mesmo o valor da fatura?`, [['Corrigir', false], ['Sim, é esse', true, 'pri']])) return;
     if(T.valor_estimado && Number(d.valor) === Number(T.valor) && d.situacao === 'pago'){ const c = await sb.rpc('fin_lancar_valor_mes', { p_id: id, p_valor: d.valor }); if(c.error) return aviso('Erro', esc(erroBanco(c.error))); }
@@ -4382,6 +4476,7 @@ async function formRecibo(pessoaId, reciboId){
   // créditos (recebimentos) — o recibo é do que foi pago
   const creditos = pos.filter(x => x.tipo === 'credito').sort((a, b) => b.data.localeCompare(a.data));
   const end = pessoaId ? ((await priv().from('pessoas_dados').select('*').eq('pessoa_id', pessoaId).maybeSingle()).data || {}) : {};
+  const enderecoCobranca = e => [[e.logradouro, e.numero].filter(Boolean).join(', '), e.complemento, e.bairro, [e.municipio, e.uf].filter(Boolean).join('/'), e.cep ? 'CEP ' + String(e.cep).replace(/^(\d{5})(\d{3})$/, '$1-$2') : ''].filter(Boolean).join(' · ');
   const local = R ? '' : (creditos[0]?.obra || [end.logradouro, end.numero, end.complemento, end.bairro].filter(Boolean).join(' ').toUpperCase());
   const modeloPadrao = R?.modelo || (creditos[0]?.origem === 'projeto' ? 'projetos' : 'equipamentos');
   abrirPainel(`<div class="cab"><h2>${R ? 'Recibo nº ' + R.numero : 'Novo recibo'}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
@@ -4389,6 +4484,8 @@ async function formRecibo(pessoaId, reciboId){
       <label class="campo">Modelo<select id="rbMod">${mods.map(m => `<option value="${m.modelo}" ${m.modelo === modeloPadrao ? 'selected' : ''}>${{ projetos:'Projetos', equipamentos:'Equipamentos', eqp:'EQP' }[m.modelo]}</option>`).join('')}</select></label>
       <label class="campo">Data do recibo<input id="rbData" type="date" value="${R?.data || hojeISO()}"></label>
       <label class="campo largo">Recebido de<input id="rbDe" value="${esc(R?.recebido_de || pe?.nome || '')}"></label>
+      <label class="campo">CPF / CNPJ<input id="rbDocCli" inputmode="numeric" value="${esc(R ? (R.documento ? fmtDoc(R.documento) : '') : (end.documento ? fmtDoc(end.documento) : ''))}"></label>
+      <label class="campo largo">Endereço do cliente (cobrança)<input id="rbEndCli" value="${esc(R ? (R.endereco || '') : enderecoCobranca(end))}"></label>
       <label class="campo largo">Local / endereço da obra (vai no texto)<input id="rbLocal" value="${esc(local)}"></label>
       <label class="campo largo">Texto do recibo (pode editar)<textarea id="rbTxt" rows="3">${esc(R?.texto || '')}</textarea></label></div></div>
     <div class="card"><h2 style="font-size:15px">Pagamentos ${R ? '' : '<span class="muted" style="font-weight:400;font-size:12px">· marque o que entra neste recibo; datas e histórico podem ser editados</span>'}</h2>
@@ -4415,7 +4512,7 @@ async function formRecibo(pessoaId, reciboId){
     $('#rbRod').value = `Quitação através de depósito na seguinte conta:\n${BANCOS[String(c.banco || '').trim()] || c.nome}${c.banco ? ' - ' + String(c.banco).trim() : ''} · Agência ${c.agencia || '—'} · Conta ${c.numero}\n${m.razao || ''}${m.cnpj ? ' · CNPJ ' + m.cnpj : ''}`; };
   if(!R){ ['#rbDe','#rbLocal'].forEach(q => $(q).onchange = () => aplica('modelo')); document.querySelectorAll('#rbItens [data-rs], #rbItens [data-rf="valor"]').forEach(e => e.onchange = () => aplica('modelo'));
     $('#rbLinha').onclick = () => { const tb = $('#rbItens'); const i = tb.querySelectorAll('[data-ri]').length; tb.insertAdjacentHTML('beforeend', `<tr data-ri="${i}"><td><input type="checkbox" data-rs checked style="width:auto"></td><td><input data-rf="proposta" style="width:80px"></td><td><input data-rf="lancamento" style="width:80px"></td><td><input data-rf="data" type="date" value="${hojeISO()}"></td><td><input data-rf="vencimento" type="date" value="${hojeISO()}"></td><td><input data-rf="historico"></td><td><input data-rf="valor" inputmode="decimal" style="width:100px;text-align:right"></td></tr>`); }; }
-  const doc = () => ({ modelo: $('#rbMod').value, empresa: mod().empresa, pessoa_id: pessoaId || null, recebido_de: $('#rbDe').value.trim(), texto: $('#rbTxt').value.trim(), data: $('#rbData').value, itens: itens(), total: total(), assinatura: $('#rbAss').value.trim(), rodape: $('#rbRod').value.trim() });
+  const doc = () => ({ modelo: $('#rbMod').value, empresa: mod().empresa, pessoa_id: pessoaId || null, recebido_de: $('#rbDe').value.trim(), documento: dig($('#rbDocCli').value) || null, endereco: $('#rbEndCli').value.trim() || null, texto: $('#rbTxt').value.trim(), data: $('#rbData').value, itens: itens(), total: total(), assinatura: $('#rbAss').value.trim(), rodape: $('#rbRod').value.trim() });
   if($('#rbVer')) $('#rbVer').onclick = () => imprimirRecibo({ ...doc(), numero: '—' }, mod());
   $('#rbSalvar').onclick = async () => {
     if(R) return imprimirRecibo(R, mods.find(m => m.modelo === R.modelo) || {});
@@ -4434,7 +4531,8 @@ function imprimirRecibo(R, M){
     ${R.rodape ? pdfNota(esc(R.rodape).replace(/\n/g, '<br>')) : ''}
     <div class="ass" style="justify-content:center"><div style="flex:0 0 320px"><b>${esc(R.assinatura || '')}</b><br>${esc(M.razao || '')}${M.cnpj ? '<br>CNPJ ' + esc(M.cnpj) : ''}</div></div>`;
   pdfJanela({ titulo: 'Recibo', sub: 'Nº ' + esc(String(R.numero)), emissao: dataBR(R.data), empresa: eqp ? 'EQP' : '', rodape: eqp ? (M.razao || 'EQP') : null,
-    faixa: pdfFaixa([['Recebido de', R.recebido_de], ['Valor', R$(R.total)], ['Data', dataBR(R.data)]]), corpo, arquivo: 'Recibo ' + R.numero });
+    faixa: pdfFaixa([['Recebido de', R.recebido_de], ...(R.documento ? [[String(R.documento).replace(/\D/g, '').length === 11 ? 'CPF' : 'CNPJ', fmtDoc(R.documento)]] : []), ['Valor', R$(R.total)], ['Data', dataBR(R.data)]])
+      + (R.endereco ? pdfFaixa([['Endereço', R.endereco]]) : ''), corpo, arquivo: 'Recibo ' + R.numero });
 }
 async function formModelosRecibo(){
   const mods = (await sb.from('fin_recibo_modelos').select('*').order('modelo')).data || [];
@@ -4493,7 +4591,7 @@ async function telaCaixa(){
         <input type="month" id="cxMes" value="${f.mes}" style="max-width:170px"><span style="flex:1"></span>
         <button class="btn" id="cxImp">Relatório do mês (PDF)</button><button class="btn" id="cxCfg">Contas e plano</button><button class="btn" id="cxTrf">Transferência</button>
         <button class="btn" id="cxSai">− Saída avulsa</button><button class="btn pri" id="cxEnt">+ Entrada avulsa</button></div>
-      <p class="muted" style="font-size:12px;margin:0 0 8px">Recebimentos e pagamentos entram aqui sozinhos quando se dá baixa na Cobrança, no A receber ou no A pagar. Aqui se lança o que não estava previsto (tarifa, juros, despesa do dia).</p>
+      <p class="muted" style="font-size:12px;margin:0 0 8px">Recebimentos e pagamentos entram aqui sozinhos quando se dá baixa na Cobrança, no A receber ou em Lançamentos. Aqui se lança o que não estava previsto (tarifa, juros, despesa do dia).</p>
       <div style="overflow:auto"><table class="reg"><thead><tr><th>C.Contab</th><th>Histórico</th><th>Empresa</th><th>Documento</th><th>Forma</th><th style="text-align:right">Entrada</th><th style="text-align:right">Saída</th><th>Conferido</th></tr></thead><tbody>
       ${blocos || '<tr><td colspan="8" class="vazio">Nenhum movimento neste mês.</td></tr>'}</tbody></table></div></div>`;
   $('#cxConta').onchange = e => { f.conta = e.target.value; telaCaixa(); }; $('#cxMes').onchange = e => { f.mes = e.target.value; telaCaixa(); };
@@ -4512,7 +4610,7 @@ async function formMovCaixa(nat, C){
       <label class="campo largo">Histórico<input id="mvHist" value="${nat === 'entrada' ? 'RECEB. ' : 'PAG. OUTRAS DESPESAS'}"></label>
       <label class="campo">Empresa / favorecido<input id="mvFav"></label><label class="campo">Documento<input id="mvDoc"></label>
       <label class="campo">Forma<select id="mvForma">${optsFormas(nat === 'entrada' ? 'PIX' : 'Débito')}</select></label><label class="campo largo">Observação<input id="mvObs"></label></div>
-      <p class="muted" style="font-size:12px">Para pagar uma conta que já está no A pagar, dê baixa por lá — assim ela não fica em aberto.</p></div>
+      <p class="muted" style="font-size:12px">Para pagar uma conta que já está em Lançamentos, dê baixa por lá — assim ela não fica em aberto.</p></div>
     <div class="rodape"><button class="btn pri" id="mvSalvar">Lançar</button></div>`);
   $('#mvPlano').onchange = () => { const p = $('#mvPlano').value; if(/^(RECEB\. |PAG\. OUTRAS DESPESAS)$/.test($('#mvHist').value) || !$('#mvHist').value) $('#mvHist').value = (nat === 'entrada' ? 'RECEB. ' : 'PAG. ') + nomePlano(p).toUpperCase(); };
   $('#mvSalvar').onclick = async () => { const d = { conta_id: C.id, data: $('#mvData').value, natureza: nat, valor: num($('#mvValor').value), plano_conta: $('#mvPlano').value, historico: $('#mvHist').value.trim(),
@@ -4735,7 +4833,7 @@ Object.assign(TELAS, { fn_cobranca: telaCobranca, fn_fluxo: telaFluxo, fn_caixa:
 
 /* ================== Contas fixas (script 22 + 27) ==================
    Valor fixo (aluguel, salário, sistemas) ou valor que varia (luz, água, telefone, internet, gás).
-   A que varia entra no A pagar com valor estimado (média dos 3 últimos meses lançados) e
+   A que varia entra em Lançamentos com valor estimado (média dos 3 últimos meses lançados) e
    "valor a confirmar"; "Lançar valor do mês" grava o valor da fatura. */
 const CATS_FIXAS = ['Consumo','Salário','Aluguel','Imposto','Serviço','Fornecedor','Técnico','Outros'];
 const SUGESTOES_CONSUMO = ['Luz','Água','Telefone','Internet','Gás'];
@@ -4751,7 +4849,7 @@ async function formRecorrentes(){
   const ultimos = id => hist.filter(x => x.recorrente_id === id && !x.valor_estimado && x.situacao !== 'cancelado').sort((a, b) => b.competencia.localeCompare(a.competencia)).slice(0, 3);
   const fixa = x => x.ativo !== false;
   abrirPainel(`<div class="cab"><h2>Contas fixas</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
-    <p class="muted" style="font-size:12px;margin-top:0">Entram sozinhas no A pagar (2 meses à frente). <b>Valor fixo</b>: aluguel, salário, sistemas. <b>Valor varia</b>: luz, água, telefone, internet, gás — entram com o valor estimado (média dos 3 últimos meses) e a etiqueta "valor a confirmar" até alguém lançar o valor da fatura.</p>
+    <p class="muted" style="font-size:12px;margin-top:0">Entram sozinhas em Lançamentos (2 meses à frente). <b>Valor fixo</b>: aluguel, salário, sistemas. <b>Valor varia</b>: luz, água, telefone, internet, gás — entram com o valor estimado (média dos 3 últimos meses) e a etiqueta "valor a confirmar" até alguém lançar o valor da fatura.</p>
     ${temVaria ? '' : '<p style="color:#b45309;font-size:13px">Falta rodar o script 27_contas_variaveis.sql para usar contas que variam.</p>'}
     <div class="barra"><input type="search" id="rcBusca" placeholder="Buscar…"><label class="muted" style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" id="rcInat" style="width:auto"> desativadas</label>
       <button class="btn pri" id="rcNova">+ Nova conta fixa</button></div>
@@ -4815,13 +4913,13 @@ async function formRecorrente(id){
     if(!temVaria27()){ delete v.varia; delete v.instalacao; delete v.observacao; if(v.categoria === 'Consumo') v.categoria = 'Serviço'; }
     const x = id ? await sb.from('fin_recorrentes').update(v).eq('id', id) : await sb.from('fin_recorrentes').insert(v);
     if(x.error) return aviso('Erro', esc(erroBanco(x.error)));
-    if(id && R.ativo !== false && !v.ativo && await modal('Desativada', 'Cancelar também as contas em aberto dos próximos meses que já tinham entrado no A pagar?', [['Não', false], ['Cancelar as próximas', true, 'pri']]))
+    if(id && R.ativo !== false && !v.ativo && await modal('Desativada', 'Cancelar também as contas em aberto dos próximos meses que já tinham entrado em Lançamentos?', [['Não', false], ['Cancelar as próximas', true, 'pri']]))
       await sb.from('titulos_pagar').update({ situacao:'cancelado' }).eq('recorrente_id', id).eq('situacao', 'aberto').gte('vencimento', hojeISO());
-    const g = await sb.rpc('fin_gerar_recorrentes', {}); toast(g.error ? 'Salvo.' : `Salvo${g.data ? ' · ' + g.data + ' conta(s) colocada(s) no A pagar' : ''}.`);
+    const g = await sb.rpc('fin_gerar_recorrentes', {}); toast(g.error ? 'Salvo.' : `Salvo${g.data ? ' · ' + g.data + ' conta(s) colocada(s) em Lançamentos' : ''}.`);
     atualizaTelasFin(); formRecorrentes();
   };
   if($('#rfExcluir')) $('#rfExcluir').onclick = async () => {
-    if(!await confirmaDuplo('Excluir conta fixa?', `Sai do cadastro. As contas em aberto de ${esc(R.favorecido)} a partir de hoje são canceladas; as já pagas continuam no histórico do A pagar. (Para só parar de gerar, desmarque "ativa".)`, 'Excluir')) return;
+    if(!await confirmaDuplo('Excluir conta fixa?', `Sai do cadastro. As contas em aberto de ${esc(R.favorecido)} a partir de hoje são canceladas; as já pagas continuam no histórico de Lançamentos. (Para só parar de gerar, desmarque "ativa".)`, 'Excluir')) return;
     await sb.from('titulos_pagar').update({ situacao:'cancelado' }).eq('recorrente_id', id).eq('situacao', 'aberto').gte('vencimento', hojeISO());
     const x = await sb.from('fin_recorrentes').delete().eq('id', id); if(x.error) return aviso('Erro', esc(erroBanco(x.error)));
     toast('Conta fixa excluída.'); atualizaTelasFin(); formRecorrentes();
@@ -4831,7 +4929,7 @@ let _tem27 = null;
 const temVaria27 = () => _tem27 !== false;
 function atualizaTelasFin(){ if(ST.aba === 'fn_fluxo' && typeof telaFluxo === 'function') telaFluxo(); if(ST.aba === 'fn_pagar') telaPagar(); atualizaSino(); }
 
-/* Lançar o valor do mês (fatura) — usado no A pagar, no Fluxo diário e na baixa */
+/* Lançar o valor do mês (fatura) — usado em Lançamentos, no Fluxo diário e na baixa */
 async function lancarValorMes(x, depois){
   const ok = await new Promise(res => {
     $('#mTit').textContent = 'Lançar valor da conta';
@@ -7340,8 +7438,8 @@ async function importarXmlRecebidas(){
     $('#mTit').textContent = 'Importar XML de notas recebidas';
     $('#mTxt').innerHTML = `<p style="margin-top:0">Escolha um ou mais arquivos <b>.xml</b> de NF-e ou NFS-e (padrão nacional) emitidas <b>para a EQP ou a Equiper</b> — do e-mail do fornecedor ou exportados do CIGAM.</p>
       <input type="file" id="ixArq" accept=".xml,text/xml,application/xml" multiple>
-      <label style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="ixLanc" checked style="width:auto"> lançar já (cadastra o fornecedor e cria as contas no A pagar)</label>
-      <p class="muted" style="font-size:12px">A nota passa pelo mesmo caminho da busca automática. Nota que já está no ERP não entra de novo. <b>No ERP de verdade</b>, nota que já foi lançada no CIGAM deve entrar <b>sem</b> "lançar já", para não duplicar o A pagar.</p>`;
+      <label style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="ixLanc" checked style="width:auto"> lançar já (cadastra o fornecedor e cria as contas em Lançamentos)</label>
+      <p class="muted" style="font-size:12px">A nota passa pelo mesmo caminho da busca automática. Nota que já está no ERP não entra de novo. <b>No ERP de verdade</b>, nota que já foi lançada no CIGAM deve entrar <b>sem</b> "lançar já", para não duplicar os lançamentos.</p>`;
     const bt = $('#mBtns'); bt.innerHTML = '';
     [['Cancelar', false, ''], ['Importar', true, 'pri']].forEach(([r, v, c]) => { const e = document.createElement('button'); e.className = 'btn ' + c; e.textContent = r;
       e.onclick = () => { const d = v ? { arqs: [...$('#ixArq').files], lancar: $('#ixLanc').checked } : null; if(v && !d.arqs.length) return; $('#modal').classList.add('hidden'); res(d); }; bt.appendChild(e); });
@@ -7538,7 +7636,7 @@ function lerDanfe(paginas){
     }
   }
   d.itens.forEach(i => delete i._x);
-  if(!d.itens.length) av.push('Não consegui ler os produtos: inclua à mão se precisar (para o A pagar não faz falta).');
+  if(!d.itens.length) av.push('Não consegui ler os produtos: inclua à mão se precisar (para os lançamentos não faz falta).');
 
   // conferências
   const r2 = v => Math.round((v || 0) * 100) / 100;
@@ -7625,7 +7723,7 @@ function conferirDanfe(r, arq, k, n){
         <label class="campo">UF<input id="dnUf" value="${esc(em.uf || '')}" maxlength="2"></label>
         <label class="campo">CEP<input id="dnCep" value="${esc(em.cep || '')}"></label>
         <label class="campo">Telefone<input id="dnFone" value="${esc(em.fone || '')}"></label></div></div>
-      <div class="card"><h2 style="font-size:15px">Parcelas (A pagar) <span class="muted" style="font-weight:400" id="dnDupSoma"></span></h2>
+      <div class="card"><h2 style="font-size:15px">Parcelas (Lançamentos) <span class="muted" style="font-weight:400" id="dnDupSoma"></span></h2>
         <table class="reg"><thead><tr><th>Nº</th><th>Vencimento</th><th style="text-align:right">Valor</th><th></th></tr></thead><tbody id="dnDups">${d.duplicatas.map(linDup).join('')}</tbody></table>
         <button class="btn peq" id="dnDupMais" style="margin-top:6px">+ parcela</button>
         <p class="muted" style="font-size:12px;margin:6px 0 0">Sem parcelas, o ERP lança uma conta só, com o prazo padrão da empresa.</p></div>
@@ -7633,9 +7731,9 @@ function conferirDanfe(r, arq, k, n){
         <div style="overflow-x:auto"><table class="reg" style="font-size:13px"><thead><tr><th>Código</th><th>Descrição</th><th>NCM</th><th>CFOP</th><th>UN</th><th style="text-align:right">Qtd</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th><th></th></tr></thead>
         <tbody id="dnIts">${d.itens.map(linIt).join('')}</tbody></table></div>
         <button class="btn peq" id="dnItMais" style="margin-top:6px">+ produto</button>
-        <p class="muted" style="font-size:12px;margin:6px 0 0">O CFOP diz se é compra (gera A pagar) ou remessa/conserto (não gera). Os produtos servem para a conferência com a ordem de compra e o estoque.</p></div>
-      <div class="card"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="dnLanc" checked style="width:auto"> lançar já (cadastra o fornecedor e cria as contas no A pagar)</label>
-        <p class="muted" style="font-size:12px;margin:6px 0 0"><b>No ERP de verdade</b>, nota que já foi lançada no CIGAM entra <b>sem</b> "lançar já", para não duplicar o A pagar.</p></div>
+        <p class="muted" style="font-size:12px;margin:6px 0 0">O CFOP diz se é compra (gera lançamento) ou remessa/conserto (não gera). Os produtos servem para a conferência com a ordem de compra e o estoque.</p></div>
+      <div class="card"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="dnLanc" checked style="width:auto"> lançar já (cadastra o fornecedor e cria as contas em Lançamentos)</label>
+        <p class="muted" style="font-size:12px;margin:6px 0 0"><b>No ERP de verdade</b>, nota que já foi lançada no CIGAM entra <b>sem</b> "lançar já", para não duplicar os lançamentos.</p></div>
       <div class="rodape">${n > 1 ? '<button class="btn" id="dnParar">Parar aqui</button><button class="btn" id="dnPular">Pular esta</button>' : ''}<button class="btn pri" id="dnGravar">Gravar nota</button></div>`);
     $('#folha').style.width = 'min(1100px,100%)';
     const somaTab = (sel, cls) => [...document.querySelectorAll(sel + ' .' + cls)].reduce((a, i) => a + (num(i.value) || 0), 0);
@@ -8217,7 +8315,7 @@ async function avisosBackup(){
    Período com dia de corte (padrão 19): de 20 de um mês a 19 do seguinte.
    Técnicos: data da atividade. Projetistas: data em que a comissão foi liberada.
    Por pessoa: tudo o que fez no período e a comissão de cada item.
-   Fechar o período (todos ou um) → lança no A pagar. */
+   Fechar o período (todos ou um) → lança em Lançamentos. */
 ST.perCom = null;          // { de, ate }
 ST.comPes = { tec:'', proj:'' };
 let _diaCorte = null;
@@ -8271,19 +8369,19 @@ async function telaComissoesTecP(){
   const linhaAt = c => { const a = atv(c.atividade_id), outros = (a.tecnicos || []).filter(t => t !== c.tecnico_id);
     return `<tr><td>${dataBR(c.data_atividade)}</td><td><b>${esc(obra(a.obra_id)?.nome || a.cliente_texto || '')}</b><div class="muted" style="font-size:12px">${esc(a.descricao || '')}</div></td><td>${esc(a.os_numero || '')}</td><td>${TIPO_OS[c.tipo_os] || c.tipo_os}${a.garantia ? ' <span class="tag">garantia</span>' : ''}</td>
       <td>${outros.map(t => esc(tecNome(t)) + (terc.has(t) ? ' <span class="muted" style="font-size:11px">(terceirizado)</span>' : '')).join(', ') || '—'}</td><td style="text-align:right">${R$(c.base)}</td><td style="text-align:right"><b>${R$(c.valor)}</b></td>
-      <td>${c.situacao === 'fechada' ? `<span class="tag ok" title="${esc(c.periodo || '')}">lançada no A pagar</span>` : '<span class="tag">em aberto</span>'}</td></tr>`; };
+      <td>${c.situacao === 'fechada' ? `<span class="tag ok" title="${esc(c.periodo || '')}">lançada em Lançamentos</span>` : '<span class="tag">em aberto</span>'}</td></tr>`; };
   const cartoes = Object.entries(porTec).sort((a, b) => tecNome(a[0]).localeCompare(tecNome(b[0]))).map(([id, x]) => `<div class="card" data-exp-quebra style="margin-top:12px">
       <h2>${esc(tecNome(id))} <span class="muted" style="font-weight:400">· ${periodoTxt(P)} · ${x.n} atividade(s) · ${R$(x.total)}</span></h2>
       <div style="overflow:auto"><table class="reg"><thead><tr><th>Data</th><th>Cliente / atividade</th><th>OS</th><th>Tipo de OS</th><th>Junto com</th><th style="text-align:right">Valor da OS</th><th style="text-align:right">Comissão</th><th>Situação</th></tr></thead>
       <tbody>${x.itens.sort((a, b) => String(a.data_atividade).localeCompare(String(b.data_atividade))).map(linhaAt).join('')}</tbody>
       <tfoot><tr><td colspan="6" style="text-align:right"><b>Total de ${esc(tecNome(id))}</b></td><td style="text-align:right"><b>${R$(x.total)}</b></td><td></td></tr></tfoot></table></div>
-      ${pode && x.aberto > 0 ? `<div style="margin-top:8px;text-align:right"><button class="btn peq pri" data-fct="${id}">Fechar e lançar ${R$(x.aberto)} no A pagar</button></div>` : ''}</div>`).join('');
+      ${pode && x.aberto > 0 ? `<div style="margin-top:8px;text-align:right"><button class="btn peq pri" data-fct="${id}">Fechar e lançar ${R$(x.aberto)} em Lançamentos</button></div>` : ''}</div>`).join('');
   const comTec = new Set((cm.data || []).map(c => c.tecnico_id));
   $('#conteudo').innerHTML = `<div class="card"><h2>Comissões dos técnicos <span class="muted" style="font-weight:400">· pela data da atividade</span></h2>
       ${barraPeriodo()}
       <div class="barra">${selPessoa('pcPes', tecs.filter(t => t.ativo || comTec.has(t.id)).map(t => [t.id, t.nome + (terc.has(t.id) ? ' (terceirizado)' : '')]), ST.comPes.tec, 'Todos os técnicos')}<span style="flex:1"></span>
-        ${pode ? '<button class="btn" id="cmRecalc">Recalcular o período</button><button class="btn pri" id="cmFechar">Fechar o período e lançar no A pagar</button>' : ''}</div>
-      <div class="kpis" style="margin-top:6px"><div class="kpi v"><span class="muted">Comissão do período</span><b>${R$(soma('total'))}</b></div><div class="kpi"><span class="muted">Em aberto</span><b>${R$(soma('aberto'))}</b></div><div class="kpi"><span class="muted">Já lançada no A pagar</span><b style="color:var(--verde)">${R$(soma('lancado'))}</b></div><div class="kpi"><span class="muted">Atividades</span><b>${cms.length}</b></div></div>
+        ${pode ? '<button class="btn" id="cmRecalc">Recalcular o período</button><button class="btn pri" id="cmFechar">Fechar o período e lançar em Lançamentos</button>' : ''}</div>
+      <div class="kpis" style="margin-top:6px"><div class="kpi v"><span class="muted">Comissão do período</span><b>${R$(soma('total'))}</b></div><div class="kpi"><span class="muted">Em aberto</span><b>${R$(soma('aberto'))}</b></div><div class="kpi"><span class="muted">Já lançada em Lançamentos</span><b style="color:var(--verde)">${R$(soma('lancado'))}</b></div><div class="kpi"><span class="muted">Atividades</span><b>${cms.length}</b></div></div>
       ${!ST.comPes.tec ? `<table class="reg" style="margin-top:10px"><thead><tr><th>Técnico</th><th style="text-align:right">Atividades</th><th style="text-align:right">Comissão</th><th style="text-align:right">Em aberto</th><th style="text-align:right">Lançada</th></tr></thead><tbody>
         ${Object.entries(porTec).sort((a, b) => tecNome(a[0]).localeCompare(tecNome(b[0]))).map(([id, x]) => `<tr data-vt="${id}" style="cursor:pointer"><td><b>${esc(tecNome(id))}</b></td><td style="text-align:right">${x.n}</td><td style="text-align:right">${R$(x.total)}</td><td style="text-align:right">${R$(x.aberto)}</td><td style="text-align:right">${R$(x.lancado)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhuma comissão no período.</td></tr>'}</tbody>
         <tfoot><tr><td><b>Total</b></td><td style="text-align:right">${cms.length}</td><td style="text-align:right"><b>${R$(soma('total'))}</b></td><td style="text-align:right">${R$(soma('aberto'))}</td><td style="text-align:right">${R$(soma('lancado'))}</td></tr></tfoot></table>` : ''}
@@ -8305,9 +8403,9 @@ async function telaComissoesTecP(){
   $('#pcPes').onchange = e => { ST.comPes.tec = e.target.value; telaComissoesTecP(); };
   document.querySelectorAll('[data-vt]').forEach(tr => tr.onclick = () => { ST.comPes.tec = tr.dataset.vt; telaComissoesTecP(); });
   const fechar = async tec => { const nome = tec ? tecNome(tec) : 'todos os técnicos';
-    if(!await confirmaDuplo('Fechar comissões', `Lançar no A pagar as comissões em aberto de <b>${esc(nome)}</b> no período ${periodoTxt(P)}?`, 'Fechar e lançar')) return;
+    if(!await confirmaDuplo('Fechar comissões', `Lançar em Lançamentos as comissões em aberto de <b>${esc(nome)}</b> no período ${periodoTxt(P)}?`, 'Fechar e lançar')) return;
     const r = await sb.rpc('comissoes_fechar_periodo', { p_de: P.de, p_ate: P.ate, p_tecnico: tec || null }); if(r.error) return aviso('Erro', esc(erroBanco(r.error)));
-    toast(`${r.data} conta(s) de comissão lançada(s) no A pagar.`); telaComissoesTecP(); };
+    toast(`${r.data} conta(s) de comissão lançada(s) em Lançamentos.`); telaComissoesTecP(); };
   if($('#cmFechar')) $('#cmFechar').onclick = () => fechar(ST.comPes.tec);
   document.querySelectorAll('[data-fct]').forEach(b => b.onclick = () => fechar(b.dataset.fct));
   if($('#cmRecalc')) $('#cmRecalc').onclick = async () => { const r = await sb.rpc('comissoes_recalcular_periodo', { p_de: P.de, p_ate: P.ate }); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); toast('Recalculado.'); telaComissoesTecP(); };
@@ -8337,15 +8435,15 @@ async function telaComissoesProjP(){
       <div style="overflow:auto"><table class="reg"><thead><tr><th>Comissão liberada em</th><th>Obra</th><th>Disciplina</th><th>Tarefa concluída</th><th style="text-align:right">Valor da disciplina</th><th style="text-align:right">Comissão (10%)</th><th>Situação</th></tr></thead><tbody>
       ${xs.map(x => `<tr><td>${dataBR(x.liberada_em)}</td><td><b>${esc(x.obra || '—')}</b></td><td>${esc(x.disciplina)}</td><td>${dataBR(x.data_conclusao)}</td>
         <td style="text-align:right">${x.achou_proposta ? R$(x.valor_disciplina) : '<span style="color:var(--amar)">sem proposta</span>'}</td><td style="text-align:right"><b>${R$(x.comissao)}</b></td>
-        <td>${x.paga ? `<span class="tag ok" title="${esc(x.periodo_pago || '')}">lançada no A pagar</span>` : '<span class="tag">em aberto</span>'}</td></tr>`).join('')}</tbody>
+        <td>${x.paga ? `<span class="tag ok" title="${esc(x.periodo_pago || '')}">lançada em Lançamentos</span>` : '<span class="tag">em aberto</span>'}</td></tr>`).join('')}</tbody>
       <tfoot><tr><td colspan="5" style="text-align:right"><b>Total de ${esc(r)}</b></td><td style="text-align:right"><b>${R$(s(xs))}</b></td><td></td></tr></tfoot></table></div>
-      ${pode && s(xs, x => !x.paga) > 0 && xs[0].responsavel_id ? `<div style="margin-top:8px;text-align:right"><button class="btn peq pri" data-fcp="${xs[0].responsavel_id}">Fechar e lançar ${R$(s(xs, x => !x.paga))} no A pagar</button></div>` : ''}</div>`).join('');
+      ${pode && s(xs, x => !x.paga) > 0 && xs[0].responsavel_id ? `<div style="margin-top:8px;text-align:right"><button class="btn peq pri" data-fcp="${xs[0].responsavel_id}">Fechar e lançar ${R$(s(xs, x => !x.paga))} em Lançamentos</button></div>` : ''}</div>`).join('');
   $('#conteudo').innerHTML = `<div class="card"><h2>Comissões de projetos <span class="muted" style="font-weight:400">· pela data em que a comissão foi liberada</span></h2>
       ${barraPeriodo()}
       <div class="barra">${pode || ST.eu.perfil === 'agente' ? selPessoa('pcPes', pessoasLista, ST.comPes.proj, 'Todos os projetistas') : ''}<span style="flex:1"></span>
-        ${pode ? '<button class="btn pri" id="cmFechar">Fechar o período e lançar no A pagar</button>' : ''}</div>
+        ${pode ? '<button class="btn pri" id="cmFechar">Fechar o período e lançar em Lançamentos</button>' : ''}</div>
       <p class="muted" style="font-size:13px;margin:6px 0">10% do valor da disciplina na proposta (já com desconto). Entra no período em que a diretoria/administrativo liberou a comissão. Uma liberação por obra + disciplina.</p>
-      <div class="kpis"><div class="kpi v"><span class="muted">Comissão do período</span><b>${R$(s(l))}</b></div><div class="kpi"><span class="muted">Em aberto</span><b>${R$(s(l, x => !x.paga))}</b></div><div class="kpi"><span class="muted">Já lançada no A pagar</span><b style="color:var(--verde)">${R$(s(l, x => x.paga))}</b></div><div class="kpi"><span class="muted">Tarefas</span><b>${l.length}</b></div></div>
+      <div class="kpis"><div class="kpi v"><span class="muted">Comissão do período</span><b>${R$(s(l))}</b></div><div class="kpi"><span class="muted">Em aberto</span><b>${R$(s(l, x => !x.paga))}</b></div><div class="kpi"><span class="muted">Já lançada em Lançamentos</span><b style="color:var(--verde)">${R$(s(l, x => x.paga))}</b></div><div class="kpi"><span class="muted">Tarefas</span><b>${l.length}</b></div></div>
       ${!ST.comPes.proj && Object.keys(grupos).length > 1 ? `<table class="reg" style="margin-top:10px"><thead><tr><th>Projetista</th><th style="text-align:right">Tarefas</th><th style="text-align:right">Comissão</th><th style="text-align:right">Em aberto</th></tr></thead><tbody>
         ${Object.entries(grupos).sort((a, b) => a[0].localeCompare(b[0])).map(([r, xs]) => `<tr data-vp="${xs[0].responsavel_id || ''}" style="cursor:pointer"><td><b>${esc(r)}</b></td><td style="text-align:right">${xs.length}</td><td style="text-align:right">${R$(s(xs))}</td><td style="text-align:right">${R$(s(xs, x => !x.paga))}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td><b>Total</b></td><td style="text-align:right">${l.length}</td><td style="text-align:right"><b>${R$(s(l))}</b></td><td style="text-align:right">${R$(s(l, x => !x.paga))}</td></tr></tfoot></table>` : ''}
@@ -8356,9 +8454,9 @@ async function telaComissoesProjP(){
   if($('#pcPes')) $('#pcPes').onchange = e => { ST.comPes.proj = e.target.value; telaComissoesProjP(); };
   document.querySelectorAll('[data-vp]').forEach(tr => tr.onclick = () => { if(tr.dataset.vp){ ST.comPes.proj = tr.dataset.vp; telaComissoesProjP(); } });
   const fechar = async resp => { const nome = resp ? (pessoasLista.find(p => p[0] === resp) || [, ''])[1] : 'todos os projetistas';
-    if(!await confirmaDuplo('Fechar comissões de projeto', `Lançar no A pagar as comissões em aberto de <b>${esc(nome)}</b> no período ${periodoTxt(P)}?`, 'Fechar e lançar')) return;
+    if(!await confirmaDuplo('Fechar comissões de projeto', `Lançar em Lançamentos as comissões em aberto de <b>${esc(nome)}</b> no período ${periodoTxt(P)}?`, 'Fechar e lançar')) return;
     const r = await sb.rpc('comissoes_projeto_fechar', { p_de: P.de, p_ate: P.ate, p_responsavel: resp || null }); if(r.error) return aviso('Erro', esc(erroBanco(r.error)));
-    toast(`${r.data} conta(s) de comissão lançada(s) no A pagar.`); telaComissoesProjP(); };
+    toast(`${r.data} conta(s) de comissão lançada(s) em Lançamentos.`); telaComissoesProjP(); };
   if($('#cmFechar')) $('#cmFechar').onclick = () => fechar(ST.comPes.proj);
   document.querySelectorAll('[data-fcp]').forEach(b => b.onclick = () => fechar(b.dataset.fcp));
   document.querySelectorAll('[data-lib]').forEach(b => b.onclick = async () => { try{ await exec(sb.from('tarefas_projeto').update({ comissao_liberada: true }).eq('id', b.dataset.lib), 'Comissão liberada.'); telaComissoesProjP(); }catch(e){} });
