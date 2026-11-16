@@ -6936,7 +6936,20 @@ async function verPedCigam(numero){
       ${lin('Condição de pagamento', esc([x.condicao_codigo, x.condicao_descricao].filter(Boolean).join(' · ')))}
       ${lin('Criado por', esc([x.usuario_criacao, x.usuario_modificacao && x.usuario_modificacao !== x.usuario_criacao ? 'alterado por ' + x.usuario_modificacao : ''].filter(Boolean).join(' · ')))}
       ${x.observacao ? `<div class="campo largo"><span>Observação</span><div style="white-space:pre-wrap;color:var(--preto)">${esc(x.observacao)}</div></div>` : ''}
-    </div><p class="muted" style="font-size:12px;margin-top:12px">Consulta do CIGAM — os itens do pedido não vieram na exportação.</p></div>`);
+    </div><p class="muted" style="font-size:12px;margin-top:12px">Consulta do CIGAM — os itens do pedido não vieram na exportação.</p></div>
+    <div class="rodape" id="pcRod"></div>`);
+  sb.from('orcamentos').select('id,etapa,total').eq('pedido_cigam', numero).maybeSingle().then(o => { if(o.error || !$('#pcRod')) return;
+    if(o.data) $('#pcRod').innerHTML = `<span class="muted" style="font-size:13px;margin-right:auto">Já está no ERP como orçamento nº ${numero} (${esc((ETAPAS_ORC[o.data.etapa] || [o.data.etapa])[0])} · ${R$(o.data.total)})</span><button class="btn pri" id="pcAbrir">Abrir no ERP</button>`;
+    else if(typeof podeOrc !== 'function' || podeOrc(x.tipo || 'equipamento')) $('#pcRod').innerHTML = '<button class="btn pri" id="pcTrazer">↪ Trazer para o ERP</button>';
+    if($('#pcAbrir')) $('#pcAbrir').onclick = () => { fecharPainel(); formOrc(o.data.id); };
+    if($('#pcTrazer')) $('#pcTrazer').onclick = async () => {
+      const pr = modal('Trazer o pedido ' + numero + ' para o ERP', `<p style="margin-top:0">O ERP cria o orçamento <b>nº ${numero}</b> (mesmo número do CIGAM) com o cliente, a condição de pagamento, o tipo de operação, as datas, o desconto e o frete deste pedido.</p>
+        <p>Depois é só escolher os itens no catálogo (o ERP mostra o total do CIGAM para comparar) e, se o cliente já fechou, <b>aprovar</b> como qualquer orçamento: ${x.tipo === 'projeto' ? 'nasce a proposta em Projetos, com as tarefas em "Fechados pelo cliente" e as parcelas' : x.tipo === 'servico' ? 'nasce a atividade na Agenda' : 'nascem os pedidos por sistema, as parcelas e a ida para Compras'}.</p>
+        <p class="muted" style="font-size:12px">Se este trabalho já foi trazido dos apps antigos para o ERP, não aprove de novo para não duplicar.</p>`, [['Cancelar', false], ['Trazer', true, 'pri']]);
+      if(!await pr) return;
+      const r = await sb.rpc('cigam_trazer_pedido', { p_numero: numero }); if(r.error) return aviso('Não foi possível trazer', esc(erroBanco(r.error)));
+      fecharPainel(); toast('Orçamento nº ' + numero + ' criado. Escolha os itens.'); formOrc(r.data); };
+  });
   if($('#pcEmp')) $('#pcEmp').onclick = e => { e.preventDefault(); fecharPainel(); formPessoa(pe); };
 }
 
@@ -6957,6 +6970,29 @@ async function pedidosCigamDaEmpresa(pid){
 }
 
 Object.assign(TELAS, { ped_cigam: telaPedCigam });
+
+/* no orçamento trazido do CIGAM: total do CIGAM × itens escolhidos */
+(function(){ const orig = window.formOrc; if(typeof orig !== 'function') return;
+  window.formOrc = async function(id){ const r = await orig.apply(this, arguments);
+    if(!id) return r;
+    const o = await sb.from('orcamentos').select('pedido_cigam,total,etapa').eq('id', id).maybeSingle(); if(o.error || !o.data || !o.data.pedido_cigam) return r;
+    const c = await sb.from('pedidos_cigam').select('total,itens,situacao').eq('numero', o.data.pedido_cigam).maybeSingle(); const x = c.data || {};
+    const dif = Number(o.data.total || 0) - Number(x.total || 0), ok = Math.abs(dif) < 0.01;
+    const box = document.createElement('div'); box.className = 'card'; box.id = 'ocCigam';
+    box.style.cssText = `font-size:13px;background:${ok ? '#f0fdf4' : '#fff7ed'};border-color:${ok ? '#16a34a55' : '#f59e0b55'}`;
+    box.innerHTML = `<b>Trazido do CIGAM</b> · pedido ${o.data.pedido_cigam} ${tagSitCigam(x.situacao)} · total no CIGAM <b>${R$(x.total)}</b>${x.itens ? ` (${x.itens} itens)` : ''} · itens escolhidos aqui <b>${R$(o.data.total)}</b>
+      ${ok ? ' <span class="tag ok">confere</span>' : ` <span class="tag" style="background:#fef3c7;color:#b45309">diferença ${dif > 0 ? '+' : '−'}${R$(Math.abs(dif))}</span>`}
+      ${['elaboracao','enviado'].includes(o.data.etapa) && ['A','L','F'].includes(x.situacao) ? '<div class="muted" style="margin-top:4px">O cliente já fechou no CIGAM: depois de escolher os itens, use "Cliente aprovou".</div>' : ''}`;
+    const cab = document.querySelector('#folha .cab'); if(cab && !$('#ocCigam')) cab.after(box);
+    return r; };
+})();
+/* na lista: marca os pedidos que já foram trazidos para o ERP */
+(function(){ const orig = window.telaPedCigam; if(typeof orig !== 'function') return;
+  window.telaPedCigam = async function(...a){ const r = await orig.apply(this, a);
+    const o = await sb.from('orcamentos').select('pedido_cigam').not('pedido_cigam', 'is', null); if(o.error) return r;
+    (o.data || []).forEach(x => { const td = document.querySelector(`[data-pc="${x.pedido_cigam}"] td`); if(td) td.insertAdjacentHTML('beforeend', ' <span class="tag ok" title="Já é um orçamento do ERP">no ERP</span>'); });
+    return r; };
+  Object.assign(TELAS, { ped_cigam: window.telaPedCigam }); })();
 
 /* ============ Leitura do certificado digital — só no computador da pessoa ============
    Lê o arquivo .pfx/.p12 (com a senha) ou .cer/.crt/.pem (sem senha) AQUI no navegador,
