@@ -4793,7 +4793,8 @@ const CARDS_PERFIL = { manager: 'roleCardManager', tech: 'roleCardTech', finance
 function restringirPerfisAoUsuario(){
   if(!authAtivo() || !contaAtual) return;
   const u = usuarioDaConta();
-  const perfis = u ? Object.keys(CARDS_PERFIL).filter(p => u.profiles && u.profiles[p]) : [];
+  let perfis = u ? Object.keys(CARDS_PERFIL).filter(p => u.profiles && u.profiles[p]) : [];
+  if(window.__erpSSO && window.__erpSSO()) perfis = perfis.filter(p => erpVe(ERP_SV_PERFIL[p], true));   /* ERP: tela Acessos */
   contaAtual.perfis = perfis;
   Object.keys(CARDS_PERFIL).forEach(p => { document.getElementById(CARDS_PERFIL[p]).style.display = perfis.includes(p) ? '' : 'none'; });
   document.getElementById('loginContaInfo').style.display = '';
@@ -17280,6 +17281,24 @@ function erpSemConta(email){
   d.style.display = ''; d.innerHTML = '<p style="margin:0;line-height:1.5">O seu login do ERP' + (email ? ' (<b>' + email + '</b>)' : '') +
     ' ainda não está ligado a um usuário do app de Serviços.</p><p style="margin:10px 0 0;line-height:1.5;color:var(--text-secondary)">Peça a quem é Gestor para cadastrar este e-mail em <b>Acessos</b>, no app de Serviços.</p>';
 }
+/* ERP (script 57): o que a pessoa vê no app vem da tela Acessos do ERP. null = sem controle (como antes) */
+function erpNivelApp(t){ try{ return window.top !== window && window.top.__erpNivelApp ? window.top.__erpNivelApp(t) : null; }catch(e){ return null; } }
+function erpVe(t, padrao){ var n = erpNivelApp(t); return n == null ? padrao : n >= 1; }
+const ERP_SV_PERFIL = { manager: 'app_sv_gerenciador', tech: 'app_sv_tecnico', financeiro: 'app_sv_financeiro', oficina: 'app_sv_oficina' };
+const ERP_SV_ABAS = { PGestor: 'app_sv_g_pgestor', PAlex: 'app_sv_g_palex', Agenda: 'app_sv_g_agenda', Orcamentos: 'app_sv_g_orcamentos', Obras: 'app_sv_g_obras',
+  Manutencoes: 'app_sv_g_manutencoes', OficinaGestor: 'app_sv_g_oficina', Tecnicos: 'app_sv_g_enviar', OS: 'app_sv_g_os', Clientes: 'app_sv_g_clientes',
+  Acessos: 'app_sv_g_acessos', Painel: 'app_sv_g_estatisticas', Galeria: 'app_sv_g_galeria', Estoque: 'app_sv_g_estoque' };
+const ERP_SV_FIN = { OS: 'app_sv_f_os', Obras: 'app_sv_f_obras', Manut: 'app_sv_f_manut' };
+/* ERP: esconde as abas que a pessoa não tem (menu lateral e barra do celular) e sai de aba escondida */
+function erpAplicarAbas(){
+  if(!(window.__erpSSO && window.__erpSSO())) return;
+  const mostra = (id, ok) => { const b = document.getElementById(id); if(b) b.style.display = ok ? '' : 'none'; };
+  for(const [k, t] of Object.entries(ERP_SV_ABAS)){ const ok = erpVe(t, true); mostra('sidebarBtn' + k, ok); mostra('bottomNavBtn' + k, ok); }
+  for(const [k, t] of Object.entries(ERP_SV_FIN)){ const ok = erpVe(t, true); mostra('finNav' + k, ok); mostra('finBn' + k, ok); }
+  ['appSidebar', 'finSidebar'].forEach(id => { const a = document.getElementById(id); if(!a || a.offsetParent === null) return;
+    const at = a.querySelector('.sidebar-nav-btn.active'); if(at && at.style.display === 'none'){ const p = [...a.querySelectorAll('.sidebar-nav-btn')].find(b => b.style.display !== 'none'); if(p) p.click(); } });
+}
+setInterval(erpAplicarAbas, 1000);
 /* ERP: o botão "Sair" de cada perfil vira "Trocar perfil" (quem tem mais de um) ou some; "Trocar de conta" some */
 function erpBotoesSair(n){
   if(!(window.__erpSSO && window.__erpSSO())) return;

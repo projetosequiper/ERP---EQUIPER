@@ -7604,6 +7604,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
   var topicoProjetosAtivo = 'quadro';
 
   function podeVerTopicoProjetos(t){
+    if(!erpVe('app_pj_t_' + t.id, true)) return false;   /* ERP: aba liberada na tela Acessos */
     if(t.gerente) return !modoDesenhista;
     if(t.permissao) return !modoDesenhista || !!((state.permissoesProjetista||{})[nomeProjetistaAtual]||{})[t.permissao];
     if(t.permissoes){ var pp = (state.permissoesProjetista||{})[nomeProjetistaAtual]||{}; return !modoDesenhista || t.permissoes.some(function(k){ return !!pp[k]; }); }
@@ -7983,7 +7984,9 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
   function renderNavFinanceiro(){
     var nav = document.getElementById('topicoNavFinanceiro');
     if(!nav) return;
-    nav.innerHTML = TOPICOS_FINANCEIRO.map(function(t){
+    var _finVis = TOPICOS_FINANCEIRO.filter(function(t){ return erpVe('app_pj_f_' + t.id, true); });   /* ERP: abas liberadas */
+    if(_finVis.length && !_finVis.some(function(t){ return t.id === topicoFinanceiroAtivo; })) topicoFinanceiroAtivo = _finVis[0].id;
+    nav.innerHTML = _finVis.map(function(t){
       return '<div class="topico-nav-item'+(t.id===topicoFinanceiroAtivo?' active':'')+'" data-topico-nav-fin="'+t.id+'"><span class="topico-nav-icone">'+t.icone+'</span><span class="topico-nav-label">'+escapeHtml(t.label)+'</span></div>';
     }).join('');
     nav.querySelectorAll('[data-topico-nav-fin]').forEach(function(el){
@@ -10522,7 +10525,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
 
   function mostrarGateProjetosManager(containerId, aoVoltar){
     /* ERP-SSO */ var _sso = window.__erpSSO && window.__erpSSO();
-    if(_sso && /^(diretoria|projetos)$/.test(_sso.perfil)){ if(!state.emailGerente){ state.emailGerente = _sso.email; saveEmailGerente(); } entrarEmProjetos(); return; }
+    if(_sso && erpVe('app_pj_projetos', /^(diretoria|projetos)$/.test(_sso.perfil))){ if(!state.emailGerente){ state.emailGerente = _sso.email; saveEmailGerente(); } entrarEmProjetos(); return; }
     if(window.__erpSSO && window.__erpSSO()){ erpSemAcesso(containerId, aoVoltar); return; }   /* ERP: sem senha — quem não tem o perfil vê o aviso */
     var gate = document.getElementById(containerId);
     var linkVoltar = aoVoltar ? '<p style="margin-top:16px;"><a href="#" class="pm-voltar-raiz" style="font-size:12.5px; color:var(--ink-soft); text-decoration:none;">‹ voltar</a></p>' : '';
@@ -10606,7 +10609,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
   var nomeFinanceiroAtual = null;
   function mostrarGateFinanceiroIndividual(containerId, aoVoltar){
     /* ERP-SSO fin */ var _sso = window.__erpSSO && window.__erpSSO();
-    if(_sso && /^(diretoria|administrativo)$/.test(_sso.perfil)){
+    if(_sso && erpVe('app_pj_financeiro', /^(diretoria|administrativo)$/.test(_sso.perfil))){
       state.usuariosFinanceiro = state.usuariosFinanceiro || []; state.emailsFinanceiroInd = state.emailsFinanceiroInd || {};
       var _n = Object.keys(state.emailsFinanceiroInd).filter(function(k){ return String(state.emailsFinanceiroInd[k]||'').toLowerCase() === String(_sso.email).toLowerCase(); })[0];
       if(!_n){ _n = _sso.nome; if(state.usuariosFinanceiro.indexOf(_n) < 0){ state.usuariosFinanceiro.push(_n); saveUsuariosFinanceiro(); } state.emailsFinanceiroInd[_n] = _sso.email; saveEmailsFinanceiroInd(); }
@@ -10747,7 +10750,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
 
   function mostrarGateProjetistaIndividual(containerId, aoVoltar){
     /* ERP-SSO pj */ var _sso = window.__erpSSO && window.__erpSSO();
-    if(_sso && /^(diretoria|projetos)$/.test(_sso.perfil)){
+    if(_sso && erpVe('app_pj_projetista', /^(diretoria|projetos)$/.test(_sso.perfil))){
       state.emailsProjetistas = state.emailsProjetistas || {};
       var _p = Object.keys(state.emailsProjetistas).filter(function(k){ return String(state.emailsProjetistas[k]||'').toLowerCase() === String(_sso.email).toLowerCase(); })[0];
       if(_p){ nomeProjetistaAtual = _p; entrarEmProjetos(true); return; }
@@ -10896,7 +10899,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
       '<div class="sidebar-desktop-item'+(ehFinanceiro?' area-atual':'')+'" data-area="financeiro"><span class="sidebar-desktop-icone">💰</span><span>Financeiro</span></div>';
 
     var topicos, ativo;
-    if(ehFinanceiro){ topicos = TOPICOS_FINANCEIRO; ativo = topicoFinanceiroAtivo; }
+    if(ehFinanceiro){ topicos = TOPICOS_FINANCEIRO.filter(function(t){ return erpVe('app_pj_f_' + t.id, true); }); ativo = topicoFinanceiroAtivo; }
     else { topicos = topicosProjetosMenu(); ativo = topicoProjetosAtivo; }
 
     var grupoAnt = '';
@@ -10910,6 +10913,14 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
       htmlAreas +
       '<div class="sidebar-desktop-separador"></div>'+
       htmlTopicos;
+    /* ERP: some a área que a pessoa não tem (Projetos · Projetista · Financeiro) */
+    var _sso2 = window.__erpSSO && window.__erpSSO();
+    if(_sso2){
+      var _pp2 = /^(diretoria|projetos)$/.test(_sso2.perfil), _pf2 = /^(diretoria|administrativo)$/.test(_sso2.perfil);
+      var _ok = { projetos: erpVe('app_pj_projetos', _pp2), projetista: erpVe('app_pj_projetista', _pp2), financeiro: erpVe('app_pj_financeiro', _pf2) };
+      sidebar.querySelectorAll('[data-area]').forEach(function(el){ if(!_ok[el.getAttribute('data-area')]) el.remove(); });
+      [['navProjetos','projetos'],['navProjetista','projetista'],['navFinanceiro','financeiro']].forEach(function(x){ var b = document.getElementById(x[0]); if(b && !_ok[x[1]]) b.style.display = 'none'; });
+    }
 
     sidebar.querySelectorAll('[data-area]').forEach(function(el){
       el.onclick = function(){
@@ -11067,6 +11078,9 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
   }
 
   /* ERP: login único — o perfil do ERP já diz a área (sem escolher acesso, senha ou PIN) */
+/* ERP (script 57): o que a pessoa vê no app vem da tela Acessos do ERP. null = sem controle (como antes) */
+  function erpNivelApp(t){ try{ return window.top !== window && window.top.__erpNivelApp ? window.top.__erpNivelApp(t) : null; }catch(e){ return null; } }
+  function erpVe(t, padrao){ var n = erpNivelApp(t); return n == null ? padrao : n >= 1; }
   function erpSemAcesso(containerId, aoVoltar){
     var g = document.getElementById(containerId); if(!g) return;
     g.innerHTML = '<div class="gate-box" style="margin:30px auto; max-width:360px;"><img src="'+LOGO_EQUIPER+'" alt="Equiper" class="gate-logo"><h2>Sem acesso</h2>'+
@@ -11078,7 +11092,10 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     var gate = document.getElementById('senhaGate');
     var selecionado = null;
     var _erp = window.__erpSSO && window.__erpSSO();
-    if(_erp){ selecionado = /^administrativo$/.test(_erp.perfil) ? 'financeiro' : 'projetos'; }
+    if(_erp){
+      var _pp = /^(diretoria|projetos)$/.test(_erp.perfil), _pf = /^(diretoria|administrativo)$/.test(_erp.perfil);
+      selecionado = erpVe('app_pj_projetos', _pp) ? 'projetos' : erpVe('app_pj_projetista', _pp) ? 'desenhista' : erpVe('app_pj_financeiro', _pf) ? 'financeiro' : 'projetos';
+    }
     function montar(){
       if(!selecionado){
         gate.innerHTML =
