@@ -4808,9 +4808,11 @@ function abrirPerfilUnico(){
   /* ERP: entra direto, sem escolher perfil — o do setor (Técnicos → Técnico) ou o primeiro que a pessoa tem
      (Gerenciador, Financeiro, Oficina, Técnico). Só na primeira vez; depois, "Trocar perfil" mostra os cartões. */
   try{ if(window.__erpSSO && window.__erpSSO() && !window.__erpAutoFeito && appInitState === 'ready'){
-    const pref = window.top !== window && window.top.__erpPerfilApp;
-    for(const p of [pref, 'manager', 'financeiro', 'oficina', 'tech']){ const c = p && CARDS_PERFIL[p] && document.getElementById(CARDS_PERFIL[p]);
-      if(c && c.style.display !== 'none'){ window.__erpAutoFeito = true; c.click(); return true; } } } }catch(e){}
+    const pref = (window.top !== window && window.top.__erpPerfilApp) || '';
+    const lista = pref ? pref.split('|') : ['manager', 'financeiro', 'oficina', 'tech'];
+    for(const p of lista){ const c = CARDS_PERFIL[p] && document.getElementById(CARDS_PERFIL[p]);
+      if(c && c.style.display !== 'none'){ window.__erpAutoFeito = true; c.click(); return true; } }
+    if(pref){ window.__erpAutoFeito = true; erpSemPerfilSetor(lista); return true; } } }catch(e){}
   if(!authAtivo() || !contaAtual || !contaAtual.perfis || contaAtual.perfis.length !== 1) return false;
   if(appInitState !== 'ready') return false;
   document.getElementById(CARDS_PERFIL[contaAtual.perfis[0]]).click(); return true;
@@ -17299,6 +17301,14 @@ function erpAplicarAbas(){
     const at = a.querySelector('.sidebar-nav-btn.active'); if(at && at.style.display === 'none'){ const p = [...a.querySelectorAll('.sidebar-nav-btn')].find(b => b.style.display !== 'none'); if(p) p.click(); } });
 }
 setInterval(erpAplicarAbas, 1000);
+/* ERP: o setor escolhido no ERP (Técnico, Oficina…) não está liberado para a pessoa aqui no app → aviso, sem abrir outro perfil */
+function erpSemPerfilSetor(lista){
+  const nomes = { manager: 'Gerenciador', tech: 'Técnico', financeiro: 'Financeiro', oficina: 'Oficina' };
+  const g = document.getElementById('roleGrid'); if(g) g.style.display = 'none';
+  const e = document.getElementById('loginSemPerfil'); if(!e) return;
+  e.textContent = 'No app de Serviços você ainda não está como ' + lista.map(p => nomes[p] || p).join(' ou ') + '. Peça à diretoria: ERP → Administração → Acessos → 🔗 Apps.';
+  e.style.display = '';
+}
 /* ERP: o botão "Sair" de cada perfil vira "Trocar perfil" (quem tem mais de um) ou some; "Trocar de conta" some */
 function erpBotoesSair(n){
   if(!(window.__erpSSO && window.__erpSSO())) return;

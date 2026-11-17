@@ -3193,12 +3193,15 @@ function _ordPrepara(raiz){
    Cada setor é o mesmo ERP com o menu daquele setor. Quem tem um setor só entra direto. Trocar de setor: botão no topo.
    Abrir uma função de outro setor (pelo sino, pela lupa, por um link) troca o setor sozinho.
    17/11 (Júlio): Projetos abre o app de Projetos; Serviços e Técnicos abrem o app de Serviços (Técnicos já entra no perfil
-   Técnico), em tela cheia, sem o menu do ERP; o Administrativo continua com o ERP. Os apps ganham o visual do ERP (window.__erpTemaApp, no fim deste arquivo). */
+   Técnico), em tela cheia, sem o menu do ERP; o Administrativo continua com o ERP.
+   17/11 (Júlio, script 58): setor Oficina (app de Serviços no perfil Oficina). Cada pessoa só vê os setores em que está
+   habilitada na tela Acessos (os técnicos, em geral, só Técnico e Oficina); com um setor só, entra direto. Os apps ganham o visual do ERP (window.__erpTemaApp, no fim deste arquivo). */
 const SETORES = {
   adm:  { nome: 'Administrativo', ic: 'fn_caixa',   txt: 'Financeiro, compras, notas, cadastros e orçamentos', areas: ['Cadastros', 'Orçamentos', 'Suprimentos', 'Financeiro', 'Administração'], nucleo: ['fn_receber', 'fn_pagar', 'fn_caixa', 'fn_cobranca', 'fn_fluxo', 'fn_notas', 'adm_usuarios', 'adm_fiscal'] },
   proj: { nome: 'Projetos',       ic: 'pj_projetos', txt: 'Propostas, tarefas, calendário, visitas e dimensionamento', areas: ['Cadastros', 'Orçamentos', 'Projetos'], extras: ['projetos'], nucleo: ['Projetos'], app: 'projetos' },
-  serv: { nome: 'Serviços',       ic: 'sv_manut',    txt: 'Agenda, OS, pedidos, contratos, oficina e estoque', areas: ['Cadastros', 'Orçamentos', 'Serviços', 'Suprimentos'], extras: ['servicos'], nucleo: ['Serviços'], app: 'servicos' },
-  tec:  { nome: 'Técnicos',       ic: 'sv_agenda',   txt: 'Minha agenda, oficina, estoque e pedidos de material', chaves: ['sv_agenda', 'sv_oficina', 'sv_estoque', 'cp_requisicoes', 'servicos'], app: 'servicos', perfilApp: 'tech' },
+  serv: { nome: 'Serviços',       ic: 'sv_manut',    txt: 'Agenda, OS, pedidos, contratos, oficina e estoque', areas: ['Cadastros', 'Orçamentos', 'Serviços', 'Suprimentos'], extras: ['servicos'], nucleo: ['Serviços'], app: 'servicos', perfilApp: 'manager|financeiro' },
+  tec:  { nome: 'Técnico',        ic: 'sv_agenda',   txt: 'Minha agenda de serviços do dia, galeria e estoque', chaves: ['sv_agenda', 'sv_oficina', 'sv_estoque', 'cp_requisicoes', 'servicos'], app: 'servicos', perfilApp: 'tech' },
+  ofi:  { nome: 'Oficina',        ic: 'sv_oficina',  txt: 'Equipamentos na oficina, consertos e estoque', chaves: ['sv_oficina', 'sv_estoque', 'cp_requisicoes', 'servicos'], app: 'servicos', perfilApp: 'oficina' },
   tudo: { nome: 'Tudo',           ic: 'inicio',      txt: 'O menu completo, com todas as áreas' }
 };
 // tela em que cada setor abre: o app (Projetos/Serviços/Técnicos) ou o Início do ERP
@@ -3215,6 +3218,18 @@ function setorTem(k, item){
 function setoresDisponiveis(){
   if(!ST.eu) return [];
   const vis = MENU.flatMap(g => g.itens).filter(i => menuVe(i)), area = _areaDaChave(), l = [];
+  // script 57/58: os setores seguem a tela Acessos (áreas dos apps). Sem ela (script não rodado), como antes.
+  const nApp = t => window.__erpNivelApp ? window.__erpNivelApp(t) : null, algum = (...ts) => ts.some(t => (nApp(t) || 0) >= 1);
+  if(nApp('app_sv_oficina') != null){
+    const ve = k => vis.some(i => i[0] === k);
+    if(vis.some(i => SETORES.adm.nucleo.includes(i[0]))) l.push('adm');
+    if(ve('projetos') && algum('app_pj_projetos', 'app_pj_projetista', 'app_pj_financeiro')) l.push('proj');
+    if(ve('servicos') && algum('app_sv_gerenciador', 'app_sv_financeiro')) l.push('serv');
+    if(ve('servicos') && algum('app_sv_tecnico')) l.push('tec');
+    if(ve('servicos') && algum('app_sv_oficina')) l.push('ofi');
+    if(ST.eu.perfil === 'diretoria') l.push('tudo');
+    return l;
+  }
   if(vis.some(i => SETORES.adm.nucleo.includes(i[0]))) l.push('adm');
   for(const k of ['proj', 'serv']) if(vis.some(i => SETORES[k].nucleo.includes(area[i[0]]))) l.push(k);
   if(ST.eu.perfil === 'tecnico' || ST.eu.perfil === 'diretoria') if(vis.some(i => SETORES.tec.chaves.includes(i[0]))) l.push('tec');
@@ -3222,7 +3237,7 @@ function setoresDisponiveis(){
   return l;
 }
 // o técnico não tem escolha: é sempre o setor Técnicos
-function setorUnico(){ const l = setoresDisponiveis(); return ST.eu && ST.eu.perfil === 'tecnico' ? (l.includes('tec') ? 'tec' : l[0]) : l.length === 1 ? l[0] : null; }
+function setorUnico(){ const l = setoresDisponiveis(); return l.length === 1 ? l[0] : null; }
 
 (function(){
   const orig = itensVisiveis;
