@@ -1903,7 +1903,7 @@ function montaTopo(){
   $('#btnUser').onclick = ev => { ev.stopPropagation(); abrirDrop($('#btnUser'), () => `
       <div class="dr-cab"><b>${esc(ST.eu.nome || '')}</b><span>${esc((window.__erpEu || {}).email || '')}</span><span>${esc(PERFIL_TXT[ST.eu.perfil] || '')}</span></div>
       <button class="dr-it" data-dr="inicio">${ico('inicio')} Início</button>
-      <button class="dr-it" data-dr="foto">${ico('usuario')} ${fotoDoEu() ? 'Trocar' : 'Pôr'} minha foto</button>
+      <button class="dr-it" data-dr="foto">${ico('usuario')} Alterar foto</button>
       ${appInstalado() ? '' : `<button class="dr-it" data-dr="instalar">${ico('inicio')} Instalar o ERP neste aparelho</button>`}
       <button class="dr-it" data-dr="sair">${ico('sair')} Sair do ERP</button>`); };
   document.addEventListener('click', ev => { if(!ev.target.closest('#drop')) fecharDrop(); });
