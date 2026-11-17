@@ -1091,12 +1091,21 @@ async function telaRegistro(){
 async function telaApp(arquivo, titulo){
   document.documentElement.style.setProperty('--topo', document.querySelector('header').getBoundingClientRect().height + 'px');
   const w = $('#appWrap');
+  // o app de Serviços abre no perfil do setor (Técnicos → Técnico); se o setor mudou, abre de novo
+  const perfil = arquivo === 'app_servicos' ? (window.__erpPerfilApp || '') : '';
+  const velho = w.querySelector('iframe[data-app="' + arquivo + '"]');
+  if(velho && (velho.dataset.perfil || '') !== perfil) velho.remove();
   w.querySelectorAll('iframe').forEach(f => f.classList.toggle('hidden', f.dataset.app !== arquivo));
   if(!w.querySelector('iframe[data-app="' + arquivo + '"]')){
-    const html = await window.__erpArquivo(arquivo);
+    let html = await window.__erpArquivo(arquivo);
     if(!html){ toast(titulo + ': não foi possível carregar (confira a internet).'); return; }
     if(w.querySelector('iframe[data-app="' + arquivo + '"]')) return;
-    const f = document.createElement('iframe'); f.title = titulo; f.dataset.app = arquivo; f.srcdoc = html; w.appendChild(f);
+    // visual do ERP (mod/07_setores.js)
+    // (um script logo no começo do <head> põe o estilo no fim do <head> quando a página termina de ler — fica por cima do estilo do app)
+    if(window.__erpTemaApp && arquivo !== 'dimensionamento'){ const m = /<head[^>]*>/i.exec(html);
+      if(m){ const css = JSON.stringify(window.__erpTemaApp).replace(/<\//g, '<\\/'), sc = '<script>document.addEventListener("DOMContentLoaded",function(){var s=document.createElement("style");s.id="erpTema";s.textContent=' + css + ';document.head.appendChild(s);});<\/script>';
+        html = html.slice(0, m.index + m[0].length) + sc + html.slice(m.index + m[0].length); } }
+    const f = document.createElement('iframe'); f.title = titulo; f.dataset.app = arquivo; f.dataset.perfil = perfil; f.srcdoc = html; w.appendChild(f);
   }
 }
 
@@ -3182,14 +3191,20 @@ function _ordPrepara(raiz){
 /* =================== Tela inicial por setor (P7) ===================
    Depois do login: cartões Administrativo · Projetos · Serviços · Técnicos (só os que o perfil acessa; a diretoria tem também "Tudo").
    Cada setor é o mesmo ERP com o menu daquele setor. Quem tem um setor só entra direto. Trocar de setor: botão no topo.
-   Abrir uma função de outro setor (pelo sino, pela lupa, por um link) troca o setor sozinho. */
+   Abrir uma função de outro setor (pelo sino, pela lupa, por um link) troca o setor sozinho.
+   17/11 (Júlio): Projetos abre o app de Projetos; Serviços e Técnicos abrem o app de Serviços (Técnicos já entra no perfil
+   Técnico), em tela cheia, sem o menu do ERP; o Administrativo continua com o ERP. Os apps ganham o visual do ERP (window.__erpTemaApp, no fim deste arquivo). */
 const SETORES = {
   adm:  { nome: 'Administrativo', ic: 'fn_caixa',   txt: 'Financeiro, compras, notas, cadastros e orçamentos', areas: ['Cadastros', 'Orçamentos', 'Suprimentos', 'Financeiro', 'Administração'], nucleo: ['fn_receber', 'fn_pagar', 'fn_caixa', 'fn_cobranca', 'fn_fluxo', 'fn_notas', 'adm_usuarios', 'adm_fiscal'] },
-  proj: { nome: 'Projetos',       ic: 'pj_projetos', txt: 'Propostas, tarefas, calendário, visitas e dimensionamento', areas: ['Cadastros', 'Orçamentos', 'Projetos'], extras: ['projetos'], nucleo: ['Projetos'] },
-  serv: { nome: 'Serviços',       ic: 'sv_manut',    txt: 'Agenda, OS, pedidos, contratos, oficina e estoque', areas: ['Cadastros', 'Orçamentos', 'Serviços', 'Suprimentos'], extras: ['servicos'], nucleo: ['Serviços'] },
-  tec:  { nome: 'Técnicos',       ic: 'sv_agenda',   txt: 'Minha agenda, oficina, estoque e pedidos de material', chaves: ['sv_agenda', 'sv_oficina', 'sv_estoque', 'cp_requisicoes'] },
+  proj: { nome: 'Projetos',       ic: 'pj_projetos', txt: 'Propostas, tarefas, calendário, visitas e dimensionamento', areas: ['Cadastros', 'Orçamentos', 'Projetos'], extras: ['projetos'], nucleo: ['Projetos'], app: 'projetos' },
+  serv: { nome: 'Serviços',       ic: 'sv_manut',    txt: 'Agenda, OS, pedidos, contratos, oficina e estoque', areas: ['Cadastros', 'Orçamentos', 'Serviços', 'Suprimentos'], extras: ['servicos'], nucleo: ['Serviços'], app: 'servicos' },
+  tec:  { nome: 'Técnicos',       ic: 'sv_agenda',   txt: 'Minha agenda, oficina, estoque e pedidos de material', chaves: ['sv_agenda', 'sv_oficina', 'sv_estoque', 'cp_requisicoes', 'servicos'], app: 'servicos', perfilApp: 'tech' },
   tudo: { nome: 'Tudo',           ic: 'inicio',      txt: 'O menu completo, com todas as áreas' }
 };
+// tela em que cada setor abre: o app (Projetos/Serviços/Técnicos) ou o Início do ERP
+const abaDoSetor = k => (SETORES[k] && SETORES[k].app) || 'inicio';
+const setorEmApp = () => !!(ST.setor && SETORES[ST.setor] && SETORES[ST.setor].app && ST.aba === SETORES[ST.setor].app);
+function perfilAppDoSetor(k){ window.__erpPerfilApp = (SETORES[k] && SETORES[k].perfilApp) || ''; }
 const _areaDaChave = () => { if(!window._areaChave){ window._areaChave = {}; padraoMenu().forEach(g => g.itens.forEach(i => { window._areaChave[i[0]] = g.area; })); } return window._areaChave; };
 function setorTem(k, item){
   const S = SETORES[k]; if(!S || k === 'tudo') return true;
@@ -3222,7 +3237,8 @@ function setorUnico(){ const l = setoresDisponiveis(); return ST.eu && ST.eu.per
       const disp = setoresDisponiveis();
       ST.setor = s && disp.includes(s) ? s : setorUnico();
       if(ST.setor === null){ ST.setor = 'tudo'; setTimeout(() => escolherSetor(true), 0); }
-      marcaSetorTopo();
+      else if(ST.aba === 'inicio'){ ST.aba = abaDoSetor(ST.setor); }
+      perfilAppDoSetor(ST.setor); marcaSetorTopo();
     }
     // função de outro setor (sino, lupa, link): troca para um setor que tenha ela
     if(ST.eu && ST.setor && ST.setor !== 'tudo' && ST.aba && ST.aba !== 'inicio'){
@@ -3232,13 +3248,14 @@ function setorUnico(){ const l = setoresDisponiveis(); return ST.eu && ST.eu.per
         if(novo){ mudaSetor(novo, true); toast('Setor: ' + SETORES[novo].nome); }
       }
     }
+    document.body.classList.toggle('modoApp', setorEmApp());
     return desenhar0.apply(this, a);
   };
 })();
 
 function mudaSetor(k, semDesenhar){
   ST.setor = k; try{ sessionStorage.setItem('erp-setor', k); }catch(e){}
-  marcaSetorTopo(); if(!semDesenhar){ fecharPainel(); ST.aba = k === 'tec' ? 'sv_agenda' : 'inicio'; ST.busca = ''; desenhar(); }
+  perfilAppDoSetor(k); marcaSetorTopo(); if(!semDesenhar){ fecharPainel(); ST.aba = abaDoSetor(k); ST.busca = ''; desenhar(); }
 }
 function marcaSetorTopo(){
   let b = $('#btnSetor'); const disp = setoresDisponiveis();
@@ -3259,6 +3276,53 @@ function escolherSetor(inicial){
 }
 // ao sair do ERP o setor é esquecido (o próximo login escolhe de novo)
 (function(){ const s0 = sb.auth.signOut.bind(sb.auth); sb.auth.signOut = (...a) => { try{ sessionStorage.removeItem('erp-setor'); }catch(e){} ST.setor = undefined; const d = $('#setorTela'); if(d) d.classList.add('hidden'); return s0(...a); }; })();
+
+
+/* ---------- Setor em app: tela cheia, sem o menu do ERP ---------- */
+(function(){ const st = document.createElement('style'); st.textContent =
+  'body.modoApp #menu{display:none!important}body.modoApp #appWrap{left:0!important}body.modoApp #btnMenu{display:none!important}';
+  document.head.appendChild(st); })();
+
+/* ---------- Visual do ERP dentro dos apps de Projetos e Serviços ----------
+   Entra no <head> da cópia do app (telaApp) — não muda nada nos apps em uso. Só o modo claro; o escuro de cada app continua. */
+window.__erpTemaApp = `
+:root{--erpF:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Helvetica,Arial,sans-serif;--erpMenu:linear-gradient(180deg,#1e1e21 0,#131315 55%,#0c0c0d 100%);--erpPri:linear-gradient(180deg,#ff2828,#c8000c);--erpAtivo:linear-gradient(180deg,#ff2b2b,#c2000c)}
+body,body button,body input,body select,body textarea,body h1,body h2,body h3,body h4,body span,body div,body p,body label,body small,body b,body strong,body td,body th,body a{font-family:var(--erpF)!important}
+/* cores e cantos do ERP */
+:root{--accent:#d0151b;--accent-dark:#a8000a;--accent-soft:rgba(208,21,27,.08);--accent-line:rgba(208,21,27,.25);--red:#d0151b;--red-soft:#fbe9ea;--radius:16px;--r-lg:16px;--r-md:12px;
+  --shadow-sm:0 8px 26px rgba(20,20,30,.07),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 8px 26px rgba(20,20,30,.09),0 1px 2px rgba(0,0,0,.05)}
+html:not([data-theme="dark"]) body:not(.tema-escuro){--background:#ececf0;--paper:#ececf0;background:#ececf0!important}
+html:not([data-theme="dark"]) body:not(.tema-escuro) .app{background:#ececf0!important}
+/* botão principal = vermelho do ERP */
+.btn-primary,.btn:not(.secondary):not(.perigo):not(.btn-anexo){background:var(--erpPri)!important;border-color:#c0000b!important;color:#fff!important;box-shadow:0 4px 12px rgba(220,0,0,.22)!important}
+/* ===== Projetos: menu lateral escuro como o do ERP ===== */
+@media (min-width:901px){
+  .sidebar-desktop{background:var(--erpMenu)!important;border-right:0!important;color:#ececf0}
+  .sidebar-desktop-logo{display:none!important}
+  .sidebar-desktop-nav{padding-top:4px}
+  .sidebar-desktop-item{color:#ececf0!important;border-radius:11px!important}
+  .sidebar-desktop-item:hover{background:rgba(255,255,255,.07)!important}
+  .sidebar-desktop-item.area-atual{background:rgba(255,255,255,.1)!important;color:#fff!important;font-weight:700}
+  .sidebar-desktop-item.active{background:var(--erpAtivo)!important;color:#fff!important;font-weight:700;box-shadow:0 8px 20px rgba(225,0,0,.4),inset 0 1px 0 rgba(255,255,255,.22)}
+  .sidebar-desktop-titulo-grupo{color:#8e8e94!important;font-size:10.5px!important;letter-spacing:1.1px!important}
+  .sidebar-desktop-separador{background:rgba(255,255,255,.12)!important}
+  .sidebar-desktop-rodape{border-top-color:rgba(255,255,255,.12)!important}
+  .sidebar-desktop-usuario,.sidebar-desktop-usuario *{color:#ececf0!important}
+  .sidebar-desktop-rodape .btn.secondary{background:rgba(255,255,255,.06)!important;border-color:rgba(255,255,255,.18)!important;color:#ececf0!important}
+}
+/* ===== Serviços: menu lateral escuro de altura toda, como o do ERP ===== */
+@media (min-width:760px){
+  .app-sidebar{position:fixed!important;left:0;top:0;bottom:0;width:240px!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:var(--erpMenu)!important;padding:14px 12px!important;z-index:20;overflow-y:auto}
+  .page{max-width:none!important;margin:0!important;padding-left:calc(240px + 28px)!important}
+  .sidebar-logo{display:none!important}
+  .sidebar-nav-btn{color:#ececf0!important;border-radius:11px!important}
+  .sidebar-nav-btn .sidebar-icon{color:#fff!important}
+  .sidebar-nav-btn:hover{background:rgba(255,255,255,.07)!important}
+  .sidebar-nav-btn.active{background:var(--erpAtivo)!important;color:#fff!important;font-weight:700;box-shadow:0 8px 20px rgba(225,0,0,.4),inset 0 1px 0 rgba(255,255,255,.22)!important}
+  .sidebar-footer{border-top-color:rgba(255,255,255,.12)!important;color:#ececf0}
+  .sidebar-footer *{color:#ececf0}
+  .sidebar-logout-btn{background:rgba(255,255,255,.06)!important;border-color:rgba(255,255,255,.18)!important;color:#ececf0!important}
+}`;
 
 /* ================== Projetos · complementos (script 10) ==================
    Visitas e considerações · ART · Calendário · Comissões · Dimensionamento · Chat */

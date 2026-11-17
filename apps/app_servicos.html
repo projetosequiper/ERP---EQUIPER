@@ -4803,6 +4803,9 @@ function restringirPerfisAoUsuario(){
 }
 // Pessoa com um perfil só: vai direto para a etapa dele (menos um toque). Com mais de um, escolhe.
 function abrirPerfilUnico(){
+  /* ERP: o setor escolhido no ERP já diz o perfil (Técnicos → Técnico), se a pessoa tiver esse perfil */
+  try{ const pref = window.top !== window && window.top.__erpPerfilApp; const c = pref && CARDS_PERFIL[pref] && document.getElementById(CARDS_PERFIL[pref]);
+    if(c && c.style.display !== 'none' && appInitState === 'ready'){ c.click(); return true; } }catch(e){}
   if(!authAtivo() || !contaAtual || !contaAtual.perfis || contaAtual.perfis.length !== 1) return false;
   if(appInitState !== 'ready') return false;
   document.getElementById(CARDS_PERFIL[contaAtual.perfis[0]]).click(); return true;
