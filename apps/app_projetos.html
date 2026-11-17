@@ -10917,8 +10917,8 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     var _sso2 = window.__erpSSO && window.__erpSSO();
     if(_sso2){
       var _pp2 = /^(diretoria|projetos)$/.test(_sso2.perfil), _pf2 = /^(diretoria|administrativo)$/.test(_sso2.perfil);
-      var _fin = window.__erpModo === 'financeiro';   /* base Projetos: sem o Financeiro (ele fica no Administrativo do ERP) */
-      var _ok = { projetos: !_fin && erpVe('app_pj_projetos', _pp2), projetista: !_fin && erpVe('app_pj_projetista', _pp2), financeiro: _fin && erpVe('app_pj_financeiro', _pf2) };
+      var _fin = window.__erpModo === 'financeiro';   /* o Financeiro de Projetos fica nos dois lugares (decisão de 17/11, por enquanto): na base Projetos e no Administrativo do ERP — são os mesmos dados */
+      var _ok = { projetos: !_fin && erpVe('app_pj_projetos', _pp2), projetista: !_fin && erpVe('app_pj_projetista', _pp2), financeiro: erpVe('app_pj_financeiro', _pf2) };
       sidebar.querySelectorAll('[data-area]').forEach(function(el){ if(!_ok[el.getAttribute('data-area')]) el.remove(); });
       [['navProjetos','projetos'],['navProjetista','projetista'],['navFinanceiro','financeiro']].forEach(function(x){ var b = document.getElementById(x[0]); if(b && !_ok[x[1]]) b.style.display = 'none'; });
     }
@@ -11080,7 +11080,8 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
 
   /* ERP: login único — o perfil do ERP já diz a área (sem escolher acesso, senha ou PIN) */
 /* ERP (script 57): o que a pessoa vê no app vem da tela Acessos do ERP. null = sem controle (como antes) */
-  function erpNivelApp(t){ try{ return window.top !== window && window.top.__erpNivelApp ? window.top.__erpNivelApp(t) : null; }catch(e){ return null; } }
+  function erpNivelApp(t){ if(t === 'app_pj_f_usuarios' && window.__erpSSO && window.__erpSSO()) return 0;   /* "Usuários com acesso" foi substituída pela tela Acessos do ERP */
+  try{ return window.top !== window && window.top.__erpNivelApp ? window.top.__erpNivelApp(t) : null; }catch(e){ return null; } }
   function erpVe(t, padrao){ var n = erpNivelApp(t); return n == null ? padrao : n >= 1; }
   function erpSemAcesso(containerId, aoVoltar){
     var g = document.getElementById(containerId); if(!g) return;
@@ -11095,7 +11096,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     var _erp = window.__erpSSO && window.__erpSSO();
     if(_erp){
       var _pp = /^(diretoria|projetos)$/.test(_erp.perfil), _pf = /^(diretoria|administrativo)$/.test(_erp.perfil);
-      selecionado = window.__erpModo === 'financeiro' ? 'financeiro' : erpVe('app_pj_projetos', _pp) ? 'projetos' : erpVe('app_pj_projetista', _pp) ? 'desenhista' : 'projetos';
+      selecionado = window.__erpModo === 'financeiro' ? 'financeiro' : erpVe('app_pj_projetos', _pp) ? 'projetos' : erpVe('app_pj_projetista', _pp) ? 'desenhista' : erpVe('app_pj_financeiro', _pf) ? 'financeiro' : 'projetos';
     }
     function montar(){
       if(!selecionado){
