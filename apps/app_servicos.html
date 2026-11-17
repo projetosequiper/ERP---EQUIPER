@@ -4800,12 +4800,16 @@ function restringirPerfisAoUsuario(){
   document.getElementById('loginContaNome').textContent = u ? u.name : '(usuário não encontrado)';
   document.getElementById('loginContaEmail').textContent = contaAtual.email || '';
   document.getElementById('loginSemPerfil').style.display = perfis.length ? 'none' : '';
+  erpBotoesSair(perfis.length);
 }
 // Pessoa com um perfil só: vai direto para a etapa dele (menos um toque). Com mais de um, escolhe.
 function abrirPerfilUnico(){
-  /* ERP: o setor escolhido no ERP já diz o perfil (Técnicos → Técnico), se a pessoa tiver esse perfil */
-  try{ const pref = window.top !== window && window.top.__erpPerfilApp; const c = pref && CARDS_PERFIL[pref] && document.getElementById(CARDS_PERFIL[pref]);
-    if(c && c.style.display !== 'none' && appInitState === 'ready'){ c.click(); return true; } }catch(e){}
+  /* ERP: entra direto, sem escolher perfil — o do setor (Técnicos → Técnico) ou o primeiro que a pessoa tem
+     (Gerenciador, Financeiro, Oficina, Técnico). Só na primeira vez; depois, "Trocar perfil" mostra os cartões. */
+  try{ if(window.__erpSSO && window.__erpSSO() && !window.__erpAutoFeito && appInitState === 'ready'){
+    const pref = window.top !== window && window.top.__erpPerfilApp;
+    for(const p of [pref, 'manager', 'financeiro', 'oficina', 'tech']){ const c = p && CARDS_PERFIL[p] && document.getElementById(CARDS_PERFIL[p]);
+      if(c && c.style.display !== 'none'){ window.__erpAutoFeito = true; c.click(); return true; } } } }catch(e){}
   if(!authAtivo() || !contaAtual || !contaAtual.perfis || contaAtual.perfis.length !== 1) return false;
   if(appInitState !== 'ready') return false;
   document.getElementById(CARDS_PERFIL[contaAtual.perfis[0]]).click(); return true;
@@ -17268,6 +17272,20 @@ document.getElementById('osFiltrosLimpar').addEventListener('click', () => {
 });
 ['clientSearchInput', 'maintContractSearchInput', 'clienteSearchInput', 'osSearchInput'].forEach(setupClearableSearch);
 
+/* ERP: login único. Conta do ERP sem usuário no app -> aviso (sem pedir e-mail e senha de novo) */
+function erpSemConta(email){
+  appInitState = 'conta'; document.getElementById('appLoadStatus').style.display = 'none'; showLoginStep('conta');
+  const st = document.getElementById('loginStepConta'); [...st.children].forEach(c => { c.style.display = 'none'; });
+  let d = document.getElementById('erpSemConta'); if(!d){ d = document.createElement('div'); d.id = 'erpSemConta'; d.className = 'login-form'; st.appendChild(d); }
+  d.style.display = ''; d.innerHTML = '<p style="margin:0;line-height:1.5">O seu login do ERP' + (email ? ' (<b>' + email + '</b>)' : '') +
+    ' ainda não está ligado a um usuário do app de Serviços.</p><p style="margin:10px 0 0;line-height:1.5;color:var(--text-secondary)">Peça a quem é Gestor para cadastrar este e-mail em <b>Acessos</b>, no app de Serviços.</p>';
+}
+/* ERP: o botão "Sair" de cada perfil vira "Trocar perfil" (quem tem mais de um) ou some; "Trocar de conta" some */
+function erpBotoesSair(n){
+  if(!(window.__erpSSO && window.__erpSSO())) return;
+  ['sidebarLogoutBtn', 'finSidebarLogout', 'techLogoutBtn', 'financeiroLogoutBtn', 'oficinaLogoutBtn'].forEach(id => { const b = document.getElementById(id); if(!b) return; b.textContent = 'Trocar perfil'; b.style.display = n > 1 ? '' : 'none'; });
+  const t = document.getElementById('contaTrocarBtn'); if(t) t.style.display = 'none';
+}
 async function init(){
   document.getElementById('roleGrid').classList.add('disabled');
   document.getElementById('appLoadStatus').style.display = '';
@@ -17275,8 +17293,10 @@ async function init(){
   try{
     if(authAtivo()){
       const u = await esperarContaFirebase();
+      if(!u && window.__erpSSO && window.__erpSSO()){ erpSemConta(''); return; }   /* ERP: sem tela de e-mail/senha */
       if(!u){ appInitState = 'conta'; document.getElementById('appLoadStatus').style.display = 'none'; showLoginStep('conta'); setTimeout(() => document.getElementById('contaEmailInput').focus(), 50); return; }
       const v = await vincularConta(u);
+      if(!v.ok && window.__erpSSO && window.__erpSSO()){ erpSemConta(u.email || ''); return; }
       if(!v.ok && v.motivo === 'nao_verificado'){
         appInitState = 'conta'; document.getElementById('appLoadStatus').style.display = 'none';
         showLoginStep('conta'); mostrarAvisoVerificacao(u.email || ''); return;     // continua conectado, sem acesso ao banco, até verificar

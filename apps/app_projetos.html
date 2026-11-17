@@ -10523,6 +10523,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
   function mostrarGateProjetosManager(containerId, aoVoltar){
     /* ERP-SSO */ var _sso = window.__erpSSO && window.__erpSSO();
     if(_sso && /^(diretoria|projetos)$/.test(_sso.perfil)){ if(!state.emailGerente){ state.emailGerente = _sso.email; saveEmailGerente(); } entrarEmProjetos(); return; }
+    if(window.__erpSSO && window.__erpSSO()){ erpSemAcesso(containerId, aoVoltar); return; }   /* ERP: sem senha — quem não tem o perfil vê o aviso */
     var gate = document.getElementById(containerId);
     var linkVoltar = aoVoltar ? '<p style="margin-top:16px;"><a href="#" class="pm-voltar-raiz" style="font-size:12.5px; color:var(--ink-soft); text-decoration:none;">‹ voltar</a></p>' : '';
 
@@ -10611,6 +10612,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
       if(!_n){ _n = _sso.nome; if(state.usuariosFinanceiro.indexOf(_n) < 0){ state.usuariosFinanceiro.push(_n); saveUsuariosFinanceiro(); } state.emailsFinanceiroInd[_n] = _sso.email; saveEmailsFinanceiroInd(); }
       nomeFinanceiroAtual = _n; entrarEmFinanceiro(); return;
     }
+    if(window.__erpSSO && window.__erpSSO()){ erpSemAcesso(containerId, aoVoltar); return; }   /* ERP: sem senha — quem não tem o perfil vê o aviso */
     var gate = document.getElementById(containerId);
     var linkVoltar = aoVoltar ? '<p style="margin-top:16px;"><a href="#" class="fn-voltar-raiz" style="font-size:12.5px; color:var(--ink-soft); text-decoration:none;">‹ voltar</a></p>' : '';
 
@@ -10758,6 +10760,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
       document.getElementById('erpPjEntrar').onclick = async function(){ var n = document.getElementById('erpPjNome').value; if(!n) return; state.emailsProjetistas[n] = _sso.email; await saveEmailsProjetistas(); nomeProjetistaAtual = n; entrarEmProjetos(true); };
       return;
     }
+    if(window.__erpSSO && window.__erpSSO()){ erpSemAcesso(containerId, aoVoltar); return; }   /* ERP: sem senha — quem não tem o perfil vê o aviso */
     var gate = document.getElementById(containerId);
     var linkVoltar = aoVoltar ? '<p style="margin-top:16px;"><a href="#" class="pj-voltar-raiz" style="font-size:12.5px; color:var(--ink-soft); text-decoration:none;">‹ voltar</a></p>' : '';
 
@@ -11063,9 +11066,19 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     try{ if(!chat.ativo){ chatIniciar(); } }catch(e){}
   }
 
+  /* ERP: login único — o perfil do ERP já diz a área (sem escolher acesso, senha ou PIN) */
+  function erpSemAcesso(containerId, aoVoltar){
+    var g = document.getElementById(containerId); if(!g) return;
+    g.innerHTML = '<div class="gate-box" style="margin:30px auto; max-width:360px;"><img src="'+LOGO_EQUIPER+'" alt="Equiper" class="gate-logo"><h2>Sem acesso</h2>'+
+      '<p>O seu perfil no ERP não tem acesso a esta parte. Fale com a diretoria (ERP → Administração → Usuários e acessos).</p>'+
+      (aoVoltar ? '<p style="margin-top:16px;"><a href="#" id="erpSemAcVoltar" style="font-size:12.5px; color:var(--ink-soft); text-decoration:none;">‹ voltar</a></p>' : '')+'</div>';
+    if(aoVoltar) document.getElementById('erpSemAcVoltar').onclick = function(e){ e.preventDefault(); aoVoltar(); };
+  }
   function telaLoginUnificado(){
     var gate = document.getElementById('senhaGate');
     var selecionado = null;
+    var _erp = window.__erpSSO && window.__erpSSO();
+    if(_erp){ selecionado = /^administrativo$/.test(_erp.perfil) ? 'financeiro' : 'projetos'; }
     function montar(){
       if(!selecionado){
         gate.innerHTML =
@@ -11186,7 +11199,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
           else if(identidadeRestaurar.tipo === 'projetista'){ nomeProjetistaAtual = identidadeRestaurar.nome; entrarEmProjetos(true); }
           else { nomeFinanceiroAtual = identidadeRestaurar.nome; entrarEmFinanceiro(); }
         }
-        if(faceIdJaAtivado()){
+        if(faceIdJaAtivado() && !(window.__erpSSO && window.__erpSSO())){
           mostrarTelaFaceId(entrarComIdentidade);
         } else {
           entrarComIdentidade();
