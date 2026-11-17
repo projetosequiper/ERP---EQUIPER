@@ -550,7 +550,7 @@ window.__erpArquivo = async nome => {
   if(el){ const bin = atob(el.textContent.trim()); const bytes = new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
     return (_arqCache[nome] = new TextDecoder('utf-8').decode(bytes)); }
-  try{ toast('Carregando…'); const r = await fetch('apps/' + nome + '.html'); if(!r.ok) return null; return (_arqCache[nome] = await r.text()); }catch(e){ return null; }
+  try{ const r = await fetch('apps/' + nome + '.html'); if(!r.ok) return null; return (_arqCache[nome] = await r.text()); }catch(e){ return null; }
 };
 
 const PERFIS_HUMANOS = ['diretoria','administrativo','projetos','servicos'];
@@ -1125,13 +1125,14 @@ async function telaApp(arquivo, titulo, modo, abas){
   w.querySelectorAll('iframe').forEach(f => { if(f.dataset.app === arquivo && f.dataset.chave !== chave) f.remove(); });
   w.querySelectorAll('iframe').forEach(f => f.classList.toggle('hidden', f.dataset.chave !== chave));
   appAbas(abas || null, chave, arquivo);
-  if(abas && !abas.length) return;
+  if(abas && !abas.length){ appCapa(false); return; }
+  appCapa(!acha() || acha().dataset.pronto !== '1', titulo);
   if(!acha()){
     // script 61: o ERP liga a pessoa ao usuário do app sozinho (sem cadastro nem login dentro do app)
     const liga = { app_servicos: 'app_servicos_entrar', app_projetos: 'app_projetos_entrar' }[arquivo];
     if(liga){ try{ await sb.rpc(liga); }catch(e){} }
     let html = await window.__erpArquivo(arquivo);
-    if(!html){ toast(titulo + ': não foi possível carregar (confira a internet).'); return; }
+    if(!html){ appCapa(false); toast(titulo + ': não foi possível carregar (confira a internet).'); return; }
     if(acha()) return;
     // um script logo no começo do <head> diz ao aplicativo em que parte abrir e põe o visual do ERP (mod/07_setores.js)
     // no fim do <head> quando a página termina de ler — fica por cima do estilo do aplicativo
@@ -1141,8 +1142,33 @@ async function telaApp(arquivo, titulo, modo, abas){
           'var s=document.createElement("style");s.id="erpTema";s.textContent=' + css + ';document.head.appendChild(s);});<\/script>';
       html = html.slice(0, m.index + m[0].length) + sc + html.slice(m.index + m[0].length); }
     const f = document.createElement('iframe'); f.title = titulo; f.dataset.app = arquivo; f.dataset.perfil = modo; f.dataset.chave = chave; f.srcdoc = html; w.appendChild(f);
+    appEspera(f, arquivo, chave);
   }
   if(abas) appAbaVai(arquivo, chave);
+}
+// tela de espera por cima do aplicativo enquanto ele carrega e entra sozinho com o login do ERP
+function appCapa(mostra, titulo){
+  let c = $('#appCapa'); if(!c){ c = document.createElement('div'); c.id = 'appCapa'; $('#appWrap').appendChild(c); }
+  if(mostra) c.innerHTML = '<div class="appCapaCx"><i></i><b>' + esc(titulo || 'Abrindo') + '</b><span>Abrindo…</span></div>';
+  c.classList.toggle('hidden', !mostra);
+}
+function appEspera(f, arquivo, chave){
+  let n = 0, aviso = 0;
+  const vis = (d, id) => { const e = d.getElementById(id); return !!(e && e.offsetParent !== null); };
+  const t = setInterval(() => {
+    if(!f.isConnected) return clearInterval(t);
+    let pronto = false; const d = f.contentDocument;
+    try{
+      if(d && d.body){
+        const dentro = arquivo === 'app_servicos' ? ['managerView', 'techView', 'financeiroView', 'oficinaView'].some(id => vis(d, id)) : vis(d, 'appContainer');
+        // um aviso do aplicativo (sem acesso, erro de carga) também encerra a espera, se continuar na tela por mais de 1,5 s
+        const temAviso = arquivo === 'app_servicos' ? ['erpSemConta', 'loginSemPerfil', 'appLoadError'].some(id => vis(d, id)) : !!d.querySelector('#senhaGate .gate-box');
+        aviso = temAviso && !dentro ? aviso + 1 : 0;
+        pronto = dentro || aviso >= 6;
+      }
+    }catch(e){}
+    if(pronto || ++n > 100){ clearInterval(t); f.dataset.pronto = '1'; if(!f.classList.contains('hidden')) appCapa(false); }
+  }, 250);
 }
 
 /* ================== Vínculos: clientes dos apps × cadastro único ================== */
@@ -3319,13 +3345,16 @@ function marcaSetorTopo(){
 function escolherSetor(inicial){
   const disp = setoresDisponiveis(); if(disp.length < 2) return;
   let d = $('#setorTela'); if(!d){ d = document.createElement('div'); d.id = 'setorTela'; document.body.appendChild(d); }
+  const logo = document.querySelector('.topo .marca img');
   d.innerHTML = `<div class="stCaixa">
-    <div class="stCab"><h2>Olá, ${esc(primeiroNome(ST.eu.nome))}!</h2><p>${inicial ? 'Em qual setor você vai trabalhar agora?' : 'Trocar de setor'}</p></div>
+    ${logo ? `<img class="stLogo" src="${logo.src}" alt="Equiper">` : ''}
+    <div class="stCab"><h2>Olá, ${esc(primeiroNome(ST.eu.nome))}!</h2><p>${inicial ? 'Escolha onde você vai trabalhar agora' : 'Trocar de área'}</p></div>
     <div class="stGrade">${disp.map(k => `<button class="stCartao${ST.setor === k && !inicial ? ' ativo' : ''}" data-st="${k}">${ico(SETORES[k].ic)}<b>${SETORES[k].nome}</b><small>${SETORES[k].txt}</small></button>`).join('')}</div>
-    ${inicial ? '' : '<button class="btn" id="stFechar" style="margin-top:14px">Continuar onde estava</button>'}</div>`;
+    <div class="stRodape">${inicial ? '' : '<button class="btn" id="stFechar">Continuar onde estava</button>'}<button class="btn" id="stSair">Sair do sistema</button></div></div>`;
   d.classList.remove('hidden');
   d.querySelectorAll('[data-st]').forEach(c => c.onclick = () => { d.classList.add('hidden'); mudaSetor(c.dataset.st); });
   if($('#stFechar')) $('#stFechar').onclick = () => d.classList.add('hidden');
+  $('#stSair').onclick = async () => { await sb.auth.signOut(); location.reload(); };
 }
 // ao sair do ERP o setor é esquecido (o próximo login escolhe de novo)
 (function(){ const s0 = sb.auth.signOut.bind(sb.auth); sb.auth.signOut = (...a) => { try{ sessionStorage.removeItem('erp-setor'); }catch(e){} ST.setor = undefined; const d = $('#setorTela'); if(d) d.classList.add('hidden'); return s0(...a); }; })();
@@ -3333,7 +3362,20 @@ function escolherSetor(inicial){
 
 /* ---------- Setor em app: tela cheia, sem o menu do ERP ---------- */
 (function(){ const st = document.createElement('style'); st.textContent =
-  'body.modoApp #menu{display:none!important}body.modoApp #appWrap{left:0!important}body.modoApp #btnMenu{display:none!important}';
+  'body.modoApp #menu{display:none!important}body.modoApp #appWrap{left:0!important}body.modoApp #btnMenu{display:none!important}' +
+  // nas bases Serviços, Projetos, Técnico e Oficina a barra do topo fica só com a marca, a área (para trocar) e a conta — nada que leve para dentro do ERP
+  'body.modoApp #btnVoltar,body.modoApp #btnInicio,body.modoApp #btnBusca,body.modoApp #btnCalc,body.modoApp #btnChat,body.modoApp #btnSino,body.modoApp .topo h1,body.modoApp .topo .amb,body.modoApp .hd-dir .hd-sep{display:none!important}' +
+  'body.modoApp .setorChip span{display:inline!important}body.modoApp .topo .marca{display:flex!important}' +
+  // tela das bases: cheia e opaca (nada do ERP aparece por trás)
+  '#setorTela{background:linear-gradient(180deg,#232326 0,#131315 60%,#0c0c0d 100%)!important;align-items:flex-start!important}' +
+  '#setorTela .stCaixa{margin:auto}.stLogo{height:44px;margin-bottom:22px}#setorTela .stCab h2{color:#fff;font-size:24px;margin:0 0 6px}#setorTela .stCab p{color:#bdbdc3;margin:0 0 22px}' +
+  '.stRodape{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}.stRodape .btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:#fff}.stRodape .btn:hover{background:rgba(255,255,255,.16)}' +
+  // tela de espera do aplicativo
+  '#appWrap{position:fixed}#appCapa{position:absolute;inset:0;z-index:3;background:var(--fundo);display:flex;align-items:center;justify-content:center}' +
+  '.appCapaCx{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--texto2)}.appCapaCx b{color:var(--preto);font-size:17px}' +
+  '.appCapaCx i{width:34px;height:34px;border-radius:50%;border:3px solid #d9d9de;border-top-color:var(--verm);animation:appGira .8s linear infinite}@keyframes appGira{to{transform:rotate(360deg)}}' +
+  // celular: a barra do topo cabe inteira (antes a conta e o sino ficavam cortados)
+  '@media (max-width:520px){.topo{gap:4px!important}.topo .marca,.topo .amb,#btnCalc{display:none}.hd-btn{width:38px;height:38px}.hd-dir{gap:2px!important}.setorChip{margin-left:4px;padding:5px 8px}}';
   document.head.appendChild(st); })();
 
 /* ---------- Visual do ERP dentro dos apps de Projetos e Serviços ----------
@@ -3346,6 +3388,10 @@ body,body button,body input,body select,body textarea,body h1,body h2,body h3,bo
   --shadow-sm:0 8px 26px rgba(20,20,30,.07),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 8px 26px rgba(20,20,30,.09),0 1px 2px rgba(0,0,0,.05)}
 html:not([data-theme="dark"]) body:not(.tema-escuro){--background:#ececf0;--paper:#ececf0;background:#ececf0!important}
 html:not([data-theme="dark"]) body:not(.tema-escuro) .app{background:#ececf0!important}
+/* a faixa do rodapé só aparece quando há erro ao salvar (a normal, "ERP TESTE · gravando no banco do ERP", some) */
+#faixa-erp[style*="rgb(17, 17, 17)"],#faixa-erp[style*="#111"]{display:none!important}
+/* a marca já está na barra do ERP: somem os cabeçalhos com a marca dentro dos aplicativos */
+#techView .portal-header-slim,#oficinaView .portal-header-slim,.masthead{display:none!important}
 /* login único: quem sai é o ERP — some o Bloquear/Face ID do app de Projetos */
 #sidebarDesktopBloquear,#btnBloquear,#btnBloquearFinanceiro,#botaoFaceId{display:none!important}
 /* botão principal = vermelho do ERP */
