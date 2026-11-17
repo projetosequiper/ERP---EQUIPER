@@ -2044,7 +2044,7 @@ async function atualizaSino(){
   if('DAPS'.includes(l) && typeof avisosPendencias === 'function') jobs.push(avisosPendencias().then(a => itens.push(...a)).catch(() => {}));
   (window.AVISOS_EXTRA || []).forEach(fn => jobs.push(Promise.resolve().then(fn).then(a => itens.push(...(a || []))).catch(() => {})));
   await Promise.all(jobs.map(j => j.catch(() => {})));
-  ST.avisos = itens.sort((a, b) => a.ord - b.ord);
+  ST.avisos = itens.filter(x => !telaFora(x.aba)).sort((a, b) => a.ord - b.ord);
   if(!ST.vistos) await carregaVistos(); atualizaBadgeSino();
 }
 
@@ -2087,6 +2087,7 @@ async function resumoInicio(){
     orc = { elab: x.filter(y => y.etapa === 'elaboracao').length, env: x.filter(y => y.etapa === 'enviado'), apr: x.filter(y => ['aprovado','aprovado_parcial'].includes(y.etapa) && (y.aprovado_em || '') >= d30) }; }));
   await Promise.all(jobs.map(j => j.catch(() => {})));
   if(!$('#iniGrid')) return;
+  for(let i = at.length - 1; i >= 0; i--) if(telaFora(at[i].aba)) at.splice(i, 1);     // Projetos e Serviços ficam nas bases deles
   const cards = [];
   if(at.length) cards.push(`<div class="card"><div class="cx-cab"><h2>Atividades</h2><button class="ver" data-ir="${at.sort((a, b) => a.o - b.o)[0].aba}">Ver todas ${ico('seta')}</button></div>
     ${at.map(a => `<div class="at-lin ${a.al ? 'alerta' : ''}" data-ir="${a.aba}">${ico(a.ic)}<b>${a.n}</b><span>${a.t}</span></div>`).join('')}</div>`);
@@ -2512,7 +2513,8 @@ const flxPos = a => ({ x: FLX_CX + FLX_RX * Math.cos(a * Math.PI / 180), y: FLX_
 
 function fluxoInicio(){
   const vis = new Set(itensVisiveis().flatMap(g => g.itens.map(i => i[0])));
-  const P = FLX.map(n => ({ ...n, ...flxPos(n.ang), pode: vis.has(n.aba) }));
+  // Projetos e Serviços: o cartão leva para a base do aplicativo (se a pessoa tem a base)
+  const P = FLX.map(n => ({ ...n, ...flxPos(n.ang), pode: vis.has(n.aba) || (telaFora(n.aba) && setoresDisponiveis().includes(baseDaTelaFora(n.aba))) }));
   const NW = 230, NH = 74, HUB = 108;
   // raios: do centro (borda do hub) até a borda do cartão
   const raio = n => { const dx = n.x - FLX_CX, dy = n.y - FLX_CY, d = Math.hypot(dx, dy), ux = dx / d, uy = dy / d;
@@ -2852,7 +2854,7 @@ async function pesquisaGeral(texto){
   if(q.length < 2){ BUSCA.itens = []; alvo.innerHTML = '<div class="bg-dica">Digite pelo menos 2 letras. Números acham orçamento, pedido, nota, lançamento e OS pelo número.</div>'; return; }
   const ws = norm(q).split(/\s+/).filter(Boolean), casa = s => ws.every(w => norm(s || '').includes(w));
   const n = /^\d{1,9}$/.test(q.replace(/[.\-\/\s]/g, '')) ? q.replace(/[.\-\/\s]/g, '') : null, like = '%' + q.replace(/[%_,()]/g, ' ').trim() + '%';
-  const pode = k => nivelTela(k) >= 1, grupos = [];
+  const pode = k => nivelTela(k) >= 1 && !telaFora(k), grupos = [];
   const add = (titulo, lista) => { if(lista && lista.length) grupos.push([titulo, lista]); };
   const nomeP = id => { const p = pessoa(id); return p ? (p.apelido || p.nome) : ''; };
   // locais (já carregados)
@@ -3263,7 +3265,7 @@ function _ordPrepara(raiz){
    17/11 (Júlio, script 63): Serviços = só o Gestor; Projetos = sem o financeiro; o financeiro dos dois aplicativos fica no
    Administrativo (menu Financeiro → Financeiro de Serviços / Financeiro de Projetos — fim deste arquivo). Os apps ganham o visual do ERP (window.__erpTemaApp, no fim deste arquivo). */
 const SETORES = {
-  adm:  { nome: 'Administrativo', ic: 'fn_caixa',   txt: 'Cadastros, CRM e orçamentos, pedidos, compras, financeiro e fiscal', areas: ['Cadastros', 'Orçamentos', 'Projetos', 'Serviços', 'Suprimentos', 'Financeiro', 'Administração'], fora: ['projetos', 'servicos'] },
+  adm:  { nome: 'Administrativo', ic: 'fn_caixa',   txt: 'Cadastros, CRM e orçamentos, pedidos, compras, financeiro e fiscal', areas: ['Cadastros', 'Orçamentos', 'Suprimentos', 'Financeiro', 'Administração'], fora: ['projetos', 'servicos'] },
   serv: { nome: 'Serviços',       ic: 'sv_manut',    txt: 'Controle dos serviços: agenda, orçamentos, obras, manutenções e estoque', chaves: ['servicos'], app: 'servicos', perfilApp: 'manager' },
   proj: { nome: 'Projetos',       ic: 'pj_projetos', txt: 'Tarefas, clientes, calendário, ART, comissão e dimensionamento', chaves: ['projetos'], app: 'projetos' },
   tec:  { nome: 'Técnico',        ic: 'sv_agenda',   txt: 'Agenda de serviços do técnico', chaves: ['servicos'], app: 'servicos', perfilApp: 'tech' },
@@ -3274,6 +3276,11 @@ const SETORES = {
 const abaDoSetor = k => (SETORES[k] && SETORES[k].app) || 'inicio';
 const setorEmApp = () => !!(ST.setor && SETORES[ST.setor] && SETORES[ST.setor].app && ST.aba === SETORES[ST.setor].app);
 function perfilAppDoSetor(k){ window.__erpPerfilApp = (SETORES[k] && SETORES[k].perfilApp) || ''; }
+/* 17/11 (Júlio): os grupos "Projetos" e "Serviços" do menu do ERP (as telas reescritas) saem do Administrativo — Projetos e Serviços
+   são só os aplicativos, nas bases deles. As telas continuam no código (e nos testes, pelo setor interno "tudo"), mas não aparecem
+   no menu, na busca, nos avisos nem no Início; qualquer atalho antigo para elas leva para a base certa. */
+function telaFora(k){ return (ST.setor !== 'tudo' || ST._escolhendo) && ['Projetos', 'Serviços'].includes(_areaDaChave()[k]); }   // 'tudo' sem estar escolhendo = só nos testes
+const baseDaTelaFora = k => _areaDaChave()[k] === 'Projetos' ? 'proj' : 'serv';
 const _areaDaChave = () => { if(!window._areaChave){ window._areaChave = {}; padraoMenu().forEach(g => g.itens.forEach(i => { window._areaChave[i[0]] = g.area; })); } return window._areaChave; };
 function setorTem(k, item){
   const S = SETORES[k]; if(!S || k === 'tudo') return true;
@@ -3315,9 +3322,15 @@ function setorUnico(){ const l = setoresDisponiveis(); return l.length === 1 ? l
       let s = null; try{ s = sessionStorage.getItem('erp-setor'); }catch(e){}
       const disp = setoresDisponiveis();
       ST.setor = s && disp.includes(s) ? s : setorUnico();
-      if(ST.setor === null){ ST.setor = 'tudo'; setTimeout(() => escolherSetor(true), 0); }
+      if(ST.setor === null){ ST.setor = 'tudo'; ST._escolhendo = true; setTimeout(() => escolherSetor(true), 0); }
       else if(ST.aba === 'inicio'){ ST.aba = abaDoSetor(ST.setor); }
       perfilAppDoSetor(ST.setor); marcaSetorTopo();
+    }
+    // atalho antigo para uma tela de Projetos/Serviços do ERP: vai para a base do aplicativo (ou fica no Início, se a pessoa não tem a base)
+    if(ST.eu && ST.setor && telaFora(ST.aba)){
+      const base = baseDaTelaFora(ST.aba);
+      if(setoresDisponiveis().includes(base)){ mudaSetor(base, true); ST.aba = abaDoSetor(base); }
+      else { ST.aba = 'inicio'; toast('Esta função fica na área ' + SETORES[base].nome + '.'); }
     }
     // função de outro setor (sino, lupa, link): troca para um setor que tenha ela
     if(ST.eu && ST.setor && ST.setor !== 'tudo' && ST.aba && ST.aba !== 'inicio'){
@@ -3333,7 +3346,8 @@ function setorUnico(){ const l = setoresDisponiveis(); return l.length === 1 ? l
 })();
 
 function mudaSetor(k, semDesenhar){
-  ST.setor = k; try{ sessionStorage.setItem('erp-setor', k); }catch(e){}
+  ST.setor = k; ST._escolhendo = false; try{ sessionStorage.setItem('erp-setor', k); }catch(e){}
+  if(typeof atualizaSino === 'function') setTimeout(atualizaSino, 0);      // os avisos seguem a área
   perfilAppDoSetor(k); marcaSetorTopo(); if(!semDesenhar){ fecharPainel(); ST.aba = abaDoSetor(k); ST.busca = ''; desenhar(); }
 }
 function marcaSetorTopo(){
@@ -10165,7 +10179,7 @@ function nivelTela(t){
   const item = MENU.flatMap(g => g.itens).find(i => i[0] === t);         // sem o script 35: como antes, pelo perfil
   return item && ST.eu && item[3].includes(LETRA[ST.eu.perfil]) ? 3 : 0;
 }
-const menuVe = i => appControlado(i[0]) ? nivelTela(i[0]) >= 1 : ST.acessos && i[0] in ST.acessos ? ST.acessos[i[0]] >= 1 : i[3].includes(LETRA[ST.eu.perfil]);
+const menuVe = i => telaFora(i[0]) ? false : appControlado(i[0]) ? nivelTela(i[0]) >= 1 : ST.acessos && i[0] in ST.acessos ? ST.acessos[i[0]] >= 1 : i[3].includes(LETRA[ST.eu.perfil]);
 const selNivel = (v, attrs, max = 4, comHerda = false) => `<select ${attrs} class="selNiv" style="color:${v == null || v === '' ? 'inherit' : NIV_COR[v]};font-weight:600">
   ${comHerda ? `<option value="" ${v == null || v === '' ? 'selected' : ''}>— como o perfil —</option>` : ''}${NIV.map((n, k) => k > max ? '' : `<option value="${k}" ${String(v) === String(k) ? 'selected' : ''} style="color:${NIV_COR[k]}">${n}</option>`).join('')}</select>`;
 const dtHoraBR = v => { if(!v) return ''; const d = new Date(v); return dataBR(isoLocal(d)) + ' ' + d.toTimeString().slice(0, 5); };
