@@ -419,6 +419,9 @@ footer{text-align:center;color:var(--texto2);font-size:11px;padding:20px}
 #buscaG mark{background:#fde68a;color:inherit;border-radius:2px}
 #buscaG .bg-dica{padding:12px 16px;font-size:13px;color:#8e8e93}
 @media (max-width:600px){#buscaG{padding:calc(var(--safeT) + 8px) 6px 6px}#buscaG kbd{display:none}}
+.abasLanc{display:inline-flex;gap:2px;background:#e5e5ea;border-radius:10px;padding:3px;margin:0 0 12px}
+.abasLanc button{border:0;background:transparent;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;color:#3a3a3c;cursor:pointer}
+.abasLanc button.ativo{background:#fff;color:var(--verm);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 </style>
 </head>
 <body>
@@ -7133,8 +7136,9 @@ Object.assign(TELAS, { ped_cigam: telaPedCigam });
 /* =================== Lançamentos do CIGAM — histórico financeiro (script 55) ===================
    Consulta do "Relatório de lançamentos" do CIGAM (Equiper e EQP). Não mexe no Caixa nem na Cobrança do ERP. */
 IC.fn_cigam_lanc = '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/><path d="M15.5 16.5l1.5 1.5 3-3"/>';
-MENU.find(g => g.area === 'Financeiro').itens.push(['fn_cigam_lanc', '🗂️', 'Lançamentos do CIGAM', 'DA']);
-ST.cl = { emp: '', grupo: '', sit: '', de: '', ate: '', conta: '', pagina: 0 };
+/* fica dentro de Financeiro → Lançamentos (ERP · CIGAM · Juntos); a tela fn_cigam_lanc continua existindo para o acesso, a lupa e a ficha da empresa */
+ST.lancVis = 'erp';
+ST.cl = { emp: '', grupo: '', sit: '', de: '', ate: '', conta: '', pagina: 0, pessoa: '' };
 const CL_GRUPOS = { mov: ['Entradas e saídas (caixa)', ['Entrada', 'Saída']], ent: ['Só entradas', ['Entrada']], sai: ['Só saídas', ['Saída']],
   rec: ['Títulos a receber', ['Receber', 'c Recebido']], pag: ['Títulos a pagar', ['Pagar', 'd Pago']] };
 const clCor = v => Number(v) < 0 ? 'var(--verm)' : Number(v) > 0 ? 'var(--verde)' : '';
@@ -7142,23 +7146,24 @@ const clCor = v => Number(v) < 0 ? 'var(--verm)' : Number(v) > 0 ? 'var(--verde)
 async function telaCigamLanc(){
   carregandoTela();
   const seq = ST._clSeq = (ST._clSeq || 0) + 1, f = ST.cl, por = 300, b = (ST.busca || '').trim(); if(ST._clBusca !== b){ ST._clBusca = b; f.pagina = 0; }
-  const filtra = q => { if(f.emp) q = q.eq('empresa', f.emp); if(f.grupo) q = q.in('tipo', CL_GRUPOS[f.grupo][1]); if(f.sit) q = q.eq('situacao', f.sit);
+  const filtra = q => { if(f.pessoa) q = q.eq('pessoa_id', f.pessoa); if(f.emp) q = q.eq('empresa', f.emp); if(f.grupo) q = q.in('tipo', CL_GRUPOS[f.grupo][1]); if(f.sit) q = q.eq('situacao', f.sit);
     if(f.de) q = q.gte('data', f.de); if(f.ate) q = q.lte('data', f.ate); if(f.conta) q = q.eq('conta', f.conta);
     if(b){ const n = b.replace(/\D/g, ''); q = /^\d+$/.test(b) ? q.or(`lancamento.eq.${b},nf.eq.${b},documento.eq.${b},cliente_codigo.eq.${b}`) : q.or(`cliente_nome.ilike.%${b}%,historico.ilike.%${b}%,conta_nome.ilike.%${b}%`); }
     return q; };
   const [r, cnt] = await Promise.all([ filtra(sb.from('cigam_lancamentos').select('*')).order('data', { ascending: false }).order('lancamento', { ascending: false }).range(f.pagina * por, f.pagina * por + por - 1),
     filtra(sb.from('cigam_lancamentos').select('lancamento', { count: 'exact', head: true })) ]);
-  if(seq !== ST._clSeq || ST.aba !== 'fn_cigam_lanc') return;   // já pediram outra busca
+  if(seq !== ST._clSeq || ST.lancVis !== 'cigam') return;   // já pediram outra busca
   if(r.error) return $('#conteudo').innerHTML = '<div class="card"><h2>Lançamentos do CIGAM</h2><p>Rode o script 55_cigam_lancamentos.sql no Supabase.</p></div>';
   const l = r.data || [], total = cnt.count || 0;
   const ent = l.filter(x => x.tipo === 'Entrada').reduce((s, x) => s + Number(x.valor), 0), sai = l.filter(x => x.tipo === 'Saída').reduce((s, x) => s + Number(x.valor), 0);
-  $('#conteudo').innerHTML = `<div class="card"><h2>Lançamentos do CIGAM <span class="muted" style="font-weight:400">· histórico financeiro da Equiper e da EQP, só consulta</span></h2>
+  $('#conteudo').innerHTML = `${abasLanc()}<div class="card"><h2>Lançamentos do CIGAM <span class="muted" style="font-weight:400">· histórico financeiro da Equiper e da EQP, só consulta</span></h2>
     <div class="barra" style="flex-wrap:wrap">
       <input type="search" id="busca" placeholder="Nome, histórico, conta… ou nº do lançamento / NF / pedido" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <select id="clEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper','EQP'].map(e => `<option ${f.emp === e ? 'selected' : ''}>${e}</option>`).join('')}</select>
       <select id="clGrupo" style="max-width:210px"><option value="">Todos os tipos</option>${Object.entries(CL_GRUPOS).map(([k, [t]]) => `<option value="${k}" ${f.grupo === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
       <select id="clSit" style="max-width:170px"><option value="">Toda situação</option>${['Aberto','Liquidado','Vale/Adiantamento','Juros/Multa','Transferência','Bonif/Desc/Tarifa','Saldo Inicial'].map(s => `<option ${f.sit === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
       <label class="muted" style="font-size:12px">de <input type="date" id="clDe" value="${f.de}" style="width:auto"></label><label class="muted" style="font-size:12px">até <input type="date" id="clAte" value="${f.ate}" style="width:auto"></label>
+      ${f.pessoa ? `<span class="tag" style="padding:6px 10px">Empresa: ${esc(pessoa(f.pessoa)?.nome || '')} <a href="#" id="clTiraP" title="Ver todas">✕</a></span>` : ''}
       ${nivelTela('fn_cigam_lanc') === 4 ? '<button class="btn" id="clImp">📥 Importar relatório do CIGAM</button>' : ''}</div>
     <p class="muted" style="font-size:12px;margin:4px 0 8px">${total.toLocaleString('pt-BR')} lançamento(s) com estes filtros${total > por ? ` · mostrando ${f.pagina * por + 1} a ${Math.min(total, (f.pagina + 1) * por)}` : ''} · nesta página: entradas <b style="color:var(--verde)">${R$(ent)}</b> · saídas <b style="color:var(--verm)">${R$(-sai)}</b></p>
     <div style="overflow:auto"><table class="reg"><thead><tr><th>Lanç.</th><th>Data</th><th>Empresa / cliente / fornecedor</th><th>Histórico</th><th>Conta</th><th>Doc.</th><th>Venc.</th><th style="text-align:right">Valor</th><th>Situação</th><th>Portador</th></tr></thead><tbody>
@@ -7171,12 +7176,13 @@ async function telaCigamLanc(){
       <td style="font-size:12px">${x.situacao === 'Aberto' ? '<span class="tag" style="background:#fef3c7;color:#b45309">aberto</span>' : esc(x.situacao || '')}${x.previsao ? '<div class="muted">previsão</div>' : ''}</td>
       <td style="font-size:12px">${esc(x.portador_nome || '')}</td></tr>`).join('') || '<tr><td colspan="10" class="vazio">Nada com estes filtros. Se ainda não importou, use "Importar relatório do CIGAM".</td></tr>'}</tbody></table></div>
     ${total > por ? `<div style="display:flex;gap:8px;justify-content:center;margin-top:10px"><button class="btn peq" id="clAnt" ${f.pagina ? '' : 'disabled'}>◀ Anteriores</button><button class="btn peq" id="clProx" ${(f.pagina + 1) * por < total ? '' : 'disabled'}>Próximos ▶</button></div>` : ''}</div>`;
-  ligaBarra(null);
+  ligaBarra(null); ligaAbasLanc();
   const muda = (k, v) => { f[k] = v; f.pagina = 0; telaCigamLanc(); };
   $('#clEmp').onchange = e => muda('emp', e.target.value); $('#clGrupo').onchange = e => muda('grupo', e.target.value); $('#clSit').onchange = e => muda('sit', e.target.value);
   $('#clDe').onchange = e => muda('de', e.target.value); $('#clAte').onchange = e => muda('ate', e.target.value);
   if($('#clAnt')) $('#clAnt').onclick = () => { f.pagina--; telaCigamLanc(); }; if($('#clProx')) $('#clProx').onclick = () => { f.pagina++; telaCigamLanc(); };
   if($('#clImp')) $('#clImp').onclick = importarLancCigam;
+  if($('#clTiraP')) $('#clTiraP').onclick = e => { e.preventDefault(); muda('pessoa', ''); };
   document.querySelectorAll('[data-clp]').forEach(a => a.onclick = e => { e.preventDefault(); e.stopPropagation(); formPessoa(pessoa(a.dataset.clp)); });
   document.querySelectorAll('[data-cl]').forEach(t => t.onclick = () => verLancCigam(+t.dataset.cl));
 }
@@ -7261,7 +7267,7 @@ async function importarLancCigam(){
       $('#clProg').textContent = 'Ligando às empresas do ERP…';
       const g = await sb.rpc('cigam_lanc_religar');
       $('#clProg').innerHTML = `✅ ${nov.toLocaleString('pt-BR')} novos · ${atu.toLocaleString('pt-BR')} atualizados` + (g.data ? ` · ligados às empresas: ${(g.data.pelo_codigo + g.data.pelo_documento).toLocaleString('pt-BR')} · sem empresa no ERP: ${Number(g.data.sem_empresa).toLocaleString('pt-BR')}` : '');
-      toast('Histórico do CIGAM importado.'); if(ST.aba === 'fn_cigam_lanc') telaCigamLanc();
+      toast('Histórico do CIGAM importado.'); if(ST.aba === 'fn_pagar' && ST.lancVis !== 'erp') desenhar();
     };
   };
 }
@@ -7277,9 +7283,64 @@ async function lancCigamDaEmpresa(pid, alvo){
     ${(l.data || []).map(x => `<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--borda);cursor:pointer" data-clf="${x.lancamento}">${dataBR(x.data)} · ${esc(x.empresa || '')} · ${esc(x.historico || x.tipo)} · <span style="color:${clCor(x.valor)}">${R$(x.valor)}</span> · ${esc(x.situacao || '')}</div>`).join('')}
     <button class="btn peq" type="button" id="clVerTodos" style="margin-top:6px">Ver todos</button></div>`;
   alvo.querySelectorAll('[data-clf]').forEach(d => d.onclick = () => verLancCigam(+d.dataset.clf));
-  $('#clVerTodos').onclick = () => { const p = pessoa(pid); fecharPainel(); Object.assign(ST.cl, { emp: '', grupo: '', sit: '', de: '', ate: '', conta: '', pagina: 0 }); ST.aba = 'fn_cigam_lanc'; ST.busca = p ? p.nome : ''; desenhar(); };
+  $('#clVerTodos').onclick = () => { const p = pessoa(pid); fecharPainel(); Object.assign(ST.cl, { emp: '', grupo: '', sit: '', de: '', ate: '', conta: '', pagina: 0, pessoa: pid }); ST.lancVis = 'cigam'; ST.aba = 'fn_pagar'; ST.busca = ''; desenhar(); };
 }
-Object.assign(TELAS, { fn_cigam_lanc: telaCigamLanc });
+
+/* ---------- Lançamentos: ERP · CIGAM · Juntos ---------- */
+const temCigamLanc = () => nivelTela('fn_cigam_lanc') >= 1;
+function abasLanc(){
+  if(!temCigamLanc()) return '';
+  return `<div class="abasLanc">${[['erp', 'Novos (ERP)'], ['cigam', 'CIGAM (histórico)'], ['juntos', 'Juntos']].map(([k, r]) => `<button class="${ST.lancVis === k ? 'ativo' : ''}" data-lv="${k}">${r}</button>`).join('')}</div>`;
+}
+function ligaAbasLanc(){ document.querySelectorAll('[data-lv]').forEach(b => b.onclick = () => { if(ST.lancVis === b.dataset.lv) return; ST.lancVis = b.dataset.lv; ST.busca = ''; ST.cl.pessoa = ''; desenhar(); }); }
+(function(){ const orig = window.telaPagar; if(typeof orig !== 'function') return;
+  window.telaPagar = async function(...a){
+    if(!temCigamLanc()) ST.lancVis = 'erp';
+    if(ST.lancVis === 'cigam') return telaCigamLanc();
+    if(ST.lancVis === 'juntos') return telaLancJuntos();
+    const r = await orig.apply(this, a);
+    if(ST.lancVis === 'erp' && temCigamLanc() && !document.querySelector('#conteudo .abasLanc')){ $('#conteudo').insertAdjacentHTML('afterbegin', abasLanc()); ligaAbasLanc(); }
+    return r; };
+  Object.assign(TELAS, { fn_pagar: window.telaPagar, fn_cigam_lanc: () => { ST.lancVis = 'cigam'; ST.aba = 'fn_pagar'; return window.telaPagar(); } }); })();
+
+ST.lj = { emp: '', tipo: 'pagar', sit: '', de: '', ate: '' };
+async function telaLancJuntos(){
+  carregandoTela();
+  const seq = ST._ljSeq = (ST._ljSeq || 0) + 1, f = ST.lj, b = (ST.busca || '').trim(), lim = 400;
+  let qe = sb.from('titulos_pagar').select('id,lancamento,favorecido,descricao,categoria,valor,vencimento,pago_em,situacao,empresa,documento,pessoa_id').neq('situacao', 'cancelado');
+  let qc = sb.from('cigam_lancamentos').select('lancamento,data,vencimento,cliente_nome,historico,tipo,situacao,valor,saldo,empresa,nf,documento,tipo_documento,pessoa_id,portador_nome');
+  if(f.tipo === 'pagar') qc = qc.in('tipo', ['Pagar', 'Saída', 'd Pago']);
+  if(f.emp){ qe = qe.eq('empresa', f.emp); qc = qc.eq('empresa', f.emp); }
+  if(f.sit === 'aberto'){ qe = qe.eq('situacao', 'aberto'); qc = qc.eq('situacao', 'Aberto'); }
+  if(f.sit === 'pago'){ qe = qe.eq('situacao', 'pago'); qc = qc.neq('situacao', 'Aberto'); }
+  if(f.de){ qe = qe.gte('vencimento', f.de); qc = qc.gte('data', f.de); } if(f.ate){ qe = qe.lte('vencimento', f.ate); qc = qc.lte('data', f.ate); }
+  if(b){ if(/^\d+$/.test(b)){ qe = qe.or(`lancamento.eq.${b},documento.ilike.%${b}%`); qc = qc.or(`lancamento.eq.${b},nf.eq.${b},documento.eq.${b}`); }
+    else { qe = qe.or(`favorecido.ilike.%${b}%,descricao.ilike.%${b}%`); qc = qc.or(`cliente_nome.ilike.%${b}%,historico.ilike.%${b}%`); } }
+  const [e, c] = await Promise.all([ qe.order('vencimento', { ascending: false }).limit(lim), qc.order('data', { ascending: false }).limit(lim) ]);
+  if(seq !== ST._ljSeq || ST.lancVis !== 'juntos') return;
+  const L = [...(e.data || []).map(x => ({ o: 'ERP', id: x.id, n: x.lancamento, data: x.situacao === 'pago' && x.pago_em ? x.pago_em : x.vencimento, venc: x.vencimento, nome: x.favorecido, hist: [x.categoria, x.descricao].filter(Boolean).join(' · '),
+        valor: -Number(x.valor), sit: x.situacao === 'pago' ? 'Pago' : 'Aberto', emp: x.empresa, pid: x.pessoa_id, doc: x.documento })),
+    ...(c.data || []).map(x => ({ o: 'CIGAM', id: x.lancamento, n: x.lancamento, data: x.data, venc: x.vencimento, nome: x.cliente_nome, hist: [x.historico, x.tipo].filter(Boolean).join(' · '),
+        valor: Number(x.valor), sit: x.situacao, emp: x.empresa, pid: x.pessoa_id, doc: [x.nf && x.nf !== '0' ? 'NF ' + x.nf : '', x.documento && x.documento !== '0' ? (x.tipo_documento === 'Ordem' ? 'OC ' : x.tipo_documento === 'Pedido' ? 'Ped. ' : 'Doc. ') + x.documento : ''].filter(Boolean).join(' · ') }))]
+    .sort((a, b2) => String(b2.data || '').localeCompare(String(a.data || '')) || (b2.n || 0) - (a.n || 0));
+  const sai = L.filter(x => x.valor < 0).reduce((s, x) => s + x.valor, 0), ent = L.filter(x => x.valor > 0).reduce((s, x) => s + x.valor, 0);
+  $('#conteudo').innerHTML = `${abasLanc()}<div class="card"><h2>Lançamentos <span class="muted" style="font-weight:400">· novos do ERP e histórico do CIGAM juntos</span></h2>
+    <div class="barra" style="flex-wrap:wrap"><input type="search" id="busca" placeholder="Empresa, descrição… ou nº do lançamento / NF" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
+      <select id="ljEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper','EQP'].map(x => `<option ${f.emp === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
+      <select id="ljTipo" style="max-width:240px"><option value="pagar" ${f.tipo === 'pagar' ? 'selected' : ''}>CIGAM: só saídas e contas a pagar</option><option value="tudo" ${f.tipo === 'tudo' ? 'selected' : ''}>CIGAM: tudo (entradas também)</option></select>
+      <select id="ljSit" style="max-width:150px"><option value="">Toda situação</option><option value="aberto" ${f.sit === 'aberto' ? 'selected' : ''}>Em aberto</option><option value="pago" ${f.sit === 'pago' ? 'selected' : ''}>Pagos / baixados</option></select>
+      <label class="muted" style="font-size:12px">de <input type="date" id="ljDe" value="${f.de}" style="width:auto"></label><label class="muted" style="font-size:12px">até <input type="date" id="ljAte" value="${f.ate}" style="width:auto"></label></div>
+    <p class="muted" style="font-size:12px;margin:4px 0 8px">${L.length.toLocaleString('pt-BR')} lançamento(s)${(e.data || []).length >= lim || (c.data || []).length >= lim ? ` (os ${lim} mais recentes de cada lado — use os filtros para achar os antigos)` : ''} · saídas <b style="color:var(--verm)">${R$(-sai)}</b>${ent ? ` · entradas <b style="color:var(--verde)">${R$(ent)}</b>` : ''}</p>
+    <div style="overflow:auto"><table class="reg"><thead><tr><th>Origem</th><th>Lanç.</th><th>Data</th><th>Empresa / favorecido</th><th>Histórico</th><th>Doc.</th><th>Venc.</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>
+    ${L.map(x => `<tr data-lj="${x.o}|${x.id}" style="cursor:pointer"><td><span class="tag ${x.o === 'ERP' ? 'ok' : ''}">${x.o}</span><div class="muted" style="font-size:11px">${esc(x.emp || '')}</div></td><td>${x.n || '—'}</td><td>${dataBR(x.data)}</td>
+      <td>${esc(x.nome || '')}</td><td style="font-size:12px">${esc(x.hist || '')}</td><td style="font-size:12px">${esc(x.doc || '')}</td><td style="font-size:12px">${x.venc ? dataBR(x.venc) : '—'}</td>
+      <td style="text-align:right;white-space:nowrap;color:${clCor(x.valor)}">${R$(x.valor)}</td><td style="font-size:12px">${x.sit === 'Aberto' ? '<span class="tag" style="background:#fef3c7;color:#b45309">aberto</span>' : esc(x.sit || '')}</td></tr>`).join('') || '<tr><td colspan="9" class="vazio">Nada com estes filtros.</td></tr>'}</tbody></table></div></div>`;
+  ligaBarra(null); ligaAbasLanc();
+  const muda = (k, v) => { f[k] = v; telaLancJuntos(); };
+  $('#ljEmp').onchange = ev => muda('emp', ev.target.value); $('#ljTipo').onchange = ev => muda('tipo', ev.target.value); $('#ljSit').onchange = ev => muda('sit', ev.target.value);
+  $('#ljDe').onchange = ev => muda('de', ev.target.value); $('#ljAte').onchange = ev => muda('ate', ev.target.value);
+  document.querySelectorAll('[data-lj]').forEach(t => t.onclick = () => { const [o, id] = t.dataset.lj.split('|'); o === 'ERP' ? formPagar(id) : verLancCigam(+id); });
+}
 
 /* ============ Leitura do certificado digital — só no computador da pessoa ============
    Lê o arquivo .pfx/.p12 (com a senha) ou .cer/.crt/.pem (sem senha) AQUI no navegador,
