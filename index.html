@@ -779,12 +779,12 @@ function desenhar(){
     `<button data-aba="${k}" class="${ST.aba===k?'ativo':''}${fch && ST.aba!==k?' hidden':''}">${IC[k] ? ico(k) : `<span class="ic">${ic}</span>`}<span>${r}</span>${k==='fila'&&ST.fila.length?`<span class="cont">${ST.fila.length}</span>`:''}${fase&&!TELAS[k]?'<span class="breve">em breve</span>':''}</button>`).join(''); }).join('');
   $('#menu').querySelectorAll('[data-grupo]').forEach(a => a.onclick = () => { const g = a.dataset.grupo, l = menuAbertos(); const i = l.indexOf(g); if(i >= 0) l.splice(i, 1); else l.push(g);
     try{ localStorage.setItem('erp-menu-abertos', JSON.stringify(l)); }catch(e){} desenhaSoMenu(); });
-  $('#menu').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ ST.aba=b.dataset.aba; ST.busca=''; $('#menu').classList.remove('aberto'); if(ST.aba!=='projetos' && ST.aba!=='servicos') await carregar(); desenhar(); });
+  $('#menu').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ ST.aba=b.dataset.aba; ST.busca=''; $('#menu').classList.remove('aberto'); if(!ehTelaApp(ST.aba)) await carregar(); desenhar(); });
   document.documentElement.style.setProperty('--topo', document.querySelector('header').getBoundingClientRect().height + 'px');
   const item = todos.find(i => i[0] === ST.aba);
   if(item && item[4] && !TELAS[item[0]]){ $('#conteudo').classList.remove('hidden'); $('#appWrap').classList.add('hidden'); document.querySelector('footer').classList.remove('hidden'); return telaConstrucao(item); }
   if(ST.expTela && ST.expTela.aba !== ST.aba) ST.expTela = null;
-  const noApp = ST.aba === 'projetos' || ST.aba === 'servicos';
+  const noApp = ehTelaApp(ST.aba);
   $('#conteudo').classList.toggle('hidden', noApp); $('#appWrap').classList.toggle('hidden', !noApp);
   document.querySelector('footer').classList.toggle('hidden', noApp);
   const ret = (TELAS[ST.aba] || (() => telaConstrucao(item)))();
@@ -1089,28 +1089,60 @@ async function telaRegistro(){
 }
 
 /* ================== App de Projetos (cópia rodando no ERP) ================== */
-async function telaApp(arquivo, titulo){
+function ehTelaApp(a){ return a === 'projetos' || a === 'servicos' || a === 'fin_servicos' || a === 'fin_projetos'; }
+/* abas do ERP por cima do aplicativo (Financeiro de Serviços / de Projetos, dentro do Administrativo — script 63) */
+function appAbas(abas, chave, arquivo){
+  const w = $('#appWrap'); let d = $('#appAbas'); if(!d){ d = document.createElement('div'); d.id = 'appAbas'; w.prepend(d); }
+  if(!abas){ d.classList.add('hidden'); d.innerHTML = ''; return; }
+  ST.appAba = ST.appAba || {}; if(!abas.some(a => a[0] === ST.appAba[chave])) ST.appAba[chave] = (abas[0] || [])[0];
+  d.classList.remove('hidden');
+  d.innerHTML = abas.length ? `<div class="abasLanc">${abas.map(([k, r]) => `<button class="${ST.appAba[chave] === k ? 'ativo' : ''}" data-appaba="${k}">${r}</button>`).join('')}</div>`
+    : '<span class="muted">Nenhuma aba liberada para o seu usuário (Administração → Acessos).</span>';
+  d.querySelectorAll('[data-appaba]').forEach(b => b.onclick = () => { ST.appAba[chave] = b.dataset.appaba; appAbas(abas, chave, arquivo); appAbaVai(arquivo, chave); });
+}
+// leva o aplicativo (já aberto no financeiro) para a aba escolhida no ERP; espera o aplicativo terminar de carregar
+function appAbaVai(arquivo, chave){
+  const alvo = (ST.appAba || {})[chave]; let n = 0; clearInterval(window._appAbaT); if(!alvo) return;
+  window._appAbaT = setInterval(() => {
+    if(++n > 120 || ST.appAba[chave] !== alvo) return clearInterval(window._appAbaT);
+    const f = [...$('#appWrap').querySelectorAll('iframe')].find(x => x.dataset.chave === chave), d = f && f.contentDocument; if(!d || !d.body) return;
+    let ok = false;
+    try{
+      if(arquivo === 'app_servicos'){ const v = d.getElementById('financeiroView'), b = d.getElementById('finNav' + alvo); if(v && v.offsetParent !== null && b){ b.click(); ok = true; } }
+      else { const c = d.getElementById('financeiroConteudo'), b = d.querySelector('#sidebarDesktopNav [data-topico="' + alvo + '"]'); if(c && c.offsetParent !== null && b){ b.click(); ok = true; } }
+    }catch(e){}
+    if(ok) clearInterval(window._appAbaT);
+  }, 500);
+}
+/* modo = a parte do aplicativo que abre: Serviços → manager (Gestor) | tech | oficina | financeiro; Projetos → projetos | financeiro.
+   abas = lista [chave, rótulo] quando o aplicativo abre dentro do Administrativo (o menu é o do ERP e as abas ficam em cima). */
+async function telaApp(arquivo, titulo, modo, abas){
   document.documentElement.style.setProperty('--topo', document.querySelector('header').getBoundingClientRect().height + 'px');
   const w = $('#appWrap');
-  // o app de Serviços abre no perfil do setor (Técnicos → Técnico); se o setor mudou, abre de novo
-  const perfil = arquivo === 'app_servicos' ? (window.__erpPerfilApp || '') : '';
-  const velho = w.querySelector('iframe[data-app="' + arquivo + '"]');
-  if(velho && (velho.dataset.perfil || '') !== perfil) velho.remove();
-  w.querySelectorAll('iframe').forEach(f => f.classList.toggle('hidden', f.dataset.app !== arquivo));
-  if(!w.querySelector('iframe[data-app="' + arquivo + '"]')){
+  if(modo === undefined) modo = arquivo === 'app_servicos' ? (window.__erpPerfilApp || 'manager') : 'projetos';
+  const chave = arquivo + '|' + modo, acha = () => [...w.querySelectorAll('iframe')].find(f => f.dataset.chave === chave);
+  // o mesmo aplicativo em outra parte (ex.: saiu do Gestor e abriu o Financeiro): abre de novo
+  w.querySelectorAll('iframe').forEach(f => { if(f.dataset.app === arquivo && f.dataset.chave !== chave) f.remove(); });
+  w.querySelectorAll('iframe').forEach(f => f.classList.toggle('hidden', f.dataset.chave !== chave));
+  appAbas(abas || null, chave, arquivo);
+  if(abas && !abas.length) return;
+  if(!acha()){
     // script 61: o ERP liga a pessoa ao usuário do app sozinho (sem cadastro nem login dentro do app)
     const liga = { app_servicos: 'app_servicos_entrar', app_projetos: 'app_projetos_entrar' }[arquivo];
     if(liga){ try{ await sb.rpc(liga); }catch(e){} }
     let html = await window.__erpArquivo(arquivo);
     if(!html){ toast(titulo + ': não foi possível carregar (confira a internet).'); return; }
-    if(w.querySelector('iframe[data-app="' + arquivo + '"]')) return;
-    // visual do ERP (mod/07_setores.js)
-    // (um script logo no começo do <head> põe o estilo no fim do <head> quando a página termina de ler — fica por cima do estilo do app)
-    if(window.__erpTemaApp && arquivo !== 'dimensionamento'){ const m = /<head[^>]*>/i.exec(html);
-      if(m){ const css = JSON.stringify(window.__erpTemaApp).replace(/<\//g, '<\\/'), sc = '<script>document.addEventListener("DOMContentLoaded",function(){var s=document.createElement("style");s.id="erpTema";s.textContent=' + css + ';document.head.appendChild(s);});<\/script>';
-        html = html.slice(0, m.index + m[0].length) + sc + html.slice(m.index + m[0].length); } }
-    const f = document.createElement('iframe'); f.title = titulo; f.dataset.app = arquivo; f.dataset.perfil = perfil; f.srcdoc = html; w.appendChild(f);
+    if(acha()) return;
+    // um script logo no começo do <head> diz ao aplicativo em que parte abrir e põe o visual do ERP (mod/07_setores.js)
+    // no fim do <head> quando a página termina de ler — fica por cima do estilo do aplicativo
+    const m = /<head[^>]*>/i.exec(html);
+    if(m){ const css = JSON.stringify(window.__erpTemaApp || '').replace(/<\//g, '<\\/'),
+        sc = '<script>window.__erpModo=' + JSON.stringify(modo) + ';document.addEventListener("DOMContentLoaded",function(){' + (abas ? 'document.body.classList.add("erpEmb");' : '') +
+          'var s=document.createElement("style");s.id="erpTema";s.textContent=' + css + ';document.head.appendChild(s);});<\/script>';
+      html = html.slice(0, m.index + m[0].length) + sc + html.slice(m.index + m[0].length); }
+    const f = document.createElement('iframe'); f.title = titulo; f.dataset.app = arquivo; f.dataset.perfil = modo; f.dataset.chave = chave; f.srcdoc = html; w.appendChild(f);
   }
+  if(abas) appAbaVai(arquivo, chave);
 }
 
 /* ================== Vínculos: clientes dos apps × cadastro único ================== */
@@ -3201,10 +3233,12 @@ function _ordPrepara(raiz){
    17/11 (Júlio, script 58): setor Oficina (app de Serviços no perfil Oficina). Cada pessoa só vê os setores em que está
    habilitada na tela Acessos (os técnicos, em geral, só Técnico e Oficina); com um setor só, entra direto.
    17/11 (Júlio, script 62): CINCO BASES — Administrativo (toda a base do ERP) · Serviços (controle do app de Serviços) ·
-   Projetos (app de Projetos, com o Dimensionamento) · Técnico (só a agenda) · Oficina (só a oficina). Não há mais "Tudo". Os apps ganham o visual do ERP (window.__erpTemaApp, no fim deste arquivo). */
+   Projetos (app de Projetos, com o Dimensionamento) · Técnico (só a agenda) · Oficina (só a oficina). Não há mais "Tudo".
+   17/11 (Júlio, script 63): Serviços = só o Gestor; Projetos = sem o financeiro; o financeiro dos dois aplicativos fica no
+   Administrativo (menu Financeiro → Financeiro de Serviços / Financeiro de Projetos — fim deste arquivo). Os apps ganham o visual do ERP (window.__erpTemaApp, no fim deste arquivo). */
 const SETORES = {
   adm:  { nome: 'Administrativo', ic: 'fn_caixa',   txt: 'Cadastros, CRM e orçamentos, pedidos, compras, financeiro e fiscal', areas: ['Cadastros', 'Orçamentos', 'Projetos', 'Serviços', 'Suprimentos', 'Financeiro', 'Administração'], fora: ['projetos', 'servicos'] },
-  serv: { nome: 'Serviços',       ic: 'sv_manut',    txt: 'Controle dos serviços: agenda, orçamentos, obras, manutenções e estoque', chaves: ['servicos'], app: 'servicos', perfilApp: 'manager|financeiro' },
+  serv: { nome: 'Serviços',       ic: 'sv_manut',    txt: 'Controle dos serviços: agenda, orçamentos, obras, manutenções e estoque', chaves: ['servicos'], app: 'servicos', perfilApp: 'manager' },
   proj: { nome: 'Projetos',       ic: 'pj_projetos', txt: 'Tarefas, clientes, calendário, ART, comissão e dimensionamento', chaves: ['projetos'], app: 'projetos' },
   tec:  { nome: 'Técnico',        ic: 'sv_agenda',   txt: 'Agenda de serviços do técnico', chaves: ['servicos'], app: 'servicos', perfilApp: 'tech' },
   ofi:  { nome: 'Oficina',        ic: 'sv_oficina',  txt: 'Equipamentos na oficina', chaves: ['servicos'], app: 'servicos', perfilApp: 'oficina' },
@@ -3231,8 +3265,8 @@ function setoresDisponiveis(){
     // as cinco bases, cada uma só para quem tem algum item dela liberado na tela Acessos
     const geral = ['inicio', 'chat', 'fn_pendencias', 'projetos', 'servicos'];
     if(vis.some(i => !geral.includes(i[0]))) l.push('adm');
-    if(algum('app_sv_gerenciador', 'app_sv_financeiro')) l.push('serv');
-    if(algum('app_pj_projetos', 'app_pj_projetista', 'app_pj_financeiro')) l.push('proj');
+    if(algum('app_sv_gerenciador')) l.push('serv');
+    if(algum('app_pj_projetos', 'app_pj_projetista')) l.push('proj');
     if(algum('app_sv_tecnico')) l.push('tec');
     if(algum('app_sv_oficina')) l.push('ofi');
     return l;
@@ -3343,7 +3377,35 @@ html:not([data-theme="dark"]) body:not(.tema-escuro) .app{background:#ececf0!imp
   .sidebar-footer{border-top-color:rgba(255,255,255,.12)!important;color:#ececf0}
   .sidebar-footer *{color:#ececf0}
   .sidebar-logout-btn{background:rgba(255,255,255,.06)!important;border-color:rgba(255,255,255,.18)!important;color:#ececf0!important}
-}`;
+}
+/* dentro do Administrativo (Financeiro de Serviços / de Projetos): o menu é o do ERP — o do aplicativo some */
+body.erpEmb{padding-left:0!important}
+body.erpEmb .sidebar-desktop,body.erpEmb .app-sidebar,body.erpEmb .bottom-nav,body.erpEmb .bottom-nav-sheet,body.erpEmb #barraInferiorMobile,body.erpEmb .nav-tabs,body.erpEmb .topico-nav,body.erpEmb .masthead{display:none!important}
+body.erpEmb .page{padding-left:28px!important;padding-bottom:20px!important}
+@media (max-width:700px){body.erpEmb .page{padding-left:14px!important}}`;
+
+/* ---------- script 63: o financeiro dos aplicativos fica no Administrativo (menu Financeiro) ----------
+   "Financeiro de Serviços" = o Financeiro do app de Serviços (ordens de serviço, obras e pedidos, pedidos de manutenção);
+   "Financeiro de Projetos" = tudo do Financeiro do app de Projetos. O menu é o do ERP; as abas do aplicativo viram abas do ERP. */
+const FIN_APP = {
+  fin_servicos: { arquivo: 'app_servicos', titulo: 'Financeiro de Serviços', abas: [['OS', 'Ordens de serviço', 'app_sv_f_os'], ['Obras', 'Obras e pedidos', 'app_sv_f_obras'], ['Manut', 'Pedidos de manutenção', 'app_sv_f_manut']] },
+  fin_projetos: { arquivo: 'app_projetos', titulo: 'Financeiro de Projetos', abas: [['clientes', 'Clientes', 'app_pj_f_clientes'], ['art', 'ART', 'app_pj_f_art'], ['calendario', 'Calendário', 'app_pj_f_calendario'],
+    ['resumo', 'Resumo geral', 'app_pj_f_resumo'], ['fechamentos', 'Fechamentos por mês', 'app_pj_f_fechamentos'], ['recebido', 'Valor recebido', 'app_pj_f_recebido'], ['graficos', 'Gráficos', 'app_pj_f_graficos'],
+    ['comissao', 'Comissão', 'app_pj_f_comissao'], ['chat', 'Chat', 'app_pj_f_chat']] }
+};
+(function(){
+  const g = MENU.find(x => x.area === 'Financeiro');
+  if(g && !g.itens.some(i => i[0] === 'fin_servicos')) g.itens.push(['fin_servicos', '🧾', 'Financeiro de Serviços', 'DA'], ['fin_projetos', '📐', 'Financeiro de Projetos', 'DA']);
+  if(typeof IC === 'object'){ IC.fin_servicos = IC.fin_servicos || IC.sv_os || IC.sv_manut; IC.fin_projetos = IC.fin_projetos || IC.pj_propostas || IC.pj_projetos; }
+  if(typeof SEM_EXPORTAR !== 'undefined'){ SEM_EXPORTAR.add('fin_servicos'); SEM_EXPORTAR.add('fin_projetos'); }
+  const abre = k => () => { const F = FIN_APP[k], nv = t => window.__erpNivelApp ? window.__erpNivelApp(t) : null;
+    return telaApp(F.arquivo, F.titulo, 'financeiro', F.abas.filter(a => { const n = nv(a[2]); return n == null || n >= 1; }).map(a => [a[0], a[1]])); };
+  Object.assign(TELAS, { fin_servicos: abre('fin_servicos'), fin_projetos: abre('fin_projetos') });
+  const st = document.createElement('style'); st.textContent =
+    '#appWrap{display:flex;flex-direction:column}#appWrap iframe{flex:1;min-height:0;height:auto}#appAbas{padding:10px 14px 8px;background:var(--fundo);overflow-x:auto}' +
+    '#appAbas .abasLanc{margin:0;flex-wrap:nowrap}#appAbas .abasLanc button{white-space:nowrap}';
+  document.head.appendChild(st);
+})();
 
 /* ================== Projetos · complementos (script 10) ==================
    Visitas e considerações · ART · Calendário · Comissões · Dimensionamento · Chat */
@@ -10048,7 +10110,8 @@ IC.adm_usuarios = '<circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c0-3.6 2.8-6 6
 Object.assign(TELAS, { adm_usuarios: telaAcessos });
 
 // script 62: as telas "projetos" e "servicos" (o aplicativo aberto dentro do ERP) seguem as áreas do aplicativo liberadas em Acessos
-const APP_TELAS = { projetos: ['app_pj_projetos', 'app_pj_projetista', 'app_pj_financeiro'], servicos: ['app_sv_gerenciador', 'app_sv_tecnico', 'app_sv_financeiro', 'app_sv_oficina'] };
+const APP_TELAS = { projetos: ['app_pj_projetos', 'app_pj_projetista'], servicos: ['app_sv_gerenciador', 'app_sv_tecnico', 'app_sv_oficina'],
+  fin_servicos: ['app_sv_financeiro'], fin_projetos: ['app_pj_financeiro'] };      // script 63: o financeiro dos aplicativos é tela do Administrativo
 const appControlado = t => !!(APP_TELAS[t] && ST.acessos && APP_TELAS[t][0] in ST.acessos);
 function nivelTela(t){
   if(appControlado(t)) return Math.max(...APP_TELAS[t].map(k => ST.acessos[k] || 0));
@@ -10812,7 +10875,7 @@ function atualizaVoltar(){ const b = $('#btnVoltar'); if(b) b.disabled = !((ST.h
 async function voltar(){
   if(!$('#painel').classList.contains('hidden')){ pedirFecharPainel(); return; }
   const h = ST.hist || []; if(!h.length) return;
-  ST._voltando = true; ST.aba = h.pop(); ST.busca = ''; if(ST.aba !== 'projetos' && ST.aba !== 'servicos') await carregar(); desenhar();
+  ST._voltando = true; ST.aba = h.pop(); ST.busca = ''; if(!ehTelaApp(ST.aba)) await carregar(); desenhar();
 }
 /* Painel lateral (formulários). Se a pessoa já digitou/mudou algo e ainda não salvou, clicar fora, Esc, "Fechar" ou Voltar
    perguntam antes de fechar — nada se perde por um clique sem querer. Salvar continua fechando direto. */

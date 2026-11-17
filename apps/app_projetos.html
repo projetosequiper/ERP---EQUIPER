@@ -10917,7 +10917,8 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     var _sso2 = window.__erpSSO && window.__erpSSO();
     if(_sso2){
       var _pp2 = /^(diretoria|projetos)$/.test(_sso2.perfil), _pf2 = /^(diretoria|administrativo)$/.test(_sso2.perfil);
-      var _ok = { projetos: erpVe('app_pj_projetos', _pp2), projetista: erpVe('app_pj_projetista', _pp2), financeiro: erpVe('app_pj_financeiro', _pf2) };
+      var _fin = window.__erpModo === 'financeiro';   /* base Projetos: sem o Financeiro (ele fica no Administrativo do ERP) */
+      var _ok = { projetos: !_fin && erpVe('app_pj_projetos', _pp2), projetista: !_fin && erpVe('app_pj_projetista', _pp2), financeiro: _fin && erpVe('app_pj_financeiro', _pf2) };
       sidebar.querySelectorAll('[data-area]').forEach(function(el){ if(!_ok[el.getAttribute('data-area')]) el.remove(); });
       [['navProjetos','projetos'],['navProjetista','projetista'],['navFinanceiro','financeiro']].forEach(function(x){ var b = document.getElementById(x[0]); if(b && !_ok[x[1]]) b.style.display = 'none'; });
     }
@@ -11094,7 +11095,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     var _erp = window.__erpSSO && window.__erpSSO();
     if(_erp){
       var _pp = /^(diretoria|projetos)$/.test(_erp.perfil), _pf = /^(diretoria|administrativo)$/.test(_erp.perfil);
-      selecionado = erpVe('app_pj_projetos', _pp) ? 'projetos' : erpVe('app_pj_projetista', _pp) ? 'desenhista' : erpVe('app_pj_financeiro', _pf) ? 'financeiro' : 'projetos';
+      selecionado = window.__erpModo === 'financeiro' ? 'financeiro' : erpVe('app_pj_projetos', _pp) ? 'projetos' : erpVe('app_pj_projetista', _pp) ? 'desenhista' : 'projetos';
     }
     function montar(){
       if(!selecionado){
@@ -11197,7 +11198,8 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     if(vUF){ try{ state.usuariosFinanceiro = JSON.parse(vUF); }catch(e){} }
     if(vSF){ try{ state.emailsFinanceiroInd = JSON.parse(vSF); }catch(e){} }
 
-    if(usuarioAutenticado && !usuarioAutenticado.isAnonymous && usuarioAutenticado.email){
+    /* ERP: quem decide a área é o ERP (base Projetos ou Financeiro de Projetos no Administrativo), não a última identidade usada */
+    if(usuarioAutenticado && !usuarioAutenticado.isAnonymous && usuarioAutenticado.email && !(window.__erpSSO && window.__erpSSO())){
       var emailAtual = usuarioAutenticado.email;
       var identidadeRestaurar = null;
       if(emailAtual === state.emailGerente){

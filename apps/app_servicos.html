@@ -4809,7 +4809,7 @@ function abrirPerfilUnico(){
   /* ERP: entra direto, sem escolher perfil — o do setor (Técnicos → Técnico) ou o primeiro que a pessoa tem
      (Gerenciador, Financeiro, Oficina, Técnico). Só na primeira vez; depois, "Trocar perfil" mostra os cartões. */
   try{ if(window.__erpSSO && window.__erpSSO() && !window.__erpAutoFeito && appInitState === 'ready'){
-    const pref = (window.top !== window && window.top.__erpPerfilApp) || '';
+    const pref = window.__erpModo || (window.top !== window && window.top.__erpPerfilApp) || '';   /* a parte que o ERP mandou abrir: Gestor, Técnico, Oficina ou Financeiro */
     const lista = pref ? pref.split('|') : ['manager', 'financeiro', 'oficina', 'tech'];
     for(const p of lista){ const c = CARDS_PERFIL[p] && document.getElementById(CARDS_PERFIL[p]);
       if(c && c.style.display !== 'none'){ window.__erpAutoFeito = true; c.click(); return true; } }
@@ -17313,7 +17313,7 @@ function erpSemPerfilSetor(lista){
 /* ERP: o botão "Sair" de cada perfil vira "Trocar perfil" (quem tem mais de um) ou some; "Trocar de conta" some */
 function erpBotoesSair(n){
   if(!(window.__erpSSO && window.__erpSSO())) return;
-  ['sidebarLogoutBtn', 'finSidebarLogout', 'techLogoutBtn', 'financeiroLogoutBtn', 'oficinaLogoutBtn'].forEach(id => { const b = document.getElementById(id); if(!b) return; b.textContent = 'Trocar perfil'; b.style.display = n > 1 ? '' : 'none'; });
+  ['sidebarLogoutBtn', 'finSidebarLogout', 'techLogoutBtn', 'financeiroLogoutBtn', 'oficinaLogoutBtn'].forEach(id => { const b = document.getElementById(id); if(!b) return; b.style.display = 'none'; });   /* cada parte do aplicativo é uma base do ERP: não há troca de perfil aqui dentro */
   const t = document.getElementById('contaTrocarBtn'); if(t) t.style.display = 'none';
 }
 async function init(){
