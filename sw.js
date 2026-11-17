@@ -1,14 +1,35 @@
-/* ERP Equiper — service worker: deixa o ERP instalável e abre a tela mesmo com a internet ruim.
-   Só guarda os arquivos do próprio app (a tela e os ícones). Os dados (Supabase) NUNCA ficam guardados:
-   sempre vêm do servidor, com o login de quem está usando. */
-const VERSAO = 'erp-2026-11-14-1';
+/* ERP Equiper — service worker: deixa o ERP instalável e faz ele abrir na hora.
+   A tela abre com a versão já guardada no aparelho e, ao mesmo tempo, baixa a versão nova por trás;
+   se mudou, avisa a tela ("versão nova — aperte F5"). As cópias dos apps (apps/…) só são baixadas quando alguém abre.
+   Os dados (Supabase) NUNCA ficam guardados: sempre vêm do servidor, com o login de quem está usando. */
+const VERSAO = 'erp-2026-11-17-1';
 const APP = ['./', './index.html', './manifest.webmanifest', './icones/icon-192.png', './icones/icon-512.png', './icones/apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSAO).then(c => c.addAll(APP)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSAO).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
+
+async function avisaSeMudou(req, nova){
+  try{
+    const c = await caches.open(VERSAO), velha = await c.match(req);
+    const tNova = await nova.clone().text(), tVelha = velha ? await velha.text() : null;
+    await c.put(req, nova);
+    if(tVelha !== null && tVelha !== tNova){ const cl = await self.clients.matchAll({ type: 'window' }); cl.forEach(x => x.postMessage({ tipo: 'erp-versao-nova' })); }
+  }catch(e){}
+}
+
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if(e.request.method !== 'GET' || u.origin !== location.origin) return;          // Supabase, CEP, CNPJ etc.: direto na internet
-  // a tela: primeiro a versão nova da internet; sem internet, a última guardada
+  const tela = e.request.mode === 'navigate' || /\/(index\.html)?$/.test(u.pathname);
+  if(tela){
+    // abre na hora com a guardada; a nova vem por trás
+    e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(guardada => {
+      const rede = fetch(e.request, { cache: 'no-cache' }).then(r => { if(r.ok) e.waitUntil(avisaSeMudou(e.request, r.clone())); return r; });
+      if(guardada){ e.waitUntil(rede.catch(() => {})); return guardada; }
+      return rede.catch(() => caches.match('./index.html'));
+    }));
+    return;
+  }
+  // demais arquivos do app (apps/…, ícones, proposta): da internet primeiro; sem internet, o guardado
   e.respondWith(fetch(e.request).then(r => { if(r.ok){ const c = r.clone(); caches.open(VERSAO).then(x => x.put(e.request, c)); } return r; })
-    .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html'))));
+    .catch(() => caches.match(e.request)));
 });
