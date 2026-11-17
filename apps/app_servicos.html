@@ -4794,7 +4794,8 @@ function restringirPerfisAoUsuario(){
   if(!authAtivo() || !contaAtual) return;
   const u = usuarioDaConta();
   let perfis = u ? Object.keys(CARDS_PERFIL).filter(p => u.profiles && u.profiles[p]) : [];
-  if(window.__erpSSO && window.__erpSSO()) perfis = perfis.filter(p => erpVe(ERP_SV_PERFIL[p], true));   /* ERP: tela Acessos */
+  /* ERP: os perfis são os liberados na tela Acessos do ERP (o ERP já ligou e atualizou o usuário do app — script 61) */
+  if(u && window.__erpSSO && window.__erpSSO() && erpNivelApp('app_sv_gerenciador') != null) perfis = Object.keys(CARDS_PERFIL).filter(p => erpVe(ERP_SV_PERFIL[p], false));
   contaAtual.perfis = perfis;
   Object.keys(CARDS_PERFIL).forEach(p => { document.getElementById(CARDS_PERFIL[p]).style.display = perfis.includes(p) ? '' : 'none'; });
   document.getElementById('loginContaInfo').style.display = '';
@@ -17280,8 +17281,8 @@ function erpSemConta(email){
   appInitState = 'conta'; document.getElementById('appLoadStatus').style.display = 'none'; showLoginStep('conta');
   const st = document.getElementById('loginStepConta'); [...st.children].forEach(c => { c.style.display = 'none'; });
   let d = document.getElementById('erpSemConta'); if(!d){ d = document.createElement('div'); d.id = 'erpSemConta'; d.className = 'login-form'; st.appendChild(d); }
-  d.style.display = ''; d.innerHTML = '<p style="margin:0;line-height:1.5">O seu login do ERP' + (email ? ' (<b>' + email + '</b>)' : '') +
-    ' ainda não está ligado a um usuário do app de Serviços.</p><p style="margin:10px 0 0;line-height:1.5;color:var(--text-secondary)">Peça a quem é Gestor para cadastrar este e-mail em <b>Acessos</b>, no app de Serviços.</p>';
+  d.style.display = ''; d.innerHTML = '<p style="margin:0;line-height:1.5">O app de Serviços não está liberado para o seu usuário' + (email ? ' (<b>' + email + '</b>)' : '') + '.</p>' +
+    '<p style="margin:10px 0 0;line-height:1.5;color:var(--text-secondary)">A liberação é feita pela Diretoria no ERP: <b>Administração → Acessos</b> (áreas do app de Serviços). Depois, feche e abra o app de novo.</p>';
 }
 /* ERP (script 57): o que a pessoa vê no app vem da tela Acessos do ERP. null = sem controle (como antes) */
 function erpNivelApp(t){ try{ return window.top !== window && window.top.__erpNivelApp ? window.top.__erpNivelApp(t) : null; }catch(e){ return null; } }
@@ -17306,7 +17307,7 @@ function erpSemPerfilSetor(lista){
   const nomes = { manager: 'Gerenciador', tech: 'Técnico', financeiro: 'Financeiro', oficina: 'Oficina' };
   const g = document.getElementById('roleGrid'); if(g) g.style.display = 'none';
   const e = document.getElementById('loginSemPerfil'); if(!e) return;
-  e.textContent = 'No app de Serviços você ainda não está como ' + lista.map(p => nomes[p] || p).join(' ou ') + '. Peça à diretoria: ERP → Administração → Acessos → 🔗 Apps.';
+  e.textContent = 'A área ' + lista.map(p => nomes[p] || p).join(' / ') + ' do app de Serviços não está liberada para você. A liberação é feita pela Diretoria no ERP: Administração → Acessos.';
   e.style.display = '';
 }
 /* ERP: o botão "Sair" de cada perfil vira "Trocar perfil" (quem tem mais de um) ou some; "Trocar de conta" some */

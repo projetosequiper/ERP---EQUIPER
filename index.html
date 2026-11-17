@@ -1098,6 +1098,9 @@ async function telaApp(arquivo, titulo){
   if(velho && (velho.dataset.perfil || '') !== perfil) velho.remove();
   w.querySelectorAll('iframe').forEach(f => f.classList.toggle('hidden', f.dataset.app !== arquivo));
   if(!w.querySelector('iframe[data-app="' + arquivo + '"]')){
+    // script 61: o ERP liga a pessoa ao usuário do app sozinho (sem cadastro nem login dentro do app)
+    const liga = { app_servicos: 'app_servicos_entrar', app_projetos: 'app_projetos_entrar' }[arquivo];
+    if(liga){ try{ await sb.rpc(liga); }catch(e){} }
     let html = await window.__erpArquivo(arquivo);
     if(!html){ toast(titulo + ': não foi possível carregar (confira a internet).'); return; }
     if(w.querySelector('iframe[data-app="' + arquivo + '"]')) return;
@@ -3196,14 +3199,16 @@ function _ordPrepara(raiz){
    17/11 (Júlio): Projetos abre o app de Projetos; Serviços e Técnicos abrem o app de Serviços (Técnicos já entra no perfil
    Técnico), em tela cheia, sem o menu do ERP; o Administrativo continua com o ERP.
    17/11 (Júlio, script 58): setor Oficina (app de Serviços no perfil Oficina). Cada pessoa só vê os setores em que está
-   habilitada na tela Acessos (os técnicos, em geral, só Técnico e Oficina); com um setor só, entra direto. Os apps ganham o visual do ERP (window.__erpTemaApp, no fim deste arquivo). */
+   habilitada na tela Acessos (os técnicos, em geral, só Técnico e Oficina); com um setor só, entra direto.
+   17/11 (Júlio, script 62): CINCO BASES — Administrativo (toda a base do ERP) · Serviços (controle do app de Serviços) ·
+   Projetos (app de Projetos, com o Dimensionamento) · Técnico (só a agenda) · Oficina (só a oficina). Não há mais "Tudo". Os apps ganham o visual do ERP (window.__erpTemaApp, no fim deste arquivo). */
 const SETORES = {
-  adm:  { nome: 'Administrativo', ic: 'fn_caixa',   txt: 'Financeiro, compras, notas, cadastros e orçamentos', areas: ['Cadastros', 'Orçamentos', 'Suprimentos', 'Financeiro', 'Administração'], nucleo: ['fn_receber', 'fn_pagar', 'fn_caixa', 'fn_cobranca', 'fn_fluxo', 'fn_notas', 'adm_usuarios', 'adm_fiscal'] },
-  proj: { nome: 'Projetos',       ic: 'pj_projetos', txt: 'Propostas, tarefas, calendário, visitas e dimensionamento', areas: ['Cadastros', 'Orçamentos', 'Projetos'], extras: ['projetos'], nucleo: ['Projetos'], app: 'projetos' },
-  serv: { nome: 'Serviços',       ic: 'sv_manut',    txt: 'Agenda, OS, pedidos, contratos, oficina e estoque', areas: ['Cadastros', 'Orçamentos', 'Serviços', 'Suprimentos'], extras: ['servicos'], nucleo: ['Serviços'], app: 'servicos', perfilApp: 'manager|financeiro' },
-  tec:  { nome: 'Técnico',        ic: 'sv_agenda',   txt: 'Minha agenda de serviços do dia, galeria e estoque', chaves: ['sv_agenda', 'sv_oficina', 'sv_estoque', 'cp_requisicoes', 'servicos'], app: 'servicos', perfilApp: 'tech' },
-  ofi:  { nome: 'Oficina',        ic: 'sv_oficina',  txt: 'Equipamentos na oficina, consertos e estoque', chaves: ['sv_oficina', 'sv_estoque', 'cp_requisicoes', 'servicos'], app: 'servicos', perfilApp: 'oficina' },
-  tudo: { nome: 'Tudo',           ic: 'inicio',      txt: 'O menu completo, com todas as áreas' }
+  adm:  { nome: 'Administrativo', ic: 'fn_caixa',   txt: 'Cadastros, CRM e orçamentos, pedidos, compras, financeiro e fiscal', areas: ['Cadastros', 'Orçamentos', 'Projetos', 'Serviços', 'Suprimentos', 'Financeiro', 'Administração'], fora: ['projetos', 'servicos'] },
+  serv: { nome: 'Serviços',       ic: 'sv_manut',    txt: 'Controle dos serviços: agenda, orçamentos, obras, manutenções e estoque', chaves: ['servicos'], app: 'servicos', perfilApp: 'manager|financeiro' },
+  proj: { nome: 'Projetos',       ic: 'pj_projetos', txt: 'Tarefas, clientes, calendário, ART, comissão e dimensionamento', chaves: ['projetos'], app: 'projetos' },
+  tec:  { nome: 'Técnico',        ic: 'sv_agenda',   txt: 'Agenda de serviços do técnico', chaves: ['servicos'], app: 'servicos', perfilApp: 'tech' },
+  ofi:  { nome: 'Oficina',        ic: 'sv_oficina',  txt: 'Equipamentos na oficina', chaves: ['servicos'], app: 'servicos', perfilApp: 'oficina' },
+  tudo: { nome: 'Tudo',           ic: 'inicio',      txt: 'O menu completo (uso interno e testes)' }
 };
 // tela em que cada setor abre: o app (Projetos/Serviços/Técnicos) ou o Início do ERP
 const abaDoSetor = k => (SETORES[k] && SETORES[k].app) || 'inicio';
@@ -3214,6 +3219,7 @@ function setorTem(k, item){
   const S = SETORES[k]; if(!S || k === 'tudo') return true;
   const area = _areaDaChave()[item[0]];
   if(area === '' || ['inicio', 'chat', 'fn_pendencias'].includes(item[0])) return true;   // em todos os setores
+  if((S.fora || []).includes(item[0])) return false;
   return S.chaves ? S.chaves.includes(item[0]) : S.areas.includes(area) || (S.extras || []).includes(item[0]);
 }
 function setoresDisponiveis(){
@@ -3222,19 +3228,16 @@ function setoresDisponiveis(){
   // script 57/58: os setores seguem a tela Acessos (áreas dos apps). Sem ela (script não rodado), como antes.
   const nApp = t => window.__erpNivelApp ? window.__erpNivelApp(t) : null, algum = (...ts) => ts.some(t => (nApp(t) || 0) >= 1);
   if(nApp('app_sv_oficina') != null){
-    const ve = k => vis.some(i => i[0] === k);
-    if(vis.some(i => SETORES.adm.nucleo.includes(i[0]))) l.push('adm');
-    if(ve('projetos') && algum('app_pj_projetos', 'app_pj_projetista', 'app_pj_financeiro')) l.push('proj');
-    if(ve('servicos') && algum('app_sv_gerenciador', 'app_sv_financeiro')) l.push('serv');
-    if(ve('servicos') && algum('app_sv_tecnico')) l.push('tec');
-    if(ve('servicos') && algum('app_sv_oficina')) l.push('ofi');
-    if(ST.eu.perfil === 'diretoria') l.push('tudo');
+    // as cinco bases, cada uma só para quem tem algum item dela liberado na tela Acessos
+    const geral = ['inicio', 'chat', 'fn_pendencias', 'projetos', 'servicos'];
+    if(vis.some(i => !geral.includes(i[0]))) l.push('adm');
+    if(algum('app_sv_gerenciador', 'app_sv_financeiro')) l.push('serv');
+    if(algum('app_pj_projetos', 'app_pj_projetista', 'app_pj_financeiro')) l.push('proj');
+    if(algum('app_sv_tecnico')) l.push('tec');
+    if(algum('app_sv_oficina')) l.push('ofi');
     return l;
   }
-  if(vis.some(i => SETORES.adm.nucleo.includes(i[0]))) l.push('adm');
-  for(const k of ['proj', 'serv']) if(vis.some(i => SETORES[k].nucleo.includes(area[i[0]]))) l.push(k);
-  if(ST.eu.perfil === 'tecnico' || ST.eu.perfil === 'diretoria') if(vis.some(i => SETORES.tec.chaves.includes(i[0]))) l.push('tec');
-  if(ST.eu.perfil === 'diretoria') l.push('tudo');
+  l.push('adm'); if(ST.eu.perfil === 'diretoria') l.push('tudo');      // sem os scripts de acesso: só a base do ERP
   return l;
 }
 // o técnico não tem escolha: é sempre o setor Técnicos
@@ -10044,12 +10047,16 @@ const NIV_DICA = ['Não aparece no menu', 'Consulta, sem alterar', 'Consulta e a
 IC.adm_usuarios = '<circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c0-3.6 2.8-6 6.2-6s6.2 2.4 6.2 6"/><circle cx="17.2" cy="9.2" r="2.6"/><path d="M16.6 14.2c2.7.2 4.7 2.3 4.7 5.3"/>';
 Object.assign(TELAS, { adm_usuarios: telaAcessos });
 
+// script 62: as telas "projetos" e "servicos" (o aplicativo aberto dentro do ERP) seguem as áreas do aplicativo liberadas em Acessos
+const APP_TELAS = { projetos: ['app_pj_projetos', 'app_pj_projetista', 'app_pj_financeiro'], servicos: ['app_sv_gerenciador', 'app_sv_tecnico', 'app_sv_financeiro', 'app_sv_oficina'] };
+const appControlado = t => !!(APP_TELAS[t] && ST.acessos && APP_TELAS[t][0] in ST.acessos);
 function nivelTela(t){
+  if(appControlado(t)) return Math.max(...APP_TELAS[t].map(k => ST.acessos[k] || 0));
   if(ST.acessos && t in ST.acessos) return ST.acessos[t];
   const item = MENU.flatMap(g => g.itens).find(i => i[0] === t);         // sem o script 35: como antes, pelo perfil
   return item && ST.eu && item[3].includes(LETRA[ST.eu.perfil]) ? 3 : 0;
 }
-const menuVe = i => ST.acessos && i[0] in ST.acessos ? ST.acessos[i[0]] >= 1 : i[3].includes(LETRA[ST.eu.perfil]);
+const menuVe = i => appControlado(i[0]) ? nivelTela(i[0]) >= 1 : ST.acessos && i[0] in ST.acessos ? ST.acessos[i[0]] >= 1 : i[3].includes(LETRA[ST.eu.perfil]);
 const selNivel = (v, attrs, max = 4, comHerda = false) => `<select ${attrs} class="selNiv" style="color:${v == null || v === '' ? 'inherit' : NIV_COR[v]};font-weight:600">
   ${comHerda ? `<option value="" ${v == null || v === '' ? 'selected' : ''}>— como o perfil —</option>` : ''}${NIV.map((n, k) => k > max ? '' : `<option value="${k}" ${String(v) === String(k) ? 'selected' : ''} style="color:${NIV_COR[k]}">${n}</option>`).join('')}</select>`;
 const dtHoraBR = v => { if(!v) return ''; const d = new Date(v); return dataBR(isoLocal(d)) + ' ' + d.toTimeString().slice(0, 5); };
@@ -10254,7 +10261,7 @@ function acPastas(telas){
 function acEditor(alvo, ctx){
   ST.acAbertas = ST.acAbertas || {}; const ab = ST.acAbertas[ctx.chave] = ST.acAbertas[ctx.chave] || new Set();
   const busca = (ST.acBusca || '').toLowerCase().trim();
-  const telas = ST.ac.telas.filter(t => !busca || (t.nome + ' ' + t.area).toLowerCase().includes(busca));
+  const telas = ST.ac.telas.filter(t => t.area !== 'Interno' && (!busca || (t.nome + ' ' + t.area).toLowerCase().includes(busca)));
   const pastas = acPastas(telas);
   const linha = t => {
     const v = ctx.valor(t), tr = acTrava(ctx.tipo, t), teto = acTeto(ctx.tipo, t), pad = ctx.padrao ? ctx.padrao(t) : null;
@@ -10269,7 +10276,8 @@ function acEditor(alvo, ctx){
   };
   alvo.innerHTML = `<div class="acFerr"><input type="search" id="acBusca" placeholder="Buscar área, tela ou aba" value="${esc(ST.acBusca || '')}">
       <button class="btn peq" id="acAbreTudo">${ab.size ? 'Recolher tudo' : 'Expandir tudo'}</button></div>
-    <div class="acLeg">${[1, 2, 3, 4].map(k => `<span><b>${NIV[k]}</b> — ${NIV_DICA[k]}</span>`).join('')}<span><b>Aplicativos</b> — áreas e abas dos apps de Projetos e Serviços: liberado ou não</span></div>
+    <div class="acLeg">${[1, 2, 3, 4].map(k => `<span><b>${NIV[k]}</b> — ${NIV_DICA[k]}</span>`).join('')}<span><b>Serviços, Projetos, Técnico e Oficina</b> — áreas e abas dos aplicativos: liberado ou não</span></div>
+    <p class="muted" style="font-size:12px;margin:-4px 0 10px">Cada base marcada aparece como opção na tela inicial da pessoa. Dentro da base, marque os itens liberados.</p>
     ${pastas.map(p => { const ts = p.grupos.flatMap(g => g.telas), livres = ts.filter(t => !acTrava(ctx.tipo, t)), on = ts.filter(t => ctx.valor(t) > 0).length;
       return `<details class="acPasta" data-pasta="${esc(p.nome)}" ${busca || ab.has(p.nome) ? 'open' : ''}>
         <summary><input type="checkbox" data-acpasta="${esc(p.nome)}" ${livres.length ? '' : 'disabled'} title="Marcar ou desmarcar todos os itens desta pasta"><b>${esc(p.nome)}</b><span class="acCont${on ? ' on' : ''}">${on} de ${ts.length} liberado(s)</span></summary>
@@ -10547,27 +10555,21 @@ async function acApps(u){
   const svAtual = D.svIndex[emailChave(u.email)] || '', svNomes = Object.entries(D.svUsers).sort((a, b) => String(a[1].name).localeCompare(String(b[1].name)));
   const pjAtual = Object.keys(D.pjEmails).find(n => String(D.pjEmails[n]).toLowerCase() === u.email.toLowerCase()) || '';
   const outroSv = id => { const e = Object.keys(D.svIndex).find(k => D.svIndex[k] === id && k !== emailChave(u.email)); return e ? ' · já ligado a ' + e.replace(/,/g, '.') : ''; };
-  const NV = ((await sb.rpc('acesso_nivel_de', { p_usuario: u.id })).data) || {};
-  const padrao = k => ((NV[SV_ERP[k]] || {}).final || 0) >= 1;
-  setTimeout(() => { const pinta = () => { const id = $('#apSv').value, x = D.svUsers[id];
-      document.querySelectorAll('[data-svp]').forEach(c => { c.checked = x ? !!(x.profiles || {})[c.dataset.svp] : id === '__novo' && padrao(c.dataset.svp); c.disabled = !id; }); };
-    $('#apSv').onchange = pinta; pinta(); }, 0);
   const ok = await acModal('Vínculo com os aplicativos — ' + u.nome, `<p class="muted" style="margin-top:0;font-size:13px">Identifica <b>${esc(u.nome)}</b> dentro de cada aplicativo. As áreas e abas liberadas ficam em <b>Permissões</b>, no cadastro da pessoa, ou no perfil de acesso.</p>
     <label class="campo">App de Serviços — usuário do app (o nome aparece na agenda, nas OS e no histórico)
       <select id="apSv"><option value="">— nenhum (não usa o app de Serviços) —</option>
         ${svNomes.map(([id, x]) => `<option value="${esc(id)}" ${id === svAtual ? 'selected' : ''}>${esc(x.name || id)}${esc(outroSv(id))}</option>`).join('')}
         <option value="__novo">+ criar no app com o nome "${esc(u.nome)}"</option></select></label>
-    <div id="apSvPerf" style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 0;font-size:13px"><span class="muted">No app ela é:</span>${SV_PERFIS.map(([k, r]) => `<label style="display:flex;gap:5px;align-items:center"><input type="checkbox" data-svp="${k}" style="width:auto"> ${r}</label>`).join('')}</div>
+    <p class="muted" style="font-size:12px;margin:4px 0 0">Automático: no primeiro acesso ao app, o ERP liga a pessoa pelo e-mail ou pelo nome (ou cria o usuário no app). Use esta opção só para ligar a um usuário antigo específico (para manter o histórico dele). As áreas do app seguem as permissões.</p>
     <label class="campo" style="margin-top:10px">App de Projetos — nome na equipe (área Projetista: tarefas e comissão dele)
       <select id="apPj"><option value="">— nenhum —</option>${D.equipe.map(n => `<option value="${esc(n)}" ${n === pjAtual ? 'selected' : ''}>${esc(n)}${D.pjEmails[n] && n !== pjAtual ? ' · já ligado a ' + esc(D.pjEmails[n]) : ''}</option>`).join('')}</select></label>
     <p class="muted" style="font-size:12px;margin-bottom:0">Nos aplicativos não há senha nem PIN: o acesso é feito com o login do ERP.</p>`,
-    [['Cancelar', null], ['Gravar', true, 'pri']], () => ({ sv: $('#apSv').value, pj: $('#apPj').value, perf: Object.fromEntries([...document.querySelectorAll('[data-svp]')].map(c => [c.dataset.svp, c.checked])) }), () => {});
+    [['Cancelar', null], ['Gravar', true, 'pri']], () => ({ sv: $('#apSv').value, pj: $('#apPj').value }));
   if(!ok) return;
   try{
     const ch = emailChave(u.email), idx = { ...D.svIndex }; let svId = ok.sv; const rows = [], users = { ...D.svUsers };
     if(svId === '__novo'){ svId = 'u_' + slugPerfil(u.nome).slice(0, 16) + '_' + Date.now().toString(36); users[svId] = { name: u.nome, profiles: {} }; }
-    if(svId){ const ant = users[svId].profiles || {}, novo = { ...ant, ...ok.perf };
-      if(JSON.stringify(ant) !== JSON.stringify(novo) || !D.svUsers[svId]){ users[svId] = { ...users[svId], profiles: novo }; rows.push({ caminho: 'users', valor: users }); } }
+    if(svId && !D.svUsers[svId]) rows.push({ caminho: 'users', valor: users });
     if(svId !== svAtual){
       for(const k of Object.keys(idx)) if(k === ch || (svId && idx[k] === svId)) delete idx[k];
       if(svId){ idx[ch] = svId; rows.push({ caminho: 'usersPrivado/' + svId, valor: { ...(D.svPriv[svId] || {}), email: u.email.toLowerCase() } }); }
@@ -10611,7 +10613,7 @@ function acNivelFinal(u, t){
 // ---------- Relatório de acessos (📄 Relatório / 📊 Excel do topo) ----------
 async function acExportar(){
   const A = ST.ac, us = A.usuarios.filter(u => u.ativo).sort((a, b) => a.nome.localeCompare(b.nome)), linhas = [];
-  for(const u of us) for(const t of A.telas){ const n = acNivelFinal(u, t); if(!n) continue;
+  for(const u of us) for(const t of A.telas){ const n = t.area === 'Interno' ? 0 : acNivelFinal(u, t); if(!n) continue;
     const e = A.excecoes.find(x => x.usuario_id === u.id && x.tela === t.tela && excVale(x));
     linhas.push({ u, t, n, origem: e ? 'Individual' + (e.valido_ate ? ' até ' + dataBR(e.valido_ate) : '') : 'Perfil' }); }
   return [
@@ -10625,30 +10627,25 @@ async function acExportar(){
 async function acAuditoria(){
   const A = ST.ac, hum = A.usuarios.filter(u => u.perfil !== 'agente'), ativos = hum.filter(u => u.ativo);
   const corpo = $('#acCorpo'); corpo.innerHTML = '<div class="card"><p class="muted">Analisando os acessos…</p></div>';
-  let apps = null; try{ apps = await appsLer(); }catch(e){}
   const hist = await sb.from('registro_acoes').select('quando,usuario_id,tabela,registro_id,acao,antes,depois')
     .in('tabela', ['public.acesso_grade', 'public.acesso_excecoes', 'public.acesso_perfis', 'public.acesso_convites', 'public.usuarios', 'auth.senha'])
     .order('quando', { ascending: false }).limit(600);
   const nomeU = id => (A.usuarios.find(u => u.id === id) || {}).nome || '—';
-  const sensiveis = ['Financeiro', 'Administração'];
+  const sensivel = t => /^Administrativo · (Financeiro|Fiscal|Administração)$/.test(t.area);
   const al = [];
   const add = (nivel, tit, dica, pessoas, extra) => { if(pessoas.length) al.push({ nivel, tit, dica, pessoas, extra }); };
   add('alto', 'Acesso vencido, ainda ativo', 'A data de validade passou: a pessoa já não entra. Inative ou renove.', ativos.filter(acessoVencido));
   add('medio', 'Acesso vence nos próximos 15 dias', 'Renove a validade se a pessoa continuar.', ativos.filter(u => u.acesso_ate && !acessoVencido(u) && acDiasAte(u.acesso_ate) <= 15), u => 'vence em ' + dataBR(u.acesso_ate));
   add('medio', 'Sem acessar há mais de 60 dias', 'Avalie inativar quem não usa mais o sistema.', ativos.filter(u => u.ultimo_acesso && (Date.now() - new Date(u.ultimo_acesso)) > 60 * 864e5), u => 'último acesso ' + dtHoraBR(u.ultimo_acesso).slice(0, 10));
   add('baixo', 'Usuários ativos que nunca acessaram', 'Confirme se a pessoa recebeu o e-mail e a senha.', ativos.filter(u => !u.ultimo_acesso));
-  add('alto', 'Nível Completo em Financeiro ou Administração fora da Diretoria', 'Completo permite aprovar, excluir e configurar.', ativos.filter(u => u.perfil !== 'diretoria' && A.telas.some(t => sensiveis.includes(t.area) && acNivelFinal(u, t) === 4)),
-    u => A.telas.filter(t => sensiveis.includes(t.area) && acNivelFinal(u, t) === 4).map(t => t.nome).join(', '));
+  add('alto', 'Nível Completo em Financeiro, Fiscal ou Administração fora da Diretoria', 'Completo permite aprovar, excluir e configurar.', ativos.filter(u => u.perfil !== 'diretoria' && A.telas.some(t => sensivel(t) && acNivelFinal(u, t) === 4)),
+    u => A.telas.filter(t => sensivel(t) && acNivelFinal(u, t) === 4).map(t => t.nome).join(', '));
   add('medio', 'Permissões individuais vencidas', 'Já não valem (vale o perfil). Remova para manter o cadastro limpo.', hum.filter(u => A.excecoes.some(e => e.usuario_id === u.id && !excVale(e))),
     u => A.excecoes.filter(e => e.usuario_id === u.id && !excVale(e)).map(e => telaNome(e.tela)).join(', '));
   add('baixo', 'Com permissões individuais', 'Diferentes do perfil. Revise periodicamente.', ativos.filter(u => A.excecoes.some(e => e.usuario_id === u.id && excVale(e))),
     u => A.excecoes.filter(e => e.usuario_id === u.id && excVale(e)).map(e => telaNome(e.tela) + ': ' + NIV[e.nivel] + (e.valido_ate ? ' (até ' + dataBR(e.valido_ate) + ')' : '')).join(' · '));
   const usaProprios = u => A.telas.some(t => acNivelFinal(u, t) === 2);
   add('medio', 'Nível "Próprios" sem vínculo com funcionário', 'Sem o vínculo, a pessoa não enxerga os próprios registros (agenda, OS, tarefas, comissões).', ativos.filter(u => !u.pessoa_id && usaProprios(u)));
-  if(apps){
-    const ch = e => String(e || '').toLowerCase().replace(/\./g, ',');
-    add('medio', 'Habilitados no app de Serviços sem vínculo', 'Abra o cadastro → Vínculo com os aplicativos.', ativos.filter(u => ['app_sv_gerenciador', 'app_sv_tecnico', 'app_sv_financeiro', 'app_sv_oficina'].some(k => { const t = A.telas.find(x => x.tela === k); return t && acNivelFinal(u, t) > 0; }) && !apps.svIndex[ch(u.email)]));
-  }
   const pend = A.usuarios.filter(u => u.aguardando && !u.ativo);
   add('medio', 'Solicitações de acesso aguardando', 'Aprove ou recuse na aba Usuários.', pend);
   const conv = A.convites.filter(c => !c.usado_por && !c.email);
