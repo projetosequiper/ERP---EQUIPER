@@ -10037,9 +10037,9 @@ Object.assign(TELAS, { sv_comissoes: telaComissoesTecP, pj_com: telaComissoesPro
    57: tela única de acessos — ERP + apps de Projetos e Serviços (áreas e abas na mesma grade), senhas, e-mails, novo login e o vínculo com os apps.
    Grade tela × perfil editável, exceções por pessoa, pré-cadastro e aprovação de logins.
    O banco obedece à mesma grade (RLS); a tela só mostra e grava. */
-const NIV = ['Não vê', 'Só vê', 'Só o seu', 'Mexe', 'Tudo'];
+const NIV = ['Sem acesso', 'Visualizar', 'Próprios', 'Alterar', 'Completo'];
 const NIV_COR = ['#9aa0a6', '#2563eb', '#b45309', '#15803d', '#c8000c'];
-const NIV_DICA = ['A tela nem aparece no menu', 'Consulta, sem mudar nada', 'Vê e mexe só no que é dele', 'Cria e edita', 'Também aprova, exclui e configura'];
+const NIV_DICA = ['Não aparece no menu', 'Consulta, sem alterar', 'Consulta e altera somente os registros vinculados à pessoa', 'Inclui e edita', 'Também aprova, exclui e configura'];
 IC.adm_usuarios = '<circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c0-3.6 2.8-6 6.2-6s6.2 2.4 6.2 6"/><circle cx="17.2" cy="9.2" r="2.6"/><path d="M16.6 14.2c2.7.2 4.7 2.3 4.7 5.3"/>';
 Object.assign(TELAS, { adm_usuarios: telaAcessos });
 
@@ -10067,68 +10067,111 @@ async function carregaAcessos(){
 }
 
 async function telaAcessos(){
-  ST.acAba = ST.acAba || 'usuarios';
+  ST.acAba = ({ grade: 'perfis', excecoes: 'usuarios' })[ST.acAba] || ST.acAba || 'usuarios';
   const A = await carregaAcessos();
-  if(A.erro) return $('#conteudo').innerHTML = `<div class="card"><h2>Acessos</h2><p class="muted">${/acesso_/.test(A.erro) ? 'Rode o script <b>35_acessos.sql</b> no Supabase para ligar esta tela.' : esc(A.erro)}</p></div>`;
+  if(A.erro) return $('#conteudo').innerHTML = `<div class="card"><h2>Acessos</h2><p class="muted">${/acesso_/.test(A.erro) ? 'Execute o script <b>35_acessos.sql</b> no Supabase para ativar esta tela.' : esc(A.erro)}</p></div>`;
   ST.ac = A;
   const aguard = A.usuarios.filter(u => u.aguardando && !u.ativo);
-  const abas = [['usuarios', `Usuários${aguard.length ? ` <span class="cont">${aguard.length}</span>` : ''}`], ['grade', 'Perfis e acessos'], ['excecoes', `Exceções${A.excecoes.length ? ` (${A.excecoes.length})` : ''}`], ['convites', 'Pré-cadastro']];
-  $('#conteudo').innerHTML = `<div class="cab"><h2>Acessos</h2><span class="muted" style="margin-left:8px;font-size:13px">ERP, app de Projetos e app de Serviços — tudo aqui</span></div>
-    <div class="barra" style="flex-wrap:wrap">${abas.map(([k, r]) => `<button class="btn ${ST.acAba === k ? 'pri' : ''}" data-acaba="${k}">${r}</button>`).join('')}</div>
+  const abas = [['usuarios', `Usuários${aguard.length ? ` <span class="cont">${aguard.length}</span>` : ''}`], ['perfis', 'Perfis de acesso'], ['convites', 'Pré-cadastro']];
+  $('#conteudo').innerHTML = `<div class="cab"><h2>Acessos</h2><span class="muted" style="margin-left:8px;font-size:13px">Usuários, senhas e permissões do ERP e dos aplicativos de Projetos e Serviços</span></div>
+    <div class="abasLanc">${abas.map(([k, r]) => `<button class="${ST.acAba === k ? 'ativo' : ''}" data-acaba="${k}">${r}</button>`).join('')}</div>
     <div id="acCorpo"></div>`;
-  document.querySelectorAll('[data-acaba]').forEach(b => b.onclick = () => { ST.acAba = b.dataset.acaba; telaAcessos(); });
-  ({ usuarios: acUsuarios, grade: acGrade, excecoes: acExcecoes, convites: acConvites })[ST.acAba]();
+  document.querySelectorAll('[data-acaba]').forEach(b => b.onclick = () => { ST.acAba = b.dataset.acaba; ST.acBusca = ''; telaAcessos(); });
+  ({ usuarios: acUsuarios, perfis: acPerfis, convites: acConvites })[ST.acAba]();
 }
 
 const perfilNome = id => (ST.ac.perfis.find(p => p.id === id) || {}).nome || id;
 const telaNome = t => (ST.ac.telas.find(x => x.tela === t) || {}).nome || t;
 const optsPerfis = sel => ST.ac.perfis.map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.nome)}</option>`).join('');
 const funcionarios = () => ST.pessoas.filter(p => (p.papeis || []).some(x => x === 'funcionario' || x === 'terceirizado')).sort((a, b) => a.nome.localeCompare(b.nome));
-const optsFunc = sel => `<option value="">—</option>` + funcionarios().map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.nome)}</option>`).join('');
+const optsFunc = sel => `<option value="">— sem vínculo —</option>` + funcionarios().map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.nome)}</option>`).join('');
+const iniciais = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase();
 
 // ---------- Usuários ----------
 function acUsuarios(){
-  const A = ST.ac, aguard = A.usuarios.filter(u => u.aguardando && !u.ativo), resto = A.usuarios.filter(u => !(u.aguardando && !u.ativo));
+  const A = ST.ac, aguard = A.usuarios.filter(u => u.aguardando && !u.ativo), busca = (ST.acBuscaU || '').toLowerCase();
+  const resto = A.usuarios.filter(u => !(u.aguardando && !u.ativo)).filter(u => !busca || (u.nome + ' ' + (u.email || '') + ' ' + perfilNome(u.perfil_id)).toLowerCase().includes(busca));
   const nExc = id => A.excecoes.filter(e => e.usuario_id === id).length;
-  $('#acCorpo').innerHTML = `${aguard.length ? `<div class="card" style="border-color:#f59e0b88"><h2>Aguardando aprovação <span class="tag rasc">${aguard.length}</span></h2>
-      <p class="muted" style="margin-top:-4px;font-size:13px">Criaram a conta na tela de entrada e ainda não estão no pré-cadastro. Aprove escolhendo o perfil, ou recuse.</p>
-      <table class="reg"><thead><tr><th>Nome</th><th>E-mail</th><th>Pediu em</th><th></th></tr></thead><tbody>
-      ${aguard.map(u => `<tr><td>${esc(u.nome)}</td><td>${esc(u.email || '')}</td><td>${dtHoraBR(u.criado_em)}</td><td style="text-align:right;white-space:nowrap"><button class="btn peq" data-acrec="${u.id}">Recusar</button> <button class="btn peq pri" data-acapr="${u.id}">Aprovar</button></td></tr>`).join('')}</tbody></table></div>` : ''}
-    <div class="card"><div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0">Quem entra no ERP</h2><button class="btn pri" id="acNovoLogin" style="margin-left:auto">+ Novo login</button></div>
-      <table class="reg"><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Cadastro de funcionário</th><th>Último acesso</th><th>Situação</th><th></th></tr></thead><tbody>
-      ${resto.map(u => `<tr><td>${u.perfil === 'agente' ? `<b>${esc(u.nome)}</b>` : `<input data-acnome="${u.id}" value="${esc(u.nome)}" style="min-width:150px;font-weight:600">`}</td><td>${esc(u.email || '')}</td>
-        <td><select data-acperf="${u.id}" ${u.perfil === 'agente' ? 'disabled' : ''}>${optsPerfis(u.perfil_id)}</select></td>
-        <td>${u.perfil === 'agente' ? '—' : `<select data-acpes="${u.id}">${optsFunc(u.pessoa_id)}</select>`}</td>
-        <td>${u.ultimo_acesso ? dtHoraBR(u.ultimo_acesso) : '<span class="muted">nunca</span>'}</td>
-        <td>${u.ativo ? '<span class="tag ok">ativo</span>' : '<span class="tag inat">desativado</span>'}</td>
-        <td style="text-align:right;white-space:nowrap"><button class="btn peq" data-acver="${u.id}">Acessos${nExc(u.id) ? ` · ${nExc(u.id)} exceção(ões)` : ''}</button>
-          ${u.perfil === 'agente' ? '' : `<button class="btn peq" data-acsenha="${u.id}" title="Definir senha ou mandar link">🔑 Senha</button> <button class="btn peq" data-acemail="${u.id}" title="Trocar o e-mail de login">✉️ E-mail</button> <button class="btn peq" data-acapps="${u.id}" title="Quem a pessoa é dentro dos apps">🔗 Apps</button>`}
-          ${u.id === ST.eu.id ? '' : `<button class="btn peq" data-acativo="${u.id}">${u.ativo ? 'Desativar' : 'Reativar'}</button>`}</td></tr>`).join('')}</tbody></table>
-      <p class="muted" style="font-size:12px;margin:8px 0 0">O cadastro de funcionário (em Empresas) liga o login ao técnico ou projetista, para o nível "Só o seu" (as OS, a agenda, as tarefas e a comissão dele).
-      Quem sai da empresa: <b>Desativar</b> — perde o acesso na hora.</p></div>`;
-  const salva = async (q, ok) => { const r = await q; if(r.error){ await aviso('Não mudou', esc(erroBanco(r.error))); return telaAcessos(); } toast(ok); if(ok) ST.ac = await carregaAcessos(); };
-  document.querySelectorAll('[data-acnome]').forEach(i => i.onchange = async () => { const v = i.value.trim(); if(!v){ await aviso('Falta o nome', 'O nome não pode ficar vazio.'); return telaAcessos(); }
-    await salva(sb.from('usuarios').update({ nome: v }).eq('id', i.dataset.acnome), 'Nome salvo.');
-    if(i.dataset.acnome === ST.eu.id){ ST.eu.nome = v; $('#uNome').textContent = 'Olá, ' + v; } });
-  document.querySelectorAll('[data-acperf]').forEach(s => s.onchange = () => salva(sb.from('usuarios').update({ perfil_id: s.value }).eq('id', s.dataset.acperf), 'Perfil mudado.'));
-  document.querySelectorAll('[data-acpes]').forEach(s => s.onchange = () => salva(sb.from('usuarios').update({ pessoa_id: s.value || null }).eq('id', s.dataset.acpes), 'Ligado ao cadastro.'));
-  document.querySelectorAll('[data-acativo]').forEach(b => b.onclick = async () => {
-    const u = A.usuarios.find(x => x.id === b.dataset.acativo);
-    if(u.ativo && !await confirmaDuplo('Desativar ' + esc(u.nome) + '?', 'Ele perde o acesso ao ERP na hora. O histórico do que ele fez continua.', 'Desativar')) return;
-    const r = await sb.from('usuarios').update({ ativo: !u.ativo, aguardando: false }).eq('id', u.id);
-    if(r.error) return aviso('Não mudou', esc(erroBanco(r.error))); toast(u.ativo ? 'Desativado.' : 'Reativado.'); telaAcessos();
-  });
+  $('#acCorpo').innerHTML = `${aguard.length ? `<div class="card" style="border-color:#f59e0b88"><h2>Solicitações de acesso <span class="tag rasc">${aguard.length}</span></h2>
+      <p class="muted" style="margin-top:-4px;font-size:13px">Contas criadas na tela de entrada que não constam no pré-cadastro. Aprove definindo o perfil de acesso, ou recuse.</p>
+      ${aguard.map(u => `<div class="acUser"><div class="acAv">${esc(iniciais(u.nome))}</div><div class="acUserTx"><b>${esc(u.nome)}</b><div class="muted">${esc(u.email || '')}</div><div class="muted" style="font-size:12px">Solicitado em ${dtHoraBR(u.criado_em)}</div></div>
+        <div class="acUserBt"><button class="btn peq" data-acrec="${u.id}">Recusar</button> <button class="btn peq pri" data-acapr="${u.id}">Aprovar</button></div></div>`).join('')}</div>` : ''}
+    <div class="card"><div class="acCabCard"><h2 style="margin:0">Usuários do sistema</h2>
+        <input type="search" id="acBuscaU" placeholder="Buscar por nome, e-mail ou perfil" value="${esc(ST.acBuscaU || '')}">
+        <button class="btn pri" id="acNovoLogin">+ Novo usuário</button></div>
+      <div class="acUsers">${resto.map(u => `<div class="acUser${u.ativo ? '' : ' inativo'}" data-acabrir="${u.id}" tabindex="0">
+          <div class="acAv">${esc(iniciais(u.nome))}</div>
+          <div class="acUserTx"><b>${esc(u.nome)}</b><div class="muted">${esc(u.email || (u.perfil === 'agente' ? 'acesso automatizado' : 'sem e-mail'))}</div>
+            <div style="margin-top:4px">${`<span class="tag">${esc(perfilNome(u.perfil_id))}</span>`}${u.ativo ? '<span class="tag ok">Ativo</span>' : '<span class="tag inat">Inativo</span>'}${nExc(u.id) ? `<span class="tag" style="background:#fff4e5;color:#b45309">${nExc(u.id)} permissão(ões) individual(is)</span>` : ''}</div>
+            <div class="muted" style="font-size:12px;margin-top:3px">Último acesso: ${u.ultimo_acesso ? dtHoraBR(u.ultimo_acesso) : 'nunca acessou'}</div></div>
+          <div class="acUserBt"><button class="btn peq" data-acabrir="${u.id}">Abrir cadastro</button></div></div>`).join('') || '<p class="vazio">Nenhum usuário encontrado.</p>'}</div>
+      <p class="muted" style="font-size:12px;margin:10px 0 0">Abra o cadastro para alterar dados, senha, perfil, vínculo com os aplicativos e permissões individuais. Desligamento: <b>Inativar</b> — o acesso é bloqueado imediatamente e o histórico é mantido.</p></div>`;
+  const bu = $('#acBuscaU'); bu.oninput = () => { ST.acBuscaU = bu.value; const p = bu.selectionStart; acUsuarios(); const n = $('#acBuscaU'); n.focus(); n.setSelectionRange(p, p); };
+  document.querySelectorAll('[data-acabrir]').forEach(c => c.onclick = e => { e.stopPropagation(); acPessoa(c.dataset.acabrir); });
   document.querySelectorAll('[data-acrec]').forEach(b => b.onclick = async () => {
     const r = await sb.from('usuarios').update({ ativo: false, aguardando: false }).eq('id', b.dataset.acrec);
-    if(r.error) return aviso('Erro', esc(erroBanco(r.error))); toast('Recusado.'); telaAcessos();
+    if(r.error) return aviso('Erro', esc(erroBanco(r.error))); toast('Solicitação recusada.'); telaAcessos();
   });
   document.querySelectorAll('[data-acapr]').forEach(b => b.onclick = () => aprovarUsuario(A.usuarios.find(x => x.id === b.dataset.acapr)));
-  document.querySelectorAll('[data-acver]').forEach(b => b.onclick = () => acessosDaPessoa(A.usuarios.find(x => x.id === b.dataset.acver)));
-  const quem = id => A.usuarios.find(x => x.id === id);
-  document.querySelectorAll('[data-acsenha]').forEach(b => b.onclick = () => acSenha(quem(b.dataset.acsenha)));
-  document.querySelectorAll('[data-acemail]').forEach(b => b.onclick = () => acEmail(quem(b.dataset.acemail)));
-  document.querySelectorAll('[data-acapps]').forEach(b => b.onclick = () => acApps(quem(b.dataset.acapps)));
   $('#acNovoLogin').onclick = acNovoLogin;
+}
+
+// ---------- Cadastro da pessoa: dados, senha, aplicativos e permissões individuais ----------
+async function acPessoa(id){
+  const A = ST.ac, u = A.usuarios.find(x => x.id === id); if(!u) return;
+  const ag = u.perfil === 'agente', eu = u.id === ST.eu.id;
+  abrirPainel(`<div class="cab"><div class="acAv" style="margin-right:10px">${esc(iniciais(u.nome))}</div><h2>${esc(u.nome)}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+    <div class="card"><h2>Cadastro</h2>
+      <div class="acForm">
+        <label class="campo">Nome${ag ? `<input value="${esc(u.nome)}" disabled>` : `<input id="apNome" value="${esc(u.nome)}">`}</label>
+        <label class="campo">E-mail de acesso<div class="acLinha"><input value="${esc(u.email || '')}" disabled>${ag ? '' : '<button class="btn peq" id="apEmail">Alterar</button>'}</div></label>
+        <label class="campo">Perfil de acesso<select id="apPerfil" ${ag ? 'disabled' : ''}>${optsPerfis(u.perfil_id)}</select></label>
+        <label class="campo">Vínculo com funcionário (cadastro em Empresas)${ag ? '<input value="—" disabled>' : `<select id="apPessoa">${optsFunc(u.pessoa_id)}</select>`}</label>
+        <div class="campo">Situação<div class="acLinha">${u.ativo ? '<span class="tag ok">Ativo</span>' : '<span class="tag inat">Inativo</span>'}${eu ? '' : `<button class="btn peq" id="apAtivo">${u.ativo ? 'Inativar' : 'Reativar'}</button>`}</div></div>
+        <div class="campo">Último acesso<div class="muted" style="padding-top:8px">${u.ultimo_acesso ? dtHoraBR(u.ultimo_acesso) : 'nunca acessou'}</div></div>
+      </div>
+      ${ag ? '' : `<div class="acLinha" style="margin-top:12px;flex-wrap:wrap"><button class="btn" id="apSenha">🔑 Senha</button><button class="btn" id="apApps">🔗 Vínculo com os aplicativos</button></div>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">O vínculo com funcionário define os registros "próprios" da pessoa (agenda, OS, tarefas e comissões dela).</p>`}
+    </div>
+    <div class="card"><div class="acCabCard"><h2 style="margin:0">Permissões</h2><span class="muted" style="font-size:13px">Herdadas do perfil <b>${esc(perfilNome(u.perfil_id))}</b>. Alterações aqui valem somente para esta pessoa.</span>
+      ${A.excecoes.some(e => e.usuario_id === u.id) ? '<button class="btn peq" id="apRestaura" style="margin-left:auto">Restaurar padrão do perfil</button>' : ''}</div>
+      <div id="apEditor"></div></div>`);
+  $('#folha').style.width = 'min(940px,100%)';
+  const recarrega = async () => { ST.ac = await carregaAcessos(); acPessoa(id); };
+  const salva = async (q, ok) => { const r = await q; if(r.error){ await aviso('Não foi possível salvar', esc(erroBanco(r.error))); return recarrega(); } toast(ok); await recarrega(); };
+  if(!ag){
+    $('#apNome').onchange = async () => { const v = $('#apNome').value.trim(); if(!v){ await aviso('Nome obrigatório', 'Informe o nome.'); return recarrega(); }
+      await salva(sb.from('usuarios').update({ nome: v }).eq('id', id), 'Nome atualizado.'); if(eu){ ST.eu.nome = v; $('#uNome').textContent = 'Olá, ' + v; } };
+    $('#apPerfil').onchange = () => salva(sb.from('usuarios').update({ perfil_id: $('#apPerfil').value }).eq('id', id), 'Perfil de acesso alterado.');
+    $('#apPessoa').onchange = () => salva(sb.from('usuarios').update({ pessoa_id: $('#apPessoa').value || null }).eq('id', id), 'Vínculo atualizado.');
+    $('#apEmail').onclick = async () => { await acEmail(u); await recarrega(); };
+    $('#apSenha').onclick = () => acSenha(u);
+    $('#apApps').onclick = () => acApps(u);
+  }
+  if($('#apAtivo')) $('#apAtivo').onclick = async () => {
+    if(u.ativo && !await confirmaDuplo('Inativar ' + esc(u.nome) + '?', 'O acesso ao ERP é bloqueado imediatamente. O histórico é mantido.', 'Inativar')) return;
+    await salva(sb.from('usuarios').update({ ativo: !u.ativo, aguardando: false }).eq('id', id), u.ativo ? 'Usuário inativado.' : 'Usuário reativado.'); telaAcessos();
+  };
+  if($('#apRestaura')) $('#apRestaura').onclick = async () => {
+    if(!await confirmaDuplo('Restaurar o padrão do perfil?', 'As permissões individuais de ' + esc(u.nome) + ' serão removidas.', 'Restaurar')) return;
+    await salva(sb.from('acesso_excecoes').delete().eq('usuario_id', id), 'Permissões restauradas.');
+  };
+  const exc = t => (A.excecoes.find(e => e.usuario_id === id && e.tela === t.tela) || {}).nivel;
+  const doPerfil = t => (u.perfil === 'diretoria' && t.tela === 'adm_usuarios') ? 4 : (A.grade[u.perfil_id + '|' + t.tela] ?? 0);
+  acEditor($('#apEditor'), {
+    tipo: u.perfil, chave: 'p' + id,
+    valor: t => { const v = exc(t); return Math.min(v ?? doPerfil(t), acTeto(u.perfil, t)); },
+    padrao: doPerfil,
+    gravar: async lista => {
+      for(const [tela, nivel] of lista){
+        const t = A.telas.find(x => x.tela === tela), q = nivel === doPerfil(t)
+          ? sb.from('acesso_excecoes').delete().eq('usuario_id', id).eq('tela', tela)
+          : sb.from('acesso_excecoes').upsert({ usuario_id: id, tela, nivel }, { onConflict: 'usuario_id,tela' });
+        const r = await q; if(r.error){ await aviso('Não foi possível salvar', esc(erroBanco(r.error))); break; }
+      }
+      ST.ac = await carregaAcessos(); if(id === ST.eu.id) atualizaMeusAcessos(); acPessoa(id);
+    }
+  });
 }
 
 async function aprovarUsuario(u){
@@ -10136,100 +10179,172 @@ async function aprovarUsuario(u){
   const ok = await new Promise(res => {
     $('#mTit').textContent = 'Aprovar ' + u.nome;
     $('#mTxt').innerHTML = `<p style="margin-top:0">${esc(u.email || '')}</p>
-      <label class="campo">É do pré-cadastro de<select id="apConv"><option value="">— ninguém (escolher abaixo) —</option>${livres.map(c => `<option value="${c.id}">${esc(c.nome)} · ${esc(perfilNome(c.perfil_id))}</option>`).join('')}</select></label>
-      <label class="campo" style="margin-top:8px">Perfil<select id="apPerf">${optsPerfis('tecnico')}</select></label>
-      <label class="campo" style="margin-top:8px">Nome no ERP<input id="apNome" value="${esc(u.nome)}"></label>`;
-    $('#apConv').onchange = () => { const c = livres.find(x => x.id === $('#apConv').value); if(c){ $('#apPerf').value = c.perfil_id; $('#apNome').value = c.nome; } };
+      <label class="campo">Corresponde ao pré-cadastro de<select id="apConv"><option value="">— nenhum (definir abaixo) —</option>${livres.map(c => `<option value="${c.id}">${esc(c.nome)} · ${esc(perfilNome(c.perfil_id))}</option>`).join('')}</select></label>
+      <label class="campo" style="margin-top:8px">Perfil de acesso<select id="apPerf">${optsPerfis('tecnico')}</select></label>
+      <label class="campo" style="margin-top:8px">Nome no ERP<input id="apNomeAp" value="${esc(u.nome)}"></label>`;
+    $('#apConv').onchange = () => { const c = livres.find(x => x.id === $('#apConv').value); if(c){ $('#apPerf').value = c.perfil_id; $('#apNomeAp').value = c.nome; } };
     const bt = $('#mBtns'); bt.innerHTML = '';
     [['Cancelar', false, ''], ['Aprovar', true, 'pri']].forEach(([r, v, c]) => { const e = document.createElement('button'); e.className = 'btn ' + c; e.textContent = r;
-      e.onclick = () => { const d = v ? { conv: $('#apConv').value || null, perf: $('#apPerf').value, nome: $('#apNome').value } : null; $('#modal').classList.add('hidden'); res(d); }; bt.appendChild(e); });
+      e.onclick = () => { const d = v ? { conv: $('#apConv').value || null, perf: $('#apPerf').value, nome: $('#apNomeAp').value } : null; $('#modal').classList.add('hidden'); res(d); }; bt.appendChild(e); });
     $('#modal').classList.remove('hidden');
   });
   if(!ok) return;
   const r = await sb.rpc('acesso_aprovar', { p_usuario: u.id, p_perfil: ok.perf, p_convite: ok.conv, p_nome: ok.nome });
-  if(r.error) return aviso('Não aprovou', esc(erroBanco(r.error)));
-  toast('Aprovado: já pode entrar.'); telaAcessos();
+  if(r.error) return aviso('Não foi possível aprovar', esc(erroBanco(r.error)));
+  toast('Acesso aprovado.'); telaAcessos();
 }
 
-async function acessosDaPessoa(u){
-  const r = await sb.rpc('acesso_nivel_de', { p_usuario: u.id });
-  if(r.error) return aviso('Erro', esc(erroBanco(r.error)));
-  const N = r.data || {}, areas = [...new Set(ST.ac.telas.map(t => t.area))];
-  abrirPainel(`<div class="cab"><h2>Acessos de ${esc(u.nome)}</h2><span class="muted" style="margin-left:8px">perfil ${esc(perfilNome(u.perfil_id))}</span><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
-    <div class="card"><p class="muted" style="margin-top:0;font-size:13px">A coluna <b>Exceção</b> muda só para esta pessoa. "— como o perfil —" segue a grade do perfil.${u.perfil === 'agente' ? ' O Claude tem travas: não passa do máximo de cada tela.' : ''}</p>
-    <table class="reg"><thead><tr><th>Área</th><th>Tela</th><th>Pelo perfil</th><th>Exceção</th><th>Vale</th></tr></thead><tbody>
-    ${areas.map(a => ST.ac.telas.filter(t => t.area === a).map((t, k) => { const x = N[t.tela] || { perfil: 0, excecao: null, final: 0 };
-      const trava = u.perfil === 'diretoria' && t.tela === 'adm_usuarios';
-      return `<tr><td class="muted">${k ? '' : esc(a)}</td><td>${esc(t.nome)}</td><td>${tagNivel(x.perfil)}</td>
-        <td>${trava ? '<span class="muted">trava: diretoria sempre tem</span>' : selNivel(x.excecao, `data-acex="${t.tela}"`, u.perfil === 'agente' ? t.teto_agente : 4, true)}</td><td>${tagNivel(x.final)}</td></tr>`; }).join('')).join('')}
-    </tbody></table></div>`);
-  $('#folha').style.width = 'min(860px,100%)';
-  document.querySelectorAll('[data-acex]').forEach(s => s.onchange = async () => {
-    const t = s.dataset.acex, v = s.value;
-    const q = v === '' ? sb.from('acesso_excecoes').delete().eq('usuario_id', u.id).eq('tela', t)
-                       : sb.from('acesso_excecoes').upsert({ usuario_id: u.id, tela: t, nivel: Number(v) }, { onConflict: 'usuario_id,tela' });
-    const x = await q; if(x.error){ await aviso('Não mudou', esc(erroBanco(x.error))); }
-    else toast(v === '' ? 'Volta a seguir o perfil.' : `Exceção: ${telaNome(t)} = ${NIV[v]}.`);
-    ST.ac = await carregaAcessos(); acessosDaPessoa(u);
-  });
-}
-
-// ---------- Grade ----------
-function acGrade(){
-  const A = ST.ac, perfis = A.perfis, areas = [...new Set(A.telas.map(t => t.area))];
-  const nUs = id => A.usuarios.filter(u => u.perfil_id === id && u.ativo).length;
-  $('#acCorpo').innerHTML = `<div class="card"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0">Quem vê e mexe em quê</h2>
-      <span class="muted" style="font-size:13px">${NIV.map((n, k) => `<span style="color:${NIV_COR[k]};font-weight:600" title="${NIV_DICA[k]}">${n}</span>`).join(' · ')}</span>
-      <button class="btn pri" id="acNovoPerf" style="margin-left:auto">+ Novo perfil</button></div>
-    <p class="muted" style="font-size:12px;margin:6px 0 10px">Muda na hora, para todos do perfil, no menu e no banco. Clique no nome do perfil para renomear. Só a diretoria entra em Acessos;  o Claude tem um máximo por tela (trava de segurança).</p>
-    <div style="overflow:auto;max-height:70vh"><table class="reg" style="font-size:13px"><thead style="position:sticky;top:0;background:#fff;z-index:1"><tr><th>Tela</th>
-      ${perfis.map(p => `<th style="min-width:118px"><button class="btn peq" data-acren="${p.id}" title="Renomear">${esc(p.nome)}</button><div class="muted" style="font-weight:400;font-size:11px">${nUs(p.id)} pessoa(s)${p.sistema ? '' : ` · como ${esc(perfilNome(p.tipo))}`}</div></th>`).join('')}</tr></thead><tbody>
-    ${areas.map(a => `<tr><td colspan="${perfis.length + 1}" style="background:#f6f6f6;font-weight:700">${esc(a)}</td></tr>` + A.telas.filter(t => t.area === a).map(t => `<tr><td>${esc(t.nome)}</td>
-      ${perfis.map(p => { const v = A.grade[p.id + '|' + t.tela] ?? 0;
-        if(p.tipo === 'diretoria' && t.tela === 'adm_usuarios') return `<td>${tagNivel(4)}<div class="muted" style="font-size:10px">trava</div></td>`;
-        return `<td>${selNivel(v, `data-acg="${p.id}|${t.tela}"`, p.tipo === 'agente' ? t.teto_agente : 4)}</td>`; }).join('')}</tr>`).join('')).join('')}
-    </tbody></table></div></div>`;
-  document.querySelectorAll('[data-acg]').forEach(s => s.onchange = async () => {
-    const [perfil_id, tela] = s.dataset.acg.split('|'), nivel = Number(s.value);
-    s.style.color = NIV_COR[nivel];
-    const r = await sb.from('acesso_grade').upsert({ perfil_id, tela, nivel }, { onConflict: 'perfil_id,tela' });
-    if(r.error){ await aviso('Não mudou', esc(erroBanco(r.error))); return telaAcessos(); }
-    A.grade[s.dataset.acg] = nivel; toast(`${perfilNome(perfil_id)} · ${telaNome(tela)}: ${NIV[nivel]}`);
-    if(perfil_id === ST.eu.perfil_id) atualizaMeusAcessos();
-  });
-  document.querySelectorAll('[data-acren]').forEach(b => b.onclick = () => renomearPerfil(perfis.find(p => p.id === b.dataset.acren)));
+// ---------- Perfis de acesso ----------
+function acPerfis(){
+  const A = ST.ac; if(!A.perfis.some(p => p.id === ST.acPerf)) ST.acPerf = A.perfis[0] && A.perfis[0].id;
+  const p = A.perfis.find(x => x.id === ST.acPerf), nUs = pid => A.usuarios.filter(u => u.perfil_id === pid && u.ativo).length;
+  $('#acCorpo').innerHTML = `<div class="card"><div class="acCabCard"><h2 style="margin:0">Perfis de acesso</h2><button class="btn pri" id="acNovoPerf" style="margin-left:auto">+ Novo perfil</button></div>
+      <p class="muted" style="font-size:13px;margin:6px 0 10px">Selecione o perfil e marque as áreas, telas e abas liberadas. Para cada item liberado, defina o nível de permissão. As alterações valem imediatamente para todos os usuários do perfil, no menu e no banco de dados.</p>
+      <div class="acChips">${A.perfis.map(x => `<button class="acChip${x.id === ST.acPerf ? ' ativo' : ''}" data-acperf="${x.id}">${esc(x.nome)}<small>${nUs(x.id)} usuário(s)</small></button>`).join('')}</div></div>
+    ${p ? `<div class="card"><div class="acCabCard"><h2 style="margin:0">${esc(p.nome)}</h2>
+        <span class="muted" style="font-size:13px">${p.sistema ? 'Perfil padrão do sistema' : `Perfil personalizado · comporta-se como ${esc(perfilNome(p.tipo))}`}</span>
+        <button class="btn peq" id="acRenPerf" style="margin-left:auto">${p.sistema ? 'Renomear' : 'Editar perfil'}</button></div>
+      <div id="acEditorPerf"></div></div>` : ''}`;
+  document.querySelectorAll('[data-acperf]').forEach(b => b.onclick = () => { ST.acPerf = b.dataset.acperf; acPerfis(); });
   $('#acNovoPerf').onclick = novoPerfil;
+  if(!p) return;
+  $('#acRenPerf').onclick = () => renomearPerfil(p);
+  acEditor($('#acEditorPerf'), {
+    tipo: p.tipo, chave: 'g' + p.id,
+    valor: t => (p.tipo === 'diretoria' && t.tela === 'adm_usuarios') ? 4 : Math.min(A.grade[p.id + '|' + t.tela] ?? 0, acTeto(p.tipo, t)),
+    gravar: async lista => {
+      const r = await sb.from('acesso_grade').upsert(lista.map(([tela, nivel]) => ({ perfil_id: p.id, tela, nivel })), { onConflict: 'perfil_id,tela' });
+      if(r.error) await aviso('Não foi possível salvar', esc(erroBanco(r.error)));
+      ST.ac = await carregaAcessos(); if(p.id === ST.eu.perfil_id) atualizaMeusAcessos(); acPerfis();
+    }
+  });
 }
+
+// ---------- Editor de permissões: pastas (áreas) → telas → abas, com caixas de seleção e nível ----------
+const acTeto = (tipo, t) => tipo === 'agente' ? (t.teto_agente || 0) : 4;
+const acSoAcesso = t => t.tela.startsWith('app_');          // áreas e abas dos aplicativos: liberado ou não
+function acTrava(tipo, t){
+  if(t.tela === 'adm_usuarios') return tipo === 'diretoria' ? 'Sempre liberado para a Diretoria' : 'Exclusivo da Diretoria';
+  if(tipo === 'agente' && !t.teto_agente) return 'Bloqueado para o Claude (segurança)';
+  return null;
+}
+function acPastas(telas){
+  const top = new Map();
+  for(const t of telas){
+    const [a, b] = t.area.split(' · ');
+    if(!top.has(a)) top.set(a, new Map());
+    const m = top.get(a), k = b ? b.charAt(0).toUpperCase() + b.slice(1) : '';
+    if(!m.has(k)) m.set(k, []); m.get(k).push(t);
+  }
+  return [...top].map(([nome, m]) => ({ nome, grupos: [...m].map(([sub, telas]) => ({ sub, telas })) }));
+}
+function acEditor(alvo, ctx){
+  ST.acAbertas = ST.acAbertas || {}; const ab = ST.acAbertas[ctx.chave] = ST.acAbertas[ctx.chave] || new Set();
+  const busca = (ST.acBusca || '').toLowerCase().trim();
+  const telas = ST.ac.telas.filter(t => !busca || (t.nome + ' ' + t.area).toLowerCase().includes(busca));
+  const pastas = acPastas(telas);
+  const linha = t => {
+    const v = ctx.valor(t), tr = acTrava(ctx.tipo, t), teto = acTeto(ctx.tipo, t), pad = ctx.padrao ? ctx.padrao(t) : null;
+    const ind = pad != null && Math.min(pad, teto) !== v;
+    return `<div class="acItem${v ? ' on' : ''}">
+      <label class="acChk"><input type="checkbox" data-acck="${t.tela}" ${v ? 'checked' : ''} ${tr ? 'disabled' : ''}><span>${esc(t.nome)}</span></label>
+      ${ind ? `<span class="acInd" title="No perfil: ${NIV[Math.min(pad, teto)]}">individual</span>` : ''}
+      ${tr ? `<span class="acTrava">${esc(tr)}</span>`
+        : v && !acSoAcesso(t) ? `<div class="acSeg">${[1, 2, 3, 4].filter(k => k <= teto).map(k => `<button type="button" class="${v === k ? 'ativo' : ''}" data-acnv="${t.tela}|${k}" title="${NIV_DICA[k]}">${NIV[k]}</button>`).join('')}</div>`
+        : v ? '<span class="acTrava" style="color:var(--verde)">Acesso liberado</span>' : ''}
+    </div>`;
+  };
+  alvo.innerHTML = `<div class="acFerr"><input type="search" id="acBusca" placeholder="Buscar área, tela ou aba" value="${esc(ST.acBusca || '')}">
+      <button class="btn peq" id="acAbreTudo">${ab.size ? 'Recolher tudo' : 'Expandir tudo'}</button></div>
+    <div class="acLeg">${[1, 2, 3, 4].map(k => `<span><b>${NIV[k]}</b> — ${NIV_DICA[k]}</span>`).join('')}<span><b>Aplicativos</b> — áreas e abas dos apps de Projetos e Serviços: liberado ou não</span></div>
+    ${pastas.map(p => { const ts = p.grupos.flatMap(g => g.telas), livres = ts.filter(t => !acTrava(ctx.tipo, t)), on = ts.filter(t => ctx.valor(t) > 0).length;
+      return `<details class="acPasta" data-pasta="${esc(p.nome)}" ${busca || ab.has(p.nome) ? 'open' : ''}>
+        <summary><input type="checkbox" data-acpasta="${esc(p.nome)}" ${livres.length ? '' : 'disabled'} title="Marcar ou desmarcar todos os itens desta pasta"><b>${esc(p.nome)}</b><span class="acCont${on ? ' on' : ''}">${on} de ${ts.length} liberado(s)</span></summary>
+        <div class="acPastaCorpo">${p.grupos.map(g => (g.sub ? `<div class="acSub">${esc(g.sub)}</div>` : '') + g.telas.map(linha).join('')).join('')}</div></details>`; }).join('') || '<p class="vazio">Nada encontrado.</p>'}`;
+  const tela = k => ST.ac.telas.find(t => t.tela === k);
+  const padraoLigar = t => acSoAcesso(t) ? 3 : Math.min(3, acTeto(ctx.tipo, t)) || 1;
+  alvo.querySelectorAll('.acPasta').forEach(d => {
+    const ts = acPastas(telas).find(p => p.nome === d.dataset.pasta).grupos.flatMap(g => g.telas), cb = d.querySelector('[data-acpasta]');
+    const on = ts.filter(t => ctx.valor(t) > 0).length; cb.checked = on === ts.length && on > 0; cb.indeterminate = on > 0 && on < ts.length;
+    d.ontoggle = () => { d.open ? ab.add(d.dataset.pasta) : ab.delete(d.dataset.pasta); };
+    cb.onclick = e => e.stopPropagation();
+    cb.onchange = () => { const liga = cb.checked; ab.add(d.dataset.pasta);
+      ctx.gravar(ts.filter(t => !acTrava(ctx.tipo, t)).filter(t => liga ? !ctx.valor(t) : ctx.valor(t)).map(t => [t.tela, liga ? padraoLigar(t) : 0])); };
+  });
+  alvo.querySelectorAll('[data-acck]').forEach(c => c.onchange = () => { const t = tela(c.dataset.acck); ctx.gravar([[t.tela, c.checked ? padraoLigar(t) : 0]]); });
+  alvo.querySelectorAll('[data-acnv]').forEach(b => b.onclick = () => { const [t, k] = b.dataset.acnv.split('|'); ctx.gravar([[t, Number(k)]]); });
+  const bu = $('#acBusca'); bu.oninput = () => { ST.acBusca = bu.value; const p = bu.selectionStart; acEditor(alvo, ctx); const n = $('#acBusca'); n.focus(); n.setSelectionRange(p, p); };
+  $('#acAbreTudo').onclick = () => { if(ab.size) ab.clear(); else pastas.forEach(p => ab.add(p.nome)); acEditor(alvo, ctx); };
+}
+
+(function(){ if(document.getElementById('acEstilo')) return; const st = document.createElement('style'); st.id = 'acEstilo'; st.textContent = `
+.acCabCard{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.acCabCard input[type=search]{flex:1;min-width:180px;max-width:360px}
+.acUsers{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:12px}
+.acUser{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--borda);border-radius:14px;padding:12px;background:#fff;cursor:pointer;transition:box-shadow .12s}
+.acUser:hover{box-shadow:0 6px 18px rgba(0,0,0,.08)}.acUser.inativo{opacity:.6}
+.acUserTx{flex:1;min-width:0}.acUserTx b{display:block;overflow:hidden;text-overflow:ellipsis}.acUserTx .muted{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acUserBt{display:flex;gap:6px;flex-shrink:0}
+.acUser .tag{margin:0 4px 0 0}
+.acAv{width:40px;height:40px;border-radius:50%;background:linear-gradient(180deg,#2a2a2e,#141416);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
+.acForm{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 14px}
+.acLinha{display:flex;gap:8px;align-items:center}.acLinha input{flex:1}
+.acChips{display:flex;gap:8px;flex-wrap:wrap}
+.acChip{border:1px solid var(--borda);background:#fff;border-radius:12px;padding:8px 14px;cursor:pointer;text-align:left;font-weight:600}
+.acChip small{display:block;font-weight:400;color:var(--texto2);font-size:11px}
+.acChip.ativo{background:linear-gradient(180deg,#ff2828,#c8000c);color:#fff;border-color:#c0000b}.acChip.ativo small{color:#ffe1e1}
+.acFerr{display:flex;gap:8px;margin:12px 0 8px}.acFerr input{flex:1}
+.acLeg{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--texto2);margin-bottom:10px}
+.acPasta{border:1px solid var(--borda);border-radius:12px;margin-bottom:8px;background:#fff;overflow:hidden}
+.acPasta summary{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:#f7f7f9;list-style:none}
+.acPasta summary::-webkit-details-marker{display:none}
+.acPasta summary::after{content:'';margin-left:8px;width:8px;height:8px;border-right:2px solid #8e8e94;border-bottom:2px solid #8e8e94;transform:rotate(-45deg);transition:transform .15s}
+.acPasta[open] summary::after{transform:rotate(45deg)}
+.acPasta summary input,.acChk input{width:18px;height:18px;accent-color:#d0151b;flex-shrink:0;margin:0}
+.acCont{margin-left:auto;font-size:12px;color:var(--texto2)}.acCont.on{color:var(--verde);font-weight:600}
+.acPastaCorpo{padding:4px 14px 10px}
+.acSub{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#8e8e94;padding:12px 0 4px}
+.acItem{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #f0f0f2}
+.acItem:last-child{border-bottom:0}
+.acChk{display:flex;align-items:center;gap:10px;flex:1;min-width:180px;cursor:pointer}
+.acItem:not(.on) .acChk span{color:var(--texto2)}
+.acSeg{display:inline-flex;background:#ececf0;border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.acSeg button{border:0;background:transparent;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;color:#3a3a3c;cursor:pointer}
+.acSeg button.ativo{background:#fff;color:var(--verm);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+.acTrava{font-size:12px;color:var(--texto2)}
+.acInd{font-size:11px;background:#fff4e5;color:#b45309;border-radius:999px;padding:1px 8px}
+@media (max-width:640px){.acUsers{grid-template-columns:1fr}.acUser{flex-wrap:wrap}.acUserBt{width:100%}.acUserBt .btn{flex:1}.acSeg{width:100%}.acSeg button{flex:1;padding:7px 4px}.acChk{min-width:0}}
+`; document.head.appendChild(st); })();
 
 async function renomearPerfil(p){
   const ok = await new Promise(res => {
-    $('#mTit').textContent = 'Perfil ' + p.nome;
+    $('#mTit').textContent = 'Perfil de acesso: ' + p.nome;
     $('#mTxt').innerHTML = `<label class="campo">Nome<input id="rpNome" value="${esc(p.nome)}"></label>
-      ${p.sistema ? '<p class="muted" style="font-size:12px">Perfil básico: dá para renomear, não para apagar.</p>' : `<label class="campo" style="margin-top:8px">Se comporta como<select id="rpTipo">${['diretoria','administrativo','projetos','servicos','tecnico'].map(t => `<option value="${t}" ${p.tipo === t ? 'selected' : ''}>${esc(perfilNome(t))}</option>`).join('')}</select></label>`}`;
+      ${p.sistema ? '<p class="muted" style="font-size:12px">Perfil padrão do sistema: pode ser renomeado, mas não excluído.</p>' : `<label class="campo" style="margin-top:8px">Comporta-se como<select id="rpTipo">${['diretoria','administrativo','projetos','servicos','tecnico'].map(t => `<option value="${t}" ${p.tipo === t ? 'selected' : ''}>${esc(perfilNome(t))}</option>`).join('')}</select></label>`}`;
     const bt = $('#mBtns'); bt.innerHTML = '';
-    [...(p.sistema ? [] : [['Apagar perfil', 'apagar', '']]), ['Cancelar', null, ''], ['Salvar', 'salvar', 'pri']].forEach(([r, v, c]) => { const e = document.createElement('button'); e.className = 'btn ' + c; e.textContent = r;
+    [...(p.sistema ? [] : [['Excluir perfil', 'apagar', '']]), ['Cancelar', null, ''], ['Salvar', 'salvar', 'pri']].forEach(([r, v, c]) => { const e = document.createElement('button'); e.className = 'btn ' + c; e.textContent = r;
       e.onclick = () => { const d = v ? { acao: v, nome: $('#rpNome').value.trim(), tipo: $('#rpTipo') ? $('#rpTipo').value : p.tipo } : null; $('#modal').classList.add('hidden'); res(d); }; bt.appendChild(e); });
     $('#modal').classList.remove('hidden');
   });
   if(!ok) return;
   if(ok.acao === 'apagar'){
-    if(ST.ac.usuarios.some(u => u.perfil_id === p.id)) return aviso('Tem gente neste perfil', 'Mude as pessoas para outro perfil antes de apagar.');
-    if(!await confirmaDuplo('Apagar o perfil ' + esc(p.nome) + '?', 'A grade dele some junto.', 'Apagar')) return;
-    const r = await sb.from('acesso_perfis').delete().eq('id', p.id); if(r.error) return aviso('Não apagou', esc(erroBanco(r.error)));
-    toast('Perfil apagado.'); return telaAcessos();
+    if(ST.ac.usuarios.some(u => u.perfil_id === p.id)) return aviso('Perfil em uso', 'Transfira os usuários para outro perfil antes de excluir.');
+    if(!await confirmaDuplo('Excluir o perfil ' + esc(p.nome) + '?', 'As permissões deste perfil também serão excluídas.', 'Excluir')) return;
+    const r = await sb.from('acesso_perfis').delete().eq('id', p.id); if(r.error) return aviso('Não foi possível excluir', esc(erroBanco(r.error)));
+    toast('Perfil excluído.'); ST.acPerf = null; return telaAcessos();
   }
   if(!ok.nome) return;
   const r = await sb.from('acesso_perfis').update({ nome: ok.nome, ...(p.sistema ? {} : { tipo: ok.tipo }) }).eq('id', p.id);
-  if(r.error) return aviso('Não mudou', esc(erroBanco(r.error))); toast('Perfil salvo.'); telaAcessos();
+  if(r.error) return aviso('Não foi possível salvar', esc(erroBanco(r.error))); toast('Perfil salvo.'); telaAcessos();
 }
 
 async function novoPerfil(){
   const ok = await new Promise(res => {
     $('#mTit').textContent = 'Novo perfil';
-    $('#mTxt').innerHTML = `<label class="campo">Nome<input id="npNome" placeholder="Ex.: Estagiário de projetos"></label>
-      <label class="campo" style="margin-top:8px">Se comporta como<select id="npTipo">${['administrativo','projetos','servicos','tecnico','diretoria'].map(t => `<option value="${t}">${esc(perfilNome(t))}</option>`).join('')}</select></label>
-      <label class="campo" style="margin-top:8px">Começar com os acessos de<select id="npCopia"><option value="">— nenhum (tudo "Não vê") —</option>${optsPerfis('')}</select></label>
-      <p class="muted" style="font-size:12px">"Se comporta como" vale para o que não está na grade (por exemplo: técnico entra pela agenda dele). Os acessos você ajusta na grade depois.</p>`;
+    $('#mTxt').innerHTML = `<label class="campo">Nome do perfil<input id="npNome" placeholder="Ex.: Estagiário de projetos"></label>
+      <label class="campo" style="margin-top:8px">Comporta-se como<select id="npTipo">${['administrativo','projetos','servicos','tecnico','diretoria'].map(t => `<option value="${t}">${esc(perfilNome(t))}</option>`).join('')}</select></label>
+      <label class="campo" style="margin-top:8px">Copiar as permissões de<select id="npCopia"><option value="">— nenhum (tudo sem acesso) —</option>${optsPerfis('')}</select></label>
+      <p class="muted" style="font-size:12px">"Comporta-se como" define o comportamento padrão do sistema (por exemplo: o técnico abre na própria agenda). As permissões podem ser ajustadas depois.</p>`;
     $('#npTipo').onchange = () => { $('#npCopia').value = $('#npTipo').value; }; $('#npCopia').value = 'administrativo';
     const bt = $('#mBtns'); bt.innerHTML = '';
     [['Cancelar', false, ''], ['Criar', true, 'pri']].forEach(([r, v, c]) => { const e = document.createElement('button'); e.className = 'btn ' + c; e.textContent = r;
@@ -10239,54 +10354,26 @@ async function novoPerfil(){
   if(!ok) return;
   let id = slugPerfil(ok.nome); while(ST.ac.perfis.some(p => p.id === id)) id += '_2';
   const r = await sb.from('acesso_perfis').insert({ id, nome: ok.nome, tipo: ok.tipo, ordem: 50 + ST.ac.perfis.length });
-  if(r.error) return aviso('Não criou', esc(erroBanco(r.error)));
-  if(ok.copia){ const c = await sb.rpc('acesso_copiar_perfil', { p_de: ok.copia, p_para: id }); if(c.error) await aviso('Perfil criado, acessos não copiados', esc(erroBanco(c.error))); }
-  toast('Perfil criado.'); ST.acAba = 'grade'; telaAcessos();
-}
-
-// ---------- Exceções ----------
-function acExcecoes(){
-  const A = ST.ac, nomeU = id => (A.usuarios.find(u => u.id === id) || {}).nome || '?';
-  $('#acCorpo').innerHTML = `<div class="card"><div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0">Exceções por pessoa</h2><button class="btn pri" id="acNovaEx" style="margin-left:auto">+ Nova exceção</button></div>
-    <p class="muted" style="font-size:12px">Muda o nível de uma tela só para uma pessoa, sem mexer no perfil dela.</p>
-    <table class="reg"><thead><tr><th>Pessoa</th><th>Tela</th><th>Pelo perfil</th><th>Vale para ela</th><th>Motivo</th><th></th></tr></thead><tbody>
-    ${A.excecoes.map(e => { const u = A.usuarios.find(x => x.id === e.usuario_id) || {}; return `<tr><td>${esc(nomeU(e.usuario_id))}</td><td>${esc(telaNome(e.tela))}</td><td>${tagNivel(A.grade[u.perfil_id + '|' + e.tela] ?? 0)}</td><td>${tagNivel(e.nivel)}</td>
-      <td>${esc(e.motivo || '')}</td><td style="text-align:right"><button class="btn peq" data-acexdel="${e.usuario_id}|${e.tela}">Tirar</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma exceção: todos seguem o perfil.</td></tr>'}</tbody></table></div>`;
-  document.querySelectorAll('[data-acexdel]').forEach(b => b.onclick = async () => { const [u, t] = b.dataset.acexdel.split('|');
-    const r = await sb.from('acesso_excecoes').delete().eq('usuario_id', u).eq('tela', t); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); toast('Exceção tirada.'); telaAcessos(); });
-  $('#acNovaEx').onclick = async () => {
-    const ok = await new Promise(res => {
-      $('#mTit').textContent = 'Nova exceção';
-      $('#mTxt').innerHTML = `<label class="campo">Pessoa<select id="exU">${A.usuarios.filter(u => u.ativo).map(u => `<option value="${u.id}">${esc(u.nome)} · ${esc(perfilNome(u.perfil_id))}</option>`).join('')}</select></label>
-        <label class="campo" style="margin-top:8px">Tela<select id="exT">${A.telas.map(t => `<option value="${t.tela}">${esc(t.area)} · ${esc(t.nome)}</option>`).join('')}</select></label>
-        <label class="campo" style="margin-top:8px">Nível para ela${selNivel(3, 'id="exN"')}</label>
-        <label class="campo" style="margin-top:8px">Motivo (opcional)<input id="exM" placeholder="Ex.: cuida do plano de contas"></label>`;
-      const bt = $('#mBtns'); bt.innerHTML = '';
-      [['Cancelar', false, ''], ['Gravar', true, 'pri']].forEach(([r, v, c]) => { const e = document.createElement('button'); e.className = 'btn ' + c; e.textContent = r;
-        e.onclick = () => { const d = v ? { usuario_id: $('#exU').value, tela: $('#exT').value, nivel: Number($('#exN').value), motivo: $('#exM').value.trim() || null } : null; $('#modal').classList.add('hidden'); res(d); }; bt.appendChild(e); });
-      $('#modal').classList.remove('hidden');
-    });
-    if(!ok) return;
-    const r = await sb.from('acesso_excecoes').upsert(ok, { onConflict: 'usuario_id,tela' }); if(r.error) return aviso('Não gravou', esc(erroBanco(r.error)));
-    toast('Exceção gravada.'); telaAcessos();
-  };
+  if(r.error) return aviso('Não foi possível criar', esc(erroBanco(r.error)));
+  if(ok.copia){ const c = await sb.rpc('acesso_copiar_perfil', { p_de: ok.copia, p_para: id }); if(c.error) await aviso('Perfil criado, permissões não copiadas', esc(erroBanco(c.error))); }
+  toast('Perfil criado.'); ST.acAba = 'perfis'; ST.acPerf = id; telaAcessos();
 }
 
 // ---------- Pré-cadastro ----------
 function acConvites(){
   const A = ST.ac, nomeU = id => (A.usuarios.find(u => u.id === id) || {}).nome || '';
-  $('#acCorpo').innerHTML = `<div class="card"><div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0">Pré-cadastro</h2><button class="btn pri" id="acNovoConv" style="margin-left:auto">+ Pessoa</button></div>
-    <p class="muted" style="font-size:12px">Quem vai usar o ERP. Com o <b>e-mail</b> preenchido, quando a pessoa criar a conta com esse e-mail ela entra direto, já com o perfil. Sem e-mail, ela cai em "Aguardando aprovação" e você escolhe quem é.</p>
-    <table class="reg"><thead><tr><th>Nome</th><th>Função</th><th>Perfil</th><th>E-mail</th><th>Cadastro de funcionário</th><th>Celular</th><th>Situação</th><th></th></tr></thead><tbody>
+  $('#acCorpo').innerHTML = `<div class="card"><div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0">Pré-cadastro</h2><button class="btn pri" id="acNovoConv" style="margin-left:auto">+ Incluir pessoa</button></div>
+    <p class="muted" style="font-size:12px">Pessoas que ainda vão acessar o ERP. Com o <b>e-mail</b> informado, ao criar a conta com esse e-mail a pessoa entra direto, com o perfil definido. Sem e-mail, a conta fica em "Solicitações de acesso" para aprovação. Para criar o acesso já com senha, use <b>+ Novo usuário</b> na aba Usuários.</p>
+    <div style="overflow:auto"><table class="reg"><thead><tr><th>Nome</th><th>Função</th><th>Perfil de acesso</th><th>E-mail</th><th>Funcionário</th><th>Celular</th><th>Situação</th><th></th></tr></thead><tbody>
     ${A.convites.map(c => `<tr><td>${c.usado_por ? `<b>${esc(c.nome)}</b>` : `<input data-cvf="nome" data-cv="${c.id}" value="${esc(c.nome)}" style="min-width:150px;font-weight:600">`}</td>
       <td>${c.usado_por ? esc(c.funcao || '') : `<input data-cvf="funcao" data-cv="${c.id}" value="${esc(c.funcao || '')}" placeholder="função" style="min-width:140px">`}</td>
       <td>${c.usado_por ? esc(perfilNome(c.perfil_id)) : `<select data-cvf="perfil_id" data-cv="${c.id}">${optsPerfis(c.perfil_id)}</select>`}</td>
       <td>${c.usado_por ? esc(c.email || '') : `<input data-cvf="email" data-cv="${c.id}" type="email" value="${esc(c.email || '')}" placeholder="e-mail da pessoa" style="min-width:190px">`}</td>
       <td>${c.usado_por ? esc((pessoa(c.pessoa_id) || {}).nome || '—') : `<select data-cvf="pessoa_id" data-cv="${c.id}">${optsFunc(c.pessoa_id)}</select>`}</td>
       <td>${c.celular ? 'sim' : ''}</td>
-      <td>${c.usado_por ? `<span class="tag ok">entrou${c.usado_em ? ' ' + dtHoraBR(c.usado_em).slice(0, 10) : ''}</span>` : c.email ? '<span class="tag">esperando o 1º acesso</span>' : '<span class="tag rasc">falta o e-mail</span>'}</td>
-      <td style="text-align:right">${c.usado_por ? '' : `<button class="btn peq" data-cvdel="${c.id}">Remover</button>`}</td></tr>`).join('') || '<tr><td colspan="8" class="vazio">Ninguém no pré-cadastro.</td></tr>'}</tbody></table>
-    <p class="muted" style="font-size:12px;margin:8px 0 0">Nome e função se editam direto na tabela. Quem já entrou no ERP tem o nome editado na aba <b>Usuários</b>.<br>Como a pessoa entra: abre o ERP → <b>Criar minha conta</b> → nome, e-mail e senha.</p></div>`;
+      <td>${c.usado_por ? `<span class="tag ok">entrou${c.usado_em ? ' ' + dtHoraBR(c.usado_em).slice(0, 10) : ''}</span>` : c.email ? '<span class="tag">aguardando o primeiro acesso</span>' : '<span class="tag rasc">e-mail não informado</span>'}</td>
+      <td style="text-align:right">${c.usado_por ? '' : `<button class="btn peq" data-cvdel="${c.id}">Remover</button>`}</td></tr>`).join('') || '<tr><td colspan="8" class="vazio">Nenhuma pessoa no pré-cadastro.</td></tr>'}</tbody></table></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">Nome e função são editados diretamente na tabela. Para quem já acessou, edite pelo cadastro na aba <b>Usuários</b>.<br>Primeiro acesso: abrir o ERP → <b>Criar minha conta</b> → nome, e-mail e senha.</p></div>`;
   document.querySelectorAll('[data-cv]').forEach(i => i.onchange = async () => {
     const v = i.value.trim() || null;
     if(i.dataset.cvf === 'nome' && !v){ await aviso('Falta o nome', 'O nome não pode ficar vazio.'); return acConvites(); }
@@ -10299,10 +10386,10 @@ function acConvites(){
     const ok = await new Promise(res => {
       $('#mTit').textContent = 'Pessoa no pré-cadastro';
       $('#mTxt').innerHTML = `<label class="campo">Nome<input id="cvN"></label><label class="campo" style="margin-top:8px">Função<input id="cvF"></label>
-        <label class="campo" style="margin-top:8px">Perfil<select id="cvP">${optsPerfis('tecnico')}</select></label>
+        <label class="campo" style="margin-top:8px">Perfil de acesso<select id="cvP">${optsPerfis('tecnico')}</select></label>
         <label class="campo" style="margin-top:8px">E-mail<input id="cvE" type="email"></label>
-        <label class="campo" style="margin-top:8px">Cadastro de funcionário<select id="cvPes">${optsFunc(null)}</select></label>
-        <label style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="cvC" style="width:auto"> usa pelo celular</label>`;
+        <label class="campo" style="margin-top:8px">Vínculo com funcionário<select id="cvPes">${optsFunc(null)}</select></label>
+        <label style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="cvC" style="width:auto"> utiliza pelo celular</label>`;
       const bt = $('#mBtns'); bt.innerHTML = '';
       [['Cancelar', false, ''], ['Gravar', true, 'pri']].forEach(([r, v, c]) => { const e = document.createElement('button'); e.className = 'btn ' + c; e.textContent = r;
         e.onclick = () => { const d = v ? { nome: $('#cvN').value.trim(), funcao: $('#cvF').value.trim() || null, perfil_id: $('#cvP').value, email: $('#cvE').value.trim().toLowerCase() || null, pessoa_id: $('#cvPes').value || null, celular: $('#cvC').checked } : null;
@@ -10369,11 +10456,11 @@ const linkSenhaNova = () => location.origin + location.pathname + '?nova-senha=1
 
 async function acSenha(u){
   const sug = senhaProvisoria();
-  const ok = await acModal('Senha de ' + u.nome, `<p style="margin-top:0">${esc(u.email || '')}</p>
-    <p class="muted" style="font-size:13px">A senha de cada um é secreta: o ERP não mostra a senha atual. Você pode <b>definir uma senha nova</b> (e passar para a pessoa) ou <b>mandar um link</b> para ela criar a dela.</p>
+  const ok = await acModal('Senha — ' + u.nome, `<p style="margin-top:0">${esc(u.email || '')}</p>
+    <p class="muted" style="font-size:13px">Por segurança, a senha atual não é exibida. É possível <b>definir uma senha provisória</b> (e informá-la à pessoa) ou <b>enviar um link</b> para que ela cadastre a própria senha.</p>
     <label class="campo">Senha nova (mínimo 8)<input id="acS1" value="${sug}" autocomplete="new-password"></label>
     <div id="acMErro" style="color:var(--verm);font-size:13px;margin-top:6px"></div>`,
-    [['Cancelar', null], ['Mandar link por e-mail', 'link'], ['Definir esta senha', 'definir', 'pri']],
+    [['Cancelar', null], ['Enviar link por e-mail', 'link'], ['Definir senha provisória', 'definir', 'pri']],
     v => v === 'link' ? { acao: 'link' } : ($('#acS1').value.length < 8 ? acErro('A senha precisa ter pelo menos 8 caracteres.') : { acao: 'definir', senha: $('#acS1').value }));
   if(!ok) return;
   if(ok.acao === 'link'){
@@ -10388,35 +10475,35 @@ async function acSenha(u){
 }
 
 async function acEmail(u){
-  const ok = await acModal('E-mail de ' + u.nome, `<label class="campo">E-mail de login<input id="acE1" type="email" value="${esc(u.email || '')}"></label>
-    <p class="muted" style="font-size:12px">A pessoa passa a entrar com o e-mail novo (a senha continua a mesma). Os vínculos com os apps de Projetos e Serviços acompanham.</p>
+  const ok = await acModal('E-mail de acesso — ' + u.nome, `<label class="campo">E-mail de login<input id="acE1" type="email" value="${esc(u.email || '')}"></label>
+    <p class="muted" style="font-size:12px">A pessoa passa a acessar com o novo e-mail (a senha não muda). Os vínculos com os aplicativos de Projetos e Serviços são atualizados.</p>
     <div id="acMErro" style="color:var(--verm);font-size:13px;margin-top:6px"></div>`,
-    [['Cancelar', null], ['Trocar e-mail', true, 'pri']],
+    [['Cancelar', null], ['Alterar e-mail', true, 'pri']],
     () => { const e = $('#acE1').value.trim().toLowerCase(); return /^\S+@\S+\.\S+$/.test(e) ? e : acErro('E-mail inválido.'); });
   if(!ok || ok === (u.email || '').toLowerCase()) return;
   const r = await sb.rpc('acesso_mudar_email', { p_usuario: u.id, p_email: ok });
   if(r.error) return aviso('Não trocou', esc(erroBanco(r.error)));
   try{ await appsTrocaEmail(u.email, ok); }catch(e){ await aviso('E-mail trocado', 'Mas não deu para acertar os apps: ' + esc(e.message || e)); }
-  toast('E-mail trocado.'); telaAcessos();
+  toast('E-mail alterado.'); telaAcessos();
 }
 
 async function acNovoLogin(){
   const sug = senhaProvisoria();
-  const ok = await acModal('Novo login', `<label class="campo">Nome<input id="nlN"></label>
+  const ok = await acModal('Novo usuário', `<label class="campo">Nome<input id="nlN"></label>
     <label class="campo" style="margin-top:8px">E-mail<input id="nlE" type="email"></label>
-    <label class="campo" style="margin-top:8px">Perfil<select id="nlP">${ST.ac.perfis.filter(p => p.tipo !== 'agente').map(p => `<option value="${p.id}" ${p.id === 'tecnico' ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>
-    <label class="campo" style="margin-top:8px">Cadastro de funcionário<select id="nlPes">${optsFunc(null)}</select></label>
+    <label class="campo" style="margin-top:8px">Perfil de acesso<select id="nlP">${ST.ac.perfis.filter(p => p.tipo !== 'agente').map(p => `<option value="${p.id}" ${p.id === 'tecnico' ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>
+    <label class="campo" style="margin-top:8px">Vínculo com funcionário<select id="nlPes">${optsFunc(null)}</select></label>
     <label class="campo" style="margin-top:8px">Senha provisória (mínimo 8)<input id="nlS" value="${sug}" autocomplete="new-password"></label>
-    <p class="muted" style="font-size:12px">A pessoa já entra com este e-mail e esta senha, sem esperar aprovação. Depois ela pode trocar a senha em "Esqueci minha senha". O que ela vê no ERP e nos apps segue o perfil (ajuste em "Perfis e acessos" ou em "Acessos" da pessoa).</p>
+    <p class="muted" style="font-size:12px">O acesso é liberado imediatamente com este e-mail e esta senha. A pessoa pode trocar a senha depois em "Esqueci minha senha". As permissões seguem o perfil de acesso e podem ser ajustadas no cadastro da pessoa.</p>
     <div id="acMErro" style="color:var(--verm);font-size:13px;margin-top:6px"></div>`,
-    [['Cancelar', null], ['Criar login', true, 'pri']],
+    [['Cancelar', null], ['Criar usuário', true, 'pri']],
     () => { const d = { nome: $('#nlN').value.trim(), email: $('#nlE').value.trim().toLowerCase(), perfil: $('#nlP').value, pessoa: $('#nlPes').value || null, senha: $('#nlS').value };
       return !d.nome ? acErro('Escreva o nome.') : !/^\S+@\S+\.\S+$/.test(d.email) ? acErro('E-mail inválido.') : d.senha.length < 8 ? acErro('A senha precisa ter pelo menos 8 caracteres.') : d; });
   if(!ok) return;
   const r = await sb.rpc('acesso_criar_login', { p_nome: ok.nome, p_email: ok.email, p_senha: ok.senha, p_perfil: ok.perfil, p_pessoa: ok.pessoa });
   if(r.error) return aviso('Não criou', esc(erroBanco(r.error)));
-  await aviso('Login criado', `Passe para <b>${esc(ok.nome)}</b>:<br>endereço <b>${esc(location.origin + location.pathname)}</b><br>e-mail <b>${esc(ok.email)}</b><br>senha <b style="font-family:monospace;font-size:15px">${esc(ok.senha)}</b>
-    <br><span class="muted" style="font-size:12px">Se a pessoa vai usar o app de Projetos (como projetista) ou de Serviços, ligue em <b>🔗 Apps</b> na lista.</span>`);
+  await aviso('Usuário criado', `Passe para <b>${esc(ok.nome)}</b>:<br>endereço <b>${esc(location.origin + location.pathname)}</b><br>e-mail <b>${esc(ok.email)}</b><br>senha <b style="font-family:monospace;font-size:15px">${esc(ok.senha)}</b>
+    <br><span class="muted" style="font-size:12px">Se a pessoa vai usar os aplicativos de Projetos (como projetista) ou de Serviços, abra o cadastro dela → <b>🔗 Vínculo com os aplicativos</b>.</span>`);
   telaAcessos();
 }
 
@@ -10452,7 +10539,7 @@ async function acApps(u){
   setTimeout(() => { const pinta = () => { const id = $('#apSv').value, x = D.svUsers[id];
       document.querySelectorAll('[data-svp]').forEach(c => { c.checked = x ? !!(x.profiles || {})[c.dataset.svp] : id === '__novo' && padrao(c.dataset.svp); c.disabled = !id; }); };
     $('#apSv').onchange = pinta; pinta(); }, 0);
-  const ok = await acModal('Apps de ' + u.nome, `<p class="muted" style="margin-top:0;font-size:13px">Quem <b>${esc(u.nome)}</b> é dentro de cada app. <b>O que</b> ela vê nos apps (áreas e abas) fica em <b>Perfis e acessos</b> e no botão <b>Acessos</b> da pessoa.</p>
+  const ok = await acModal('Vínculo com os aplicativos — ' + u.nome, `<p class="muted" style="margin-top:0;font-size:13px">Identifica <b>${esc(u.nome)}</b> dentro de cada aplicativo. As áreas e abas liberadas ficam em <b>Permissões</b>, no cadastro da pessoa, ou no perfil de acesso.</p>
     <label class="campo">App de Serviços — usuário do app (o nome aparece na agenda, nas OS e no histórico)
       <select id="apSv"><option value="">— nenhum (não usa o app de Serviços) —</option>
         ${svNomes.map(([id, x]) => `<option value="${esc(id)}" ${id === svAtual ? 'selected' : ''}>${esc(x.name || id)}${esc(outroSv(id))}</option>`).join('')}
@@ -10460,7 +10547,7 @@ async function acApps(u){
     <div id="apSvPerf" style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 0;font-size:13px"><span class="muted">No app ela é:</span>${SV_PERFIS.map(([k, r]) => `<label style="display:flex;gap:5px;align-items:center"><input type="checkbox" data-svp="${k}" style="width:auto"> ${r}</label>`).join('')}</div>
     <label class="campo" style="margin-top:10px">App de Projetos — nome na equipe (área Projetista: tarefas e comissão dele)
       <select id="apPj"><option value="">— nenhum —</option>${D.equipe.map(n => `<option value="${esc(n)}" ${n === pjAtual ? 'selected' : ''}>${esc(n)}${D.pjEmails[n] && n !== pjAtual ? ' · já ligado a ' + esc(D.pjEmails[n]) : ''}</option>`).join('')}</select></label>
-    <p class="muted" style="font-size:12px;margin-bottom:0">Ninguém digita senha nem PIN nos apps: entra com o login do ERP.</p>`,
+    <p class="muted" style="font-size:12px;margin-bottom:0">Nos aplicativos não há senha nem PIN: o acesso é feito com o login do ERP.</p>`,
     [['Cancelar', null], ['Gravar', true, 'pri']], () => ({ sv: $('#apSv').value, pj: $('#apPj').value, perf: Object.fromEntries([...document.querySelectorAll('[data-svp]')].map(c => [c.dataset.svp, c.checked])) }), () => {});
   if(!ok) return;
   try{
@@ -10479,7 +10566,7 @@ async function acApps(u){
       if(ok.pj) m[ok.pj] = u.email.toLowerCase();
       const r = await pjGrava([['clm-emails-projetistas', m]]); if(r.error) throw r.error;
     }
-    toast('Apps ligados.');
+    toast('Vínculo atualizado.');
   }catch(e){ aviso('Não gravou', esc(erroBanco(e))); }
 }
 
