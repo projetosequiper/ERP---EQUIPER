@@ -437,7 +437,7 @@ function montar(){
   const t = D.titulo || 'Sua proposta, do seu jeito.', i = t.indexOf(',');
   $('#hTit').innerHTML = i > 0 ? `${esc(t.slice(0, i + 1))} <em>${esc(t.slice(i + 1).trim())}</em>` : esc(t);
   $('#hIntro').textContent = D.intro || '';
-  $('#hCli').innerHTML = `<small>Cliente</small><strong>${esc(D.cliente)}</strong>${D.att ? `<small>Aos cuidados de</small><span>${esc(D.att)}</span>` : ''}${D.local ? `<small>Local</small><span>${esc(D.local)}</span>` : ''}`;
+  $('#hCli').innerHTML = `<small>Cliente</small><strong>${esc(D.cliente)}</strong>${D.att ? `<small>Pessoa de contato</small><span>${esc(D.att)}</span>` : ''}${D.local ? `<small>Local</small><span>${esc(D.local)}</span>` : ''}`;
   const A = areas();
   $('#groups').innerHTML = A.map(a => { const l = SYS.filter(s => s.area === a), sum = l.reduce((x, s) => x + s.tot, 0);
     return `<div class="group">${a || A.length > 1 ? `<div class="group-h"><h2>${esc(a || 'Outros sistemas')}</h2><span>${l.length} ${l.every(s => s.mini) ? (l.length > 1 ? 'projetos' : 'projeto') : (l.length > 1 ? 'sistemas' : 'sistema')} · ${brl(sum)}</span></div>` : ''}${l.map(card).join('')}</div>`; }).join('');
