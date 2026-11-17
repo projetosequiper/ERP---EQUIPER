@@ -686,8 +686,9 @@ async function iniciar(){
   const ent = await sb.rpc('acesso_entrar', { p_nome: (user.user_metadata || {}).nome || null });
   const sit = ent.error ? null : (ent.data || {}).situacao;
   const { data:u } = await sb.from('usuarios').select('*').eq('id', user.id).maybeSingle();
-  if(!u || !u.ativo){ $('#login').classList.remove('hidden'); $('#app').classList.add('hidden');
-    $('#lErro').textContent = sit === 'aguardando' ? 'Conta criada! Agora a diretoria precisa liberar o seu acesso. Tente entrar de novo depois.'
+  const venc = u && u.ativo && u.acesso_ate && u.acesso_ate < hojeISO();   // script 60: acesso com validade
+  if(!u || !u.ativo || venc){ $('#login').classList.remove('hidden'); $('#app').classList.add('hidden');
+    $('#lErro').textContent = venc ? 'Seu acesso ao ERP venceu em ' + dataBR(u.acesso_ate) + '. Fale com a diretoria.' : sit === 'aguardando' ? 'Conta criada! Agora a diretoria precisa liberar o seu acesso. Tente entrar de novo depois.'
       : sit === 'desativado' ? 'Seu acesso ao ERP está desativado. Fale com a diretoria.' : 'Seu login existe, mas você ainda não foi cadastrado no ERP. Peça à diretoria.';
     await sb.auth.signOut(); return; }
   ST.eu = u;
@@ -10072,12 +10073,13 @@ async function telaAcessos(){
   if(A.erro) return $('#conteudo').innerHTML = `<div class="card"><h2>Acessos</h2><p class="muted">${/acesso_/.test(A.erro) ? 'Execute o script <b>35_acessos.sql</b> no Supabase para ativar esta tela.' : esc(A.erro)}</p></div>`;
   ST.ac = A;
   const aguard = A.usuarios.filter(u => u.aguardando && !u.ativo);
-  const abas = [['usuarios', `Usuários${aguard.length ? ` <span class="cont">${aguard.length}</span>` : ''}`], ['perfis', 'Perfis de acesso'], ['convites', 'Pré-cadastro']];
+  const abas = [['usuarios', `Usuários${aguard.length ? ` <span class="cont">${aguard.length}</span>` : ''}`], ['perfis', 'Perfis de acesso'], ['convites', 'Pré-cadastro'], ['auditoria', 'Auditoria e histórico']];
   $('#conteudo').innerHTML = `<div class="cab"><h2>Acessos</h2><span class="muted" style="margin-left:8px;font-size:13px">Usuários, senhas e permissões do ERP e dos aplicativos de Projetos e Serviços</span></div>
     <div class="abasLanc">${abas.map(([k, r]) => `<button class="${ST.acAba === k ? 'ativo' : ''}" data-acaba="${k}">${r}</button>`).join('')}</div>
     <div id="acCorpo"></div>`;
   document.querySelectorAll('[data-acaba]').forEach(b => b.onclick = () => { ST.acAba = b.dataset.acaba; ST.acBusca = ''; telaAcessos(); });
-  ({ usuarios: acUsuarios, perfis: acPerfis, convites: acConvites })[ST.acAba]();
+  expRegistra(acExportar);
+  ({ usuarios: acUsuarios, perfis: acPerfis, convites: acConvites, auditoria: acAuditoria })[ST.acAba]();
 }
 
 const perfilNome = id => (ST.ac.perfis.find(p => p.id === id) || {}).nome || id;
@@ -10091,7 +10093,7 @@ const iniciais = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(x => 
 function acUsuarios(){
   const A = ST.ac, aguard = A.usuarios.filter(u => u.aguardando && !u.ativo), busca = (ST.acBuscaU || '').toLowerCase();
   const resto = A.usuarios.filter(u => !(u.aguardando && !u.ativo)).filter(u => !busca || (u.nome + ' ' + (u.email || '') + ' ' + perfilNome(u.perfil_id)).toLowerCase().includes(busca));
-  const nExc = id => A.excecoes.filter(e => e.usuario_id === id).length;
+  const nExc = id => A.excecoes.filter(e => e.usuario_id === id && excVale(e)).length;
   $('#acCorpo').innerHTML = `${aguard.length ? `<div class="card" style="border-color:#f59e0b88"><h2>Solicitações de acesso <span class="tag rasc">${aguard.length}</span></h2>
       <p class="muted" style="margin-top:-4px;font-size:13px">Contas criadas na tela de entrada que não constam no pré-cadastro. Aprove definindo o perfil de acesso, ou recuse.</p>
       ${aguard.map(u => `<div class="acUser"><div class="acAv">${esc(iniciais(u.nome))}</div><div class="acUserTx"><b>${esc(u.nome)}</b><div class="muted">${esc(u.email || '')}</div><div class="muted" style="font-size:12px">Solicitado em ${dtHoraBR(u.criado_em)}</div></div>
@@ -10102,7 +10104,7 @@ function acUsuarios(){
       <div class="acUsers">${resto.map(u => `<div class="acUser${u.ativo ? '' : ' inativo'}" data-acabrir="${u.id}" tabindex="0">
           <div class="acAv">${esc(iniciais(u.nome))}</div>
           <div class="acUserTx"><b>${esc(u.nome)}</b><div class="muted">${esc(u.email || (u.perfil === 'agente' ? 'acesso automatizado' : 'sem e-mail'))}</div>
-            <div style="margin-top:4px">${`<span class="tag">${esc(perfilNome(u.perfil_id))}</span>`}${u.ativo ? '<span class="tag ok">Ativo</span>' : '<span class="tag inat">Inativo</span>'}${nExc(u.id) ? `<span class="tag" style="background:#fff4e5;color:#b45309">${nExc(u.id)} permissão(ões) individual(is)</span>` : ''}</div>
+            <div style="margin-top:4px">${`<span class="tag">${esc(perfilNome(u.perfil_id))}</span>`}${!u.ativo ? '<span class="tag inat">Inativo</span>' : acessoVencido(u) ? '<span class="tag inat">Acesso vencido</span>' : '<span class="tag ok">Ativo</span>'}${u.ativo && u.acesso_ate && !acessoVencido(u) ? `<span class="tag">até ${dataBR(u.acesso_ate)}</span>` : ''}${nExc(u.id) ? `<span class="tag" style="background:#fff4e5;color:#b45309">${nExc(u.id)} permissão(ões) individual(is)</span>` : ''}</div>
             <div class="muted" style="font-size:12px;margin-top:3px">Último acesso: ${u.ultimo_acesso ? dtHoraBR(u.ultimo_acesso) : 'nunca acessou'}</div></div>
           <div class="acUserBt"><button class="btn peq" data-acabrir="${u.id}">Abrir cadastro</button></div></div>`).join('') || '<p class="vazio">Nenhum usuário encontrado.</p>'}</div>
       <p class="muted" style="font-size:12px;margin:10px 0 0">Abra o cadastro para alterar dados, senha, perfil, vínculo com os aplicativos e permissões individuais. Desligamento: <b>Inativar</b> — o acesso é bloqueado imediatamente e o histórico é mantido.</p></div>`;
@@ -10120,7 +10122,9 @@ function acUsuarios(){
 async function acPessoa(id){
   const A = ST.ac, u = A.usuarios.find(x => x.id === id); if(!u) return;
   const ag = u.perfil === 'agente', eu = u.id === ST.eu.id;
-  abrirPainel(`<div class="cab"><div class="acAv" style="margin-right:10px">${esc(iniciais(u.nome))}</div><h2>${esc(u.nome)}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+  const excU = A.excecoes.filter(e => e.usuario_id === id), valInd = (ST.acValInd || {})[id] !== undefined ? ST.acValInd[id] : (excU.map(e => e.valido_ate).filter(Boolean).sort().pop() || '');
+  // tudo aqui é salvo na hora: o painel não pergunta "fechar sem salvar?" (data-nao-suja)
+  abrirPainel(`<div data-nao-suja><div class="cab"><div class="acAv" style="margin-right:10px">${esc(iniciais(u.nome))}</div><h2>${esc(u.nome)}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><h2>Cadastro</h2>
       <div class="acForm">
         <label class="campo">Nome${ag ? `<input value="${esc(u.nome)}" disabled>` : `<input id="apNome" value="${esc(u.nome)}">`}</label>
@@ -10129,13 +10133,16 @@ async function acPessoa(id){
         <label class="campo">Vínculo com funcionário (cadastro em Empresas)${ag ? '<input value="—" disabled>' : `<select id="apPessoa">${optsFunc(u.pessoa_id)}</select>`}</label>
         <div class="campo">Situação<div class="acLinha">${u.ativo ? '<span class="tag ok">Ativo</span>' : '<span class="tag inat">Inativo</span>'}${eu ? '' : `<button class="btn peq" id="apAtivo">${u.ativo ? 'Inativar' : 'Reativar'}</button>`}</div></div>
         <div class="campo">Último acesso<div class="muted" style="padding-top:8px">${u.ultimo_acesso ? dtHoraBR(u.ultimo_acesso) : 'nunca acessou'}</div></div>
+        ${ag ? '' : `<label class="campo">Acesso válido até <span class="muted" style="font-weight:400">(vazio = sem prazo)</span><input type="date" id="apAte" value="${u.acesso_ate || ''}">${acessoVencido(u) ? '<span style="color:var(--verm);font-size:12px">Vencido: a pessoa não consegue entrar.</span>' : ''}</label>`}
       </div>
       ${ag ? '' : `<div class="acLinha" style="margin-top:12px;flex-wrap:wrap"><button class="btn" id="apSenha">🔑 Senha</button><button class="btn" id="apApps">🔗 Vínculo com os aplicativos</button></div>
       <p class="muted" style="font-size:12px;margin:8px 0 0">O vínculo com funcionário define os registros "próprios" da pessoa (agenda, OS, tarefas e comissões dela).</p>`}
     </div>
     <div class="card"><div class="acCabCard"><h2 style="margin:0">Permissões</h2><span class="muted" style="font-size:13px">Herdadas do perfil <b>${esc(perfilNome(u.perfil_id))}</b>. Alterações aqui valem somente para esta pessoa.</span>
       ${A.excecoes.some(e => e.usuario_id === u.id) ? '<button class="btn peq" id="apRestaura" style="margin-left:auto">Restaurar padrão do perfil</button>' : ''}</div>
-      <div id="apEditor"></div></div>`);
+      ${ag ? '' : `<div class="acLinha" style="flex-wrap:wrap;margin-top:10px"><label class="campo" style="margin:0;flex:1;min-width:220px">Permissões individuais válidas até <span class="muted" style="font-weight:400">(vazio = sem prazo; vencidas, volta a valer o perfil)</span>
+          <input type="date" id="apValInd" value="${valInd || ''}"></label><button class="btn peq" id="apCopiar" style="align-self:flex-end">Copiar permissões de outra pessoa</button></div>`}
+      <div id="apEditor"></div></div></div>`);
   $('#folha').style.width = 'min(940px,100%)';
   const recarrega = async () => { ST.ac = await carregaAcessos(); acPessoa(id); };
   const salva = async (q, ok) => { const r = await q; if(r.error){ await aviso('Não foi possível salvar', esc(erroBanco(r.error))); return recarrega(); } toast(ok); await recarrega(); };
@@ -10147,6 +10154,11 @@ async function acPessoa(id){
     $('#apEmail').onclick = async () => { await acEmail(u); await recarrega(); };
     $('#apSenha').onclick = () => acSenha(u);
     $('#apApps').onclick = () => acApps(u);
+    $('#apAte').onchange = () => salva(sb.from('usuarios').update({ acesso_ate: $('#apAte').value || null }).eq('id', id), $('#apAte').value ? 'Validade do acesso definida.' : 'Acesso sem prazo.');
+    $('#apCopiar').onclick = () => acCopiarDe(u);
+    $('#apValInd').onchange = async () => { const v = $('#apValInd').value || null; ST.acValInd = ST.acValInd || {}; ST.acValInd[id] = v;
+      if(A.excecoes.some(e => e.usuario_id === id)) await salva(sb.from('acesso_excecoes').update({ valido_ate: v }).eq('usuario_id', id), v ? 'Permissões individuais válidas até ' + dataBR(v) + '.' : 'Permissões individuais sem prazo.');
+      else toast(v ? 'As próximas permissões individuais valerão até ' + dataBR(v) + '.' : 'Sem prazo.'); };
   }
   if($('#apAtivo')) $('#apAtivo').onclick = async () => {
     if(u.ativo && !await confirmaDuplo('Inativar ' + esc(u.nome) + '?', 'O acesso ao ERP é bloqueado imediatamente. O histórico é mantido.', 'Inativar')) return;
@@ -10156,17 +10168,18 @@ async function acPessoa(id){
     if(!await confirmaDuplo('Restaurar o padrão do perfil?', 'As permissões individuais de ' + esc(u.nome) + ' serão removidas.', 'Restaurar')) return;
     await salva(sb.from('acesso_excecoes').delete().eq('usuario_id', id), 'Permissões restauradas.');
   };
-  const exc = t => (A.excecoes.find(e => e.usuario_id === id && e.tela === t.tela) || {}).nivel;
+  const exc = t => (A.excecoes.find(e => e.usuario_id === id && e.tela === t.tela && excVale(e)) || {}).nivel;
   const doPerfil = t => (u.perfil === 'diretoria' && t.tela === 'adm_usuarios') ? 4 : (A.grade[u.perfil_id + '|' + t.tela] ?? 0);
   acEditor($('#apEditor'), {
     tipo: u.perfil, chave: 'p' + id,
     valor: t => { const v = exc(t); return Math.min(v ?? doPerfil(t), acTeto(u.perfil, t)); },
+    ate: valInd || null,
     padrao: doPerfil,
     gravar: async lista => {
       for(const [tela, nivel] of lista){
         const t = A.telas.find(x => x.tela === tela), q = nivel === doPerfil(t)
           ? sb.from('acesso_excecoes').delete().eq('usuario_id', id).eq('tela', tela)
-          : sb.from('acesso_excecoes').upsert({ usuario_id: id, tela, nivel }, { onConflict: 'usuario_id,tela' });
+          : sb.from('acesso_excecoes').upsert({ usuario_id: id, tela, nivel, valido_ate: ((ST.acValInd || {})[id] !== undefined ? ST.acValInd[id] : valInd) || null }, { onConflict: 'usuario_id,tela' });
         const r = await q; if(r.error){ await aviso('Não foi possível salvar', esc(erroBanco(r.error))); break; }
       }
       ST.ac = await carregaAcessos(); if(id === ST.eu.id) atualizaMeusAcessos(); acPessoa(id);
@@ -10248,7 +10261,7 @@ function acEditor(alvo, ctx){
     const ind = pad != null && Math.min(pad, teto) !== v;
     return `<div class="acItem${v ? ' on' : ''}">
       <label class="acChk"><input type="checkbox" data-acck="${t.tela}" ${v ? 'checked' : ''} ${tr ? 'disabled' : ''}><span>${esc(t.nome)}</span></label>
-      ${ind ? `<span class="acInd" title="No perfil: ${NIV[Math.min(pad, teto)]}">individual</span>` : ''}
+      ${ind ? `<span class="acInd" title="No perfil: ${NIV[Math.min(pad, teto)]}">individual${ctx.ate ? ' até ' + dataBR(ctx.ate) : ''}</span>` : ''}
       ${tr ? `<span class="acTrava">${esc(tr)}</span>`
         : v && !acSoAcesso(t) ? `<div class="acSeg">${[1, 2, 3, 4].filter(k => k <= teto).map(k => `<button type="button" class="${v === k ? 'ativo' : ''}" data-acnv="${t.tela}|${k}" title="${NIV_DICA[k]}">${NIV[k]}</button>`).join('')}</div>`
         : v ? '<span class="acTrava" style="color:var(--verde)">Acesso liberado</span>' : ''}
@@ -10581,6 +10594,130 @@ async function appsTrocaEmail(velho, novo){
   if(String(D.pjGerente || '').toLowerCase() === v) rows.push(['clm-email-gerente', novo]);
   const r = await pjGrava(rows); if(r.error) throw r.error;
 }
+
+/* ================== 60 · auditoria, histórico, validade e relatório de acessos ================== */
+const hojeAc = () => hojeISO();
+const excVale = e => !e.valido_ate || e.valido_ate >= hojeAc();
+const acessoVencido = u => !!(u.acesso_ate && u.acesso_ate < hojeAc());
+const acDiasAte = d => Math.round((new Date(d + 'T12:00') - new Date(hojeAc() + 'T12:00')) / 864e5);
+// nível que vale hoje para a pessoa (mesma regra do banco: acesso_nivel)
+function acNivelFinal(u, t){
+  if(!u.ativo || acessoVencido(u)) return 0;
+  if(u.perfil === 'diretoria' && t.tela === 'adm_usuarios') return 4;
+  const e = ST.ac.excecoes.find(x => x.usuario_id === u.id && x.tela === t.tela && excVale(x));
+  return Math.min(e ? e.nivel : (ST.ac.grade[u.perfil_id + '|' + t.tela] ?? 0), acTeto(u.perfil, t));
+}
+
+// ---------- Relatório de acessos (📄 Relatório / 📊 Excel do topo) ----------
+async function acExportar(){
+  const A = ST.ac, us = A.usuarios.filter(u => u.ativo).sort((a, b) => a.nome.localeCompare(b.nome)), linhas = [];
+  for(const u of us) for(const t of A.telas){ const n = acNivelFinal(u, t); if(!n) continue;
+    const e = A.excecoes.find(x => x.usuario_id === u.id && x.tela === t.tela && excVale(x));
+    linhas.push({ u, t, n, origem: e ? 'Individual' + (e.valido_ate ? ' até ' + dataBR(e.valido_ate) : '') : 'Perfil' }); }
+  return [
+    expCols('Usuários', [['Nome', x => x.nome], ['E-mail', x => x.email || ''], ['Perfil de acesso', x => perfilNome(x.perfil_id)], ['Situação', x => !x.ativo ? 'Inativo' : acessoVencido(x) ? 'Acesso vencido' : 'Ativo'],
+      ['Acesso válido até', x => x.acesso_ate ? dataBR(x.acesso_ate) : 'sem prazo'], ['Último acesso', x => x.ultimo_acesso ? dtHoraBR(x.ultimo_acesso) : 'nunca']], A.usuarios),
+    expCols('Permissões em vigor por usuário', [['Usuário', x => x.u.nome], ['Perfil', x => perfilNome(x.u.perfil_id)], ['Área', x => x.t.area], ['Tela / aba', x => x.t.nome], ['Nível', x => acSoAcesso(x.t) ? 'Liberado' : NIV[x.n]], ['Origem', x => x.origem]], linhas)
+  ];
+}
+
+// ---------- Auditoria: alertas + histórico de alterações ----------
+async function acAuditoria(){
+  const A = ST.ac, hum = A.usuarios.filter(u => u.perfil !== 'agente'), ativos = hum.filter(u => u.ativo);
+  const corpo = $('#acCorpo'); corpo.innerHTML = '<div class="card"><p class="muted">Analisando os acessos…</p></div>';
+  let apps = null; try{ apps = await appsLer(); }catch(e){}
+  const hist = await sb.from('registro_acoes').select('quando,usuario_id,tabela,registro_id,acao,antes,depois')
+    .in('tabela', ['public.acesso_grade', 'public.acesso_excecoes', 'public.acesso_perfis', 'public.acesso_convites', 'public.usuarios', 'auth.senha'])
+    .order('quando', { ascending: false }).limit(600);
+  const nomeU = id => (A.usuarios.find(u => u.id === id) || {}).nome || '—';
+  const sensiveis = ['Financeiro', 'Administração'];
+  const al = [];
+  const add = (nivel, tit, dica, pessoas, extra) => { if(pessoas.length) al.push({ nivel, tit, dica, pessoas, extra }); };
+  add('alto', 'Acesso vencido, ainda ativo', 'A data de validade passou: a pessoa já não entra. Inative ou renove.', ativos.filter(acessoVencido));
+  add('medio', 'Acesso vence nos próximos 15 dias', 'Renove a validade se a pessoa continuar.', ativos.filter(u => u.acesso_ate && !acessoVencido(u) && acDiasAte(u.acesso_ate) <= 15), u => 'vence em ' + dataBR(u.acesso_ate));
+  add('medio', 'Sem acessar há mais de 60 dias', 'Avalie inativar quem não usa mais o sistema.', ativos.filter(u => u.ultimo_acesso && (Date.now() - new Date(u.ultimo_acesso)) > 60 * 864e5), u => 'último acesso ' + dtHoraBR(u.ultimo_acesso).slice(0, 10));
+  add('baixo', 'Usuários ativos que nunca acessaram', 'Confirme se a pessoa recebeu o e-mail e a senha.', ativos.filter(u => !u.ultimo_acesso));
+  add('alto', 'Nível Completo em Financeiro ou Administração fora da Diretoria', 'Completo permite aprovar, excluir e configurar.', ativos.filter(u => u.perfil !== 'diretoria' && A.telas.some(t => sensiveis.includes(t.area) && acNivelFinal(u, t) === 4)),
+    u => A.telas.filter(t => sensiveis.includes(t.area) && acNivelFinal(u, t) === 4).map(t => t.nome).join(', '));
+  add('medio', 'Permissões individuais vencidas', 'Já não valem (vale o perfil). Remova para manter o cadastro limpo.', hum.filter(u => A.excecoes.some(e => e.usuario_id === u.id && !excVale(e))),
+    u => A.excecoes.filter(e => e.usuario_id === u.id && !excVale(e)).map(e => telaNome(e.tela)).join(', '));
+  add('baixo', 'Com permissões individuais', 'Diferentes do perfil. Revise periodicamente.', ativos.filter(u => A.excecoes.some(e => e.usuario_id === u.id && excVale(e))),
+    u => A.excecoes.filter(e => e.usuario_id === u.id && excVale(e)).map(e => telaNome(e.tela) + ': ' + NIV[e.nivel] + (e.valido_ate ? ' (até ' + dataBR(e.valido_ate) + ')' : '')).join(' · '));
+  const usaProprios = u => A.telas.some(t => acNivelFinal(u, t) === 2);
+  add('medio', 'Nível "Próprios" sem vínculo com funcionário', 'Sem o vínculo, a pessoa não enxerga os próprios registros (agenda, OS, tarefas, comissões).', ativos.filter(u => !u.pessoa_id && usaProprios(u)));
+  if(apps){
+    const ch = e => String(e || '').toLowerCase().replace(/\./g, ',');
+    add('medio', 'Habilitados no app de Serviços sem vínculo', 'Abra o cadastro → Vínculo com os aplicativos.', ativos.filter(u => ['app_sv_gerenciador', 'app_sv_tecnico', 'app_sv_financeiro', 'app_sv_oficina'].some(k => { const t = A.telas.find(x => x.tela === k); return t && acNivelFinal(u, t) > 0; }) && !apps.svIndex[ch(u.email)]));
+  }
+  const pend = A.usuarios.filter(u => u.aguardando && !u.ativo);
+  add('medio', 'Solicitações de acesso aguardando', 'Aprove ou recuse na aba Usuários.', pend);
+  const conv = A.convites.filter(c => !c.usado_por && !c.email);
+  const cor = { alto: '#c8000c', medio: '#b45309', baixo: '#2563eb' }, rot = { alto: 'Atenção', medio: 'Revisar', baixo: 'Informativo' };
+  // histórico em linguagem da tela
+  const nivelTx = v => v == null ? '—' : NIV[v];
+  const descreve = h => {
+    const a = h.antes || {}, d = h.depois || {}, x = Object.keys(d).length ? d : a;
+    switch(h.tabela){
+      case 'public.acesso_grade': return `Perfil <b>${esc(perfilNome(x.perfil_id))}</b> · ${esc(telaNome(x.tela))}: ${nivelTx(h.acao === 'criar' ? null : a.nivel)} → ${nivelTx(h.acao === 'excluir' ? null : d.nivel)}`;
+      case 'public.acesso_excecoes': return h.acao === 'excluir' ? `Permissão individual removida: <b>${esc(nomeU(a.usuario_id))}</b> · ${esc(telaNome(a.tela))} (volta ao perfil)`
+        : `Permissão individual: <b>${esc(nomeU(x.usuario_id))}</b> · ${esc(telaNome(x.tela))}: ${nivelTx(d.nivel)}${d.valido_ate ? ' até ' + dataBR(d.valido_ate) : ''}`;
+      case 'public.acesso_perfis': return `Perfil de acesso ${h.acao === 'criar' ? 'criado' : h.acao === 'excluir' ? 'excluído' : 'alterado'}: <b>${esc(x.nome || x.id)}</b>`;
+      case 'public.acesso_convites': return `Pré-cadastro ${h.acao === 'criar' ? 'incluído' : h.acao === 'excluir' ? 'removido' : 'alterado'}: <b>${esc(x.nome || '')}</b>`;
+      case 'auth.senha': return `Senha provisória definida para <b>${esc(nomeU(h.registro_id))}</b>`;
+      case 'public.usuarios': {
+        if(h.acao === 'criar') return `Usuário criado: <b>${esc(d.nome)}</b> (${esc(perfilNome(d.perfil_id))})`;
+        const m = [];
+        if(a.perfil_id !== d.perfil_id) m.push(`perfil ${esc(perfilNome(a.perfil_id))} → ${esc(perfilNome(d.perfil_id))}`);
+        if(a.ativo !== d.ativo) m.push(d.ativo ? 'reativado' : 'inativado');
+        if(a.email !== d.email) m.push(`e-mail ${esc(a.email || '—')} → ${esc(d.email || '—')}`);
+        if(a.nome !== d.nome) m.push(`nome ${esc(a.nome)} → ${esc(d.nome)}`);
+        if(a.acesso_ate !== d.acesso_ate) m.push(d.acesso_ate ? 'acesso válido até ' + dataBR(d.acesso_ate) : 'acesso sem prazo');
+        if(a.pessoa_id !== d.pessoa_id) m.push('vínculo com funcionário alterado');
+        return m.length ? `Usuário <b>${esc(d.nome || a.nome)}</b>: ${m.join(' · ')}` : null;
+      }
+    }
+    return null;
+  };
+  const Htodos = (hist.data || []).filter(h => ST.acHistScripts || h.usuario_id).map(h => ({ h, tx: descreve(h) })).filter(x => x.tx);
+  ST.acHistN = ST.acHistN || 40; const H = Htodos.slice(0, ST.acHistN);
+  corpo.innerHTML = `<div class="card"><div class="acCabCard"><h2 style="margin:0">Auditoria de acessos</h2><span class="muted" style="font-size:13px">${ativos.length} usuário(s) ativo(s) · ${A.perfis.length} perfis · ${A.excecoes.filter(excVale).length} permissão(ões) individual(is) em vigor</span></div>
+      ${al.length ? al.sort((x, y) => ['alto', 'medio', 'baixo'].indexOf(x.nivel) - ['alto', 'medio', 'baixo'].indexOf(y.nivel)).map(x => `<div class="acAlerta" style="border-left-color:${cor[x.nivel]}">
+          <div class="acAlertaCab"><span class="acNivAl" style="background:${cor[x.nivel]}1a;color:${cor[x.nivel]}">${rot[x.nivel]}</span><b>${esc(x.tit)}</b><span class="muted">${x.pessoas.length}</span></div>
+          <div class="muted" style="font-size:12.5px;margin:2px 0 6px">${esc(x.dica)}</div>
+          <div class="acPess">${x.pessoas.map(u => `<button class="acPessBt" data-acabrir="${u.id}">${esc(u.nome)}${x.extra ? `<small>${esc(x.extra(u))}</small>` : ''}</button>`).join('')}</div></div>`).join('')
+        : '<p class="ok" style="margin:12px 0 0">✓ Nenhum ponto de atenção encontrado.</p>'}
+      ${conv.length ? `<p class="muted" style="font-size:12.5px;margin:10px 0 0">${conv.length} pessoa(s) no pré-cadastro sem e-mail informado.</p>` : ''}</div>
+    <div class="card"><h2>Histórico de alterações</h2><p class="muted" style="font-size:12.5px;margin-top:-6px">Últimas alterações de usuários, perfis e permissões (quem fez e quando). O histórico completo do sistema fica em Administração → Registro de ações.</p>
+      <div style="overflow:auto"><table class="reg"><thead><tr><th>Quando</th><th>Por</th><th>Alteração</th></tr></thead><tbody>
+      ${H.map(({ h, tx }) => `<tr><td style="white-space:nowrap">${dtHoraBR(h.quando)}</td><td>${h.usuario_id ? esc(nomeU(h.usuario_id)) : '<span class="muted">script do sistema</span>'}</td><td>${tx}</td></tr>`).join('') || `<tr><td colspan="3" class="vazio">${hist.error ? 'Sem permissão para ler o Registro de ações.' : 'Nenhuma alteração registrada.'}</td></tr>`}</tbody></table></div>
+      <div class="acLinha" style="margin-top:10px;flex-wrap:wrap">${Htodos.length > H.length ? `<button class="btn peq" id="acHistMais">Mostrar mais (${Htodos.length - H.length})</button>` : ''}
+        <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="acHistScr" style="width:auto" ${ST.acHistScripts ? 'checked' : ''}> incluir alterações feitas por scripts do sistema (atualizações)</label></div></div>`;
+  corpo.querySelectorAll('[data-acabrir]').forEach(b => b.onclick = () => acPessoa(b.dataset.acabrir));
+  if($('#acHistMais')) $('#acHistMais').onclick = () => { ST.acHistN += 60; acAuditoria(); };
+  $('#acHistScr').onchange = () => { ST.acHistScripts = $('#acHistScr').checked; ST.acHistN = 40; acAuditoria(); };
+}
+
+// ---------- Copiar permissões de outra pessoa ----------
+async function acCopiarDe(u){
+  const outros = ST.ac.usuarios.filter(x => x.id !== u.id && x.perfil !== 'agente' && x.ativo).sort((a, b) => a.nome.localeCompare(b.nome));
+  const de = await acModal('Copiar permissões', `<p style="margin-top:0">${esc(u.nome)} passará a ter <b>o mesmo perfil de acesso e as mesmas permissões individuais</b> da pessoa escolhida. As permissões individuais atuais de ${esc(u.nome)} serão substituídas.</p>
+    <label class="campo">Copiar de<select id="cpDe">${outros.map(x => `<option value="${x.id}">${esc(x.nome)} · ${esc(perfilNome(x.perfil_id))}</option>`).join('')}</select></label>`,
+    [['Cancelar', null], ['Copiar', true, 'pri']], () => $('#cpDe').value);
+  if(!de) return;
+  const r = await sb.rpc('acesso_copiar_pessoa', { p_de: de, p_para: u.id });
+  if(r.error) return aviso('Não foi possível copiar', esc(erroBanco(r.error)));
+  toast('Permissões copiadas.'); ST.ac = await carregaAcessos(); acPessoa(u.id);
+}
+
+(function(){ const st = document.createElement('style'); st.textContent = `
+.acAlerta{border:1px solid var(--borda);border-left:4px solid;border-radius:12px;padding:10px 14px;margin-top:10px;background:#fff}
+.acAlertaCab{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.acNivAl{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;text-transform:uppercase;letter-spacing:.4px}
+.acPess{display:flex;flex-wrap:wrap;gap:6px}
+.acPessBt{border:1px solid var(--borda);background:#f7f7f9;border-radius:10px;padding:5px 10px;cursor:pointer;text-align:left;font-size:13px;max-width:100%}
+.acPessBt small{display:block;color:var(--texto2);font-size:11px;white-space:normal}
+.acPessBt:hover{background:#efeff3}
+`; document.head.appendChild(st); })();
 
 
 /* ================== Unificação dos clientes dos dois apps ================== */
