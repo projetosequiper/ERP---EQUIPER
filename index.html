@@ -5041,7 +5041,7 @@ async function formEquipInstalado(E, oid, depois){
 
 const SIT_REC = { nao_liberado:['Não liberado','#999'], a_cobrar:['A cobrar','#d0151b'], enviado:['Cobrança enviada','#1d4ed8'], agendado:['Pagamento combinado','#7c3aed'], recebido:['Recebido','#1f8a4c'], cancelado:['Cancelado','#999'] };
 const ORIG_REC = { projeto:'Projeto', pedido:'Pedido', os:'OS', contrato:'Preventiva', avulso:'Avulso' };
-const tagSit = s => `<span class="tag" style="margin:0;background:${SIT_REC[s]?.[1]}1a;color:${SIT_REC[s]?.[1]}">${SIT_REC[s]?.[0]||s}</span>`;
+const tagSit = s => `<span class="tag" style="margin:0;white-space:nowrap;background:${SIT_REC[s]?.[1]}1a;color:${SIT_REC[s]?.[1]}">${SIT_REC[s]?.[0]||s}</span>`;
 ST.rec = { emp:'', sit:'abertos', orig:'' };
 
 async function telaReceber(){
@@ -5051,7 +5051,7 @@ async function telaReceber(){
   const nfs = typeof notasPorOrigem === 'function' ? await notasPorOrigem().catch(() => ({})) : {};
   const f = ST.rec, hoje = hojeISO(), mes = hoje.slice(0,7), todos = (r.data || []).filter(x => x.situacao !== 'cancelado');
   const filtroSit = { abertos: x => x.situacao !== 'recebido', a_cobrar: x => x.situacao === 'a_cobrar', enviado: x => ['enviado','agendado'].includes(x.situacao), vencidos: x => x.situacao !== 'recebido' && x.situacao !== 'nao_liberado' && x.vencimento && x.vencimento < hoje, recebidos: x => x.situacao === 'recebido', todos: () => true };
-  const l = todos.filter(x => (!f.emp || (f.emp === '-' ? !x.empresa : x.empresa === f.emp)) && (!f.orig || x.origem === f.orig) && filtroSit[f.sit](x) && (!ST.busca || norm(x.obra + ' ' + x.descricao).includes(norm(ST.busca))))
+  const l = todos.filter(x => (!f.emp || (f.emp === '-' ? !x.empresa : x.empresa === f.emp)) && (!f.orig || x.origem === f.orig) && filtroSit[f.sit](x) && (!ST.busca || norm(x.obra + ' ' + x.descricao + ' ' + (x.cliente || '')).includes(norm(ST.busca))))
     .sort((a, b) => f.sit === 'recebidos' ? String(b.recebido_em).localeCompare(String(a.recebido_em)) : String(a.agendado_para || a.vencimento || '9999').localeCompare(String(b.agendado_para || b.vencimento || '9999')));
   const soma = fn => todos.filter(x => !f.emp || x.empresa === f.emp).filter(fn).reduce((s, x) => s + Number(x.valor), 0);
   $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px">
@@ -5060,15 +5060,15 @@ async function telaReceber(){
       <div class="kpi" data-k="vencidos"><span class="muted">Vencidos</span><b style="color:var(--verm)">${R$(soma(filtroSit.vencidos))}</b></div>
       <div class="kpi" data-k="recebidos"><span class="muted">Recebido no mês</span><b style="color:var(--verde)">${R$(soma(x => x.situacao === 'recebido' && String(x.recebido_em).slice(0,7) === mes))}</b></div></div>
     <div class="card"><h2>A receber <span class="muted" style="font-weight:400">· projetos, pedidos, OS e avulsos numa lista só</span></h2>
-    <div class="barra"><input type="search" id="busca" placeholder="Buscar obra ou descrição…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
+    <div class="barra"><input type="search" id="busca" placeholder="Buscar cliente, obra ou descrição…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <button class="btn pri" id="btnNovo">+ Valor avulso</button></div>
     <div class="barra" style="margin-top:-4px">
       <select id="rEmp" style="max-width:170px"><option value="">EQP + Equiper</option><option ${f.emp==='EQP'?'selected':''}>EQP</option><option ${f.emp==='Equiper'?'selected':''}>Equiper</option><option value="-" ${f.emp==='-'?'selected':''}>Sem empresa definida</option></select>
       <select id="rSit" style="max-width:200px">${[['abertos','Em aberto'],['a_cobrar','A cobrar'],['enviado','Cobrados, aguardando'],['vencidos','Vencidos'],['recebidos','Recebidos'],['todos','Todos']].map(([k,r]) => `<option value="${k}" ${f.sit===k?'selected':''}>${r}</option>`).join('')}</select>
       <select id="rOrig" style="max-width:170px"><option value="">Todas as origens</option>${Object.entries(ORIG_REC).map(([k,r]) => `<option value="${k}" ${f.orig===k?'selected':''}>${r}</option>`).join('')}</select></div>
-    <div style="overflow:auto"><table class="reg"><thead><tr><th>Vencimento</th><th>Obra</th><th>Descrição</th><th>Empresa</th><th style="text-align:right">Valor</th><th>Situação</th><th></th></tr></thead><tbody>
+    <div style="overflow:auto"><table class="reg"><thead><tr><th>Vencimento</th><th>Obra · cliente</th><th>Descrição</th><th>Empresa</th><th style="text-align:right">Valor</th><th>Situação</th><th></th></tr></thead><tbody>
     ${l.map(x => `<tr data-sel="${x.origem}|${x.id}|${x.situacao==='recebido'?0:1}"><td style="${x.situacao!=='recebido'&&x.situacao!=='nao_liberado'&&x.vencimento&&x.vencimento<hoje?'color:var(--verm);font-weight:600':''}">${x.situacao==='recebido'?'✓ '+dataBR(x.recebido_em):x.agendado_para?'📅 '+dataBR(x.agendado_para):dataBR(x.vencimento)||'—'}</td>
-      <td><b>${esc(x.obra||'—')}</b></td><td>${esc(x.descricao)} <span class="tag">${ORIG_REC[x.origem]}</span>${x.lancamento ? ' <span class="muted" style="font-size:11px">lanç. ' + x.lancamento + '</span>' : ''}${typeof tagsNotas === 'function' ? tagsNotas(nfs[x.origem === 'pedido' ? x.ref_id : x.id]) : ''}</td><td>${x.empresa||'<span style="color:var(--amar)">definir</span>'}</td>
+      <td><b>${esc(x.obra||'—')}</b>${x.cliente && x.cliente !== x.obra ? '<br><span class="muted" style="font-size:12px">' + esc(x.cliente) + '</span>' : ''}</td><td>${esc(x.descricao)} <span class="tag">${ORIG_REC[x.origem]}</span>${x.lancamento ? ' <span class="muted" style="font-size:11px">lanç. ' + x.lancamento + '</span>' : ''}${typeof tagsNotas === 'function' ? tagsNotas(nfs[x.origem === 'pedido' ? x.ref_id : x.id]) : ''}</td><td>${x.empresa||'<span style="color:var(--amar)">definir</span>'}</td>
       <td style="text-align:right">${R$(x.valor)}</td><td>${tagSit(x.situacao)}</td><td style="white-space:nowrap">${acoesReceber(x)}${typeof emitirDoReceber === 'function' ? `<button class="btn peq" data-emnf="${x.id}" title="Emitir nota fiscal">🧾 Nota</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nada aqui.</td></tr>'}</tbody>
     <tfoot><tr><td colspan="4" style="text-align:right"><b>Total da lista</b></td><td style="text-align:right"><b>${R$(l.reduce((s, x) => s + Number(x.valor), 0))}</b></td><td colspan="2"></td></tr></tfoot></table></div></div>`;
   ligaBarra(() => formAvulso(null));
@@ -5080,8 +5080,7 @@ async function telaReceber(){
 function acoesReceber(x){
   if(x.situacao === 'recebido') return '';
   const b = (a, r) => `<button class="btn peq" data-rec="${x.id}" data-acao="${a}">${r}</button>`;
-  if(x.origem === 'projeto') return x.situacao === 'nao_liberado' ? b('cobrar','Liberar cobrança') + b('receber','Recebido') : b('receber','Recebido');
-  return (x.situacao === 'nao_liberado' ? b('cobrar','Liberar') : x.situacao === 'a_cobrar' ? b('enviar','Cobrança enviada') : '') + (['enviado','agendado'].includes(x.situacao) ? b('agendar','Data combinada') : '') + b('receber','Recebido') + (x.origem !== 'pedido' ? b('editar','✎') : '');
+  return (x.situacao === 'nao_liberado' ? b('cobrar','Liberar') : x.situacao === 'a_cobrar' ? b('enviar','Cobrança enviada') : '') + (['enviado','agendado'].includes(x.situacao) ? b('agendar','Data combinada') : '') + b('receber','Recebido') + (x.origem !== 'pedido' && x.origem !== 'projeto' ? b('editar','✎') : '');
 }
 async function mudarReceber(x, acao){
   if(acao === 'editar') return formAvulso(x.id);
@@ -5096,11 +5095,13 @@ async function mudarReceber(x, acao){
   }
   try{
     if(x.origem === 'projeto'){
-      const d = acao === 'receber' ? { situacao:'Recebido', data_recebimento: data } : { situacao:'Cobrar' };
+      // script 68: projeto também tem "cobrança enviada" e "data combinada"
+      const d = acao === 'receber' ? { situacao:'Recebido', data_recebimento: data } : acao === 'agendar' ? { agendado_para: data, cobranca_enviada_em: x.enviado_em || hojeISO() }
+        : acao === 'enviar' ? { cobranca_enviada_em: hojeISO() } : { situacao:'Cobrar' };
       await exec(sb.from('parcelas_projeto').update(d).eq('id', x.id));
     } else {
       const tab = x.origem === 'pedido' ? 'parcelas_servico' : 'titulos_receber';
-      const d = acao === 'receber' ? { situacao:'recebido', recebido_em: data } : acao === 'agendar' ? { situacao:'agendado', agendado_para: data } : acao === 'enviar' ? { situacao:'enviado' } : { situacao:'a_cobrar' };
+      const d = acao === 'receber' ? { situacao:'recebido', recebido_em: data } : acao === 'agendar' ? { situacao:'agendado', agendado_para: data } : acao === 'enviar' ? { situacao:'enviado', enviado_em: hojeISO() } : { situacao:'a_cobrar' };
       await exec(sb.from(tab).update(d).eq('id', x.id));
     }
     toast('Atualizado.'); telaReceber();
@@ -6082,6 +6083,224 @@ async function formBoleto(x, depois){
       try{ const b = await boletoDoTitulo(x.origem, x.id); if(b && b.linha_digitavel && $('#msgTxt')){ const t = $('#msgTxt').value;
         $('#msgTxt').value = t.replace(/\nSe já tiver pago/, `\nSegue a linha digitável do boleto${b.vencimento ? ' (vencimento ' + dataBR(b.vencimento) + ')' : ''}:\n${fmtLinha(b.linha_digitavel)}\nSe já tiver pago`); } }catch(e){}
       return r; }; }
+})();
+
+/* ================== Contas a receber único (script 68) ==================
+   Uma tela só para projetos, obras/pedidos, OS, manutenções e preventivas (docs/analise_financeiro_apps.md).
+   Abas: Precisa de você · Por cliente · Lista (a tabela de sempre, com lote, boleto e renegociação) ·
+         Previsão e calendário · Recebido por mês.
+   Toda parcela, de qualquer origem, tem os mesmos botões: Liberar · Cobrança enviada · Data combinada · Recebido · Nota.
+   Este módulo vem depois do 30 e do 33 (que montam e embrulham a telaReceber): a aba "Lista" é a tela deles. */
+(function(){
+  const lista0 = window.telaReceber;
+  if(typeof lista0 !== 'function') return;
+  const ABAS = [['precisa', 'Precisa de você'], ['clientes', 'Por cliente'], ['lista', 'Lista'], ['previsao', 'Previsão e calendário'], ['recebido', 'Recebido por mês']];
+  const RU = { dados: [], nfs: {} };
+  Object.assign(ST.rec, { aba: 'precisa', alerta: '', cliSit: 'saldo', cliAberto: '', prevPer: 'mes', prevRef: '', prevAntes: true, recMes: '' });
+
+  if(!document.getElementById('ruCss')){ const st = document.createElement('style'); st.id = 'ruCss'; st.textContent = `
+    .ruAbas{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+    .ruAbas button{border:1px solid var(--borda,#e3e3e6);background:#fff;border-radius:999px;padding:8px 14px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;color:#3a3a3c;white-space:nowrap}
+    .ruAbas button.ativo{background:var(--verm,#d0151b);border-color:var(--verm,#d0151b);color:#fff}
+    .ruAbas button .n{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:9px;background:rgba(0,0,0,.08);font-size:11px;line-height:18px;text-align:center}
+    .ruAbas button.ativo .n{background:rgba(255,255,255,.25)}
+    .ruAl{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+    .ruAl button{display:flex;align-items:center;gap:12px;text-align:left;border:1px solid var(--borda,#e3e3e6);border-left:4px solid #999;background:#fff;border-radius:12px;padding:12px 14px;font:inherit;cursor:pointer}
+    .ruAl button.ativo{box-shadow:0 0 0 2px var(--verm,#d0151b) inset}
+    .ruAl button b.q{font-size:22px;min-width:34px;text-align:center}
+    .ruAl button span{display:block;font-size:13px;font-weight:600;color:#1c1c1e}
+    .ruAl button small{display:block;color:#6e6e73;font-size:12px;margin-top:2px}
+    .ruCli{border:1px solid var(--borda,#e3e3e6);border-radius:14px;background:#fff;margin-bottom:10px;overflow:hidden}
+    .ruCliCab{display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(84px,.6fr)) minmax(0,1fr);gap:10px;align-items:center;padding:12px 14px;cursor:pointer}
+    .ruCliCab .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis}
+    .ruCliCab .v small{display:block;color:#6e6e73;font-size:11px}
+    .ruBarra{height:6px;border-radius:3px;background:#ececef;overflow:hidden;margin-top:6px}.ruBarra i{display:block;height:100%;background:var(--verde,#1f8a4c)}
+    .ruCliDet{border-top:1px solid var(--borda,#e3e3e6);padding:6px 14px 12px;overflow:auto}
+    .ruGrp{margin-top:10px;font-weight:700;font-size:13px}
+    .ruCal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:10px 0}
+    .ruCal div{min-height:58px;border:1px solid var(--borda,#e3e3e6);border-radius:8px;padding:4px 6px;font-size:11px;background:#fff}
+    .ruCal div.fora{opacity:.35}.ruCal div.hoje{box-shadow:0 0 0 2px var(--verm,#d0151b) inset}
+    .ruCal div b{display:block;font-size:12px}.ruCal .pv{color:#1d4ed8}.ruCal .rc{color:var(--verde,#1f8a4c)}.ruCal .at{color:var(--verm,#d0151b)}
+    .ruCal .dsm{font-weight:700;text-align:center;border:0;min-height:0;background:none;color:#6e6e73}
+    .ruNav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+    .ruF select{flex:1 1 130px}
+    @media(max-width:700px){ .ruK{grid-template-columns:1fr 1fr;gap:8px} .ruK .kpi{padding:10px 12px} .ruK .kpi b{font-size:16px} .ruK .kpi span{font-size:11px} .ruF input[type=search]{flex:1 1 100%} .ruF select{max-width:none!important}
+      .ruCliCab{grid-template-columns:1fr 1fr 1fr} .ruCliCab .nm{grid-column:1/-1} .ruCliCab .px{grid-column:1/-1} .ruCal div{min-height:44px;font-size:10px;padding:3px} }
+  `; document.head.appendChild(st); }
+
+  const hoje = () => hojeISO();
+  const mais = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
+  const aberto = x => x.situacao !== 'recebido';
+  const cobravel = x => ['a_cobrar', 'enviado', 'agendado'].includes(x.situacao);
+  const dataDe = x => x.agendado_para || x.vencimento || null;         // quando se espera receber
+  const soma = l => l.reduce((s, x) => s + Number(x.valor || 0), 0);
+  const nomeCli = x => x.cliente || x.obra || 'Sem cliente';
+  const filtrados = () => { const f = ST.rec, b = norm(ST.busca || '');
+    return RU.dados.filter(x => (!f.emp || (f.emp === '-' ? !x.empresa : x.empresa === f.emp)) && (!f.orig || x.origem === f.orig) && (!b || norm(nomeCli(x) + ' ' + (x.obra || '') + ' ' + x.descricao + ' ' + (x.numero || '')).includes(b))); };
+
+  const ALERTAS = [
+    ['combinada', '#d0151b', 'Data combinada já passou', 'o cliente combinou pagar e a data venceu', (x, h) => x.situacao === 'agendado' && x.agendado_para && x.agendado_para < h],
+    ['vencidos', '#d0151b', 'Vencidos', 'liberados, com vencimento passado e sem data combinada', (x, h) => ['a_cobrar', 'enviado'].includes(x.situacao) && x.vencimento && x.vencimento < h],
+    ['enviar', '#b45309', 'A cobrar: falta enviar a cobrança', 'liberados para cobrar e ainda não enviados', x => x.situacao === 'a_cobrar'],
+    ['parados7', '#b45309', 'Liberados há mais de 7 dias sem enviar', 'cobrança parada', (x, h) => x.situacao === 'a_cobrar' && x.liberado_em && x.liberado_em <= mais(h, -7)],
+    ['enviadas30', '#b45309', 'Enviados há mais de 30 dias sem receber', 'vale um novo contato', (x, h) => x.situacao === 'enviado' && x.enviado_em && x.enviado_em <= mais(h, -30)],
+    ['hoje', '#1d4ed8', 'Previsto para hoje', 'vencimento ou data combinada hoje', (x, h) => cobravel(x) && dataDe(x) === h],
+    ['semana', '#1d4ed8', 'Previsto nos próximos 7 dias', 'para acompanhar', (x, h) => cobravel(x) && dataDe(x) > h && dataDe(x) <= mais(h, 7)],
+    ['semdata', '#6e6e73', 'Liberados sem data', 'sem vencimento e sem data combinada: ficam fora da previsão', x => cobravel(x) && !dataDe(x)],
+    ['semempresa', '#6e6e73', 'Sem empresa definida', 'falta dizer se é EQP ou Equiper', x => aberto(x) && !x.empresa],
+    ['semcliente', '#6e6e73', 'Sem cliente (quem paga)', 'a obra não tem quem paga cadastrado', x => aberto(x) && !x.cliente]
+  ];
+
+  function abasHtml(){ const h = hoje(), n = filtrados().filter(x => ALERTAS.slice(0, 5).some(a => a[4](x, h))).length;
+    return `<div class="ruAbas">${ABAS.map(([k, r]) => `<button data-ruaba="${k}" class="${ST.rec.aba === k ? 'ativo' : ''}">${r}${k === 'precisa' && n ? `<span class="n">${n}</span>` : ''}</button>`).join('')}</div>`; }
+  function ligaAbas(){ document.querySelectorAll('[data-ruaba]').forEach(b => b.onclick = () => { ST.rec.aba = b.dataset.ruaba; window.telaReceber(); }); }
+  function filtrosHtml(extra){ const f = ST.rec;
+    return `<div class="barra ruF"><input type="search" id="ruBusca" placeholder="Buscar cliente, obra, pedido…" value="${esc(ST.busca || '')}">
+      <select id="ruEmp" style="max-width:170px"><option value="">EQP + Equiper</option><option ${f.emp === 'EQP' ? 'selected' : ''}>EQP</option><option ${f.emp === 'Equiper' ? 'selected' : ''}>Equiper</option><option value="-" ${f.emp === '-' ? 'selected' : ''}>Sem empresa definida</option></select>
+      <select id="ruOrig" style="max-width:170px"><option value="">Todas as origens</option>${Object.entries(ORIG_REC).map(([k, r]) => `<option value="${k}" ${f.orig === k ? 'selected' : ''}>${r}</option>`).join('')}</select>${extra || ''}</div>`; }
+  function ligaFiltros(){
+    const b = $('#ruBusca'); if(b) b.oninput = () => { ST.busca = b.value; clearTimeout(RU.t); RU.t = setTimeout(() => { desenha(); const n = $('#ruBusca'); if(n){ n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 250); };
+    if($('#ruEmp')) $('#ruEmp').onchange = e => { ST.rec.emp = e.target.value; desenha(); };
+    if($('#ruOrig')) $('#ruOrig').onchange = e => { ST.rec.orig = e.target.value; desenha(); };
+  }
+  // uma parcela/título, igual em todas as abas
+  function linha(x, comCliente){ const h = hoje(), venc = cobravel(x) && dataDe(x) && dataDe(x) < h;
+    return `<tr><td style="white-space:nowrap;${venc ? 'color:var(--verm);font-weight:600' : ''}">${x.situacao === 'recebido' ? '✓ ' + dataBR(x.recebido_em) : x.agendado_para ? '📅 ' + dataBR(x.agendado_para) : dataBR(x.vencimento) || '<span class="muted">sem data</span>'}</td>
+      ${comCliente ? `<td><b>${esc(nomeCli(x))}</b>${x.obra && x.obra !== nomeCli(x) ? '<br><span class="muted" style="font-size:12px">' + esc(x.obra) + '</span>' : ''}</td>` : ''}
+      <td>${comCliente ? esc(x.descricao) + ' <span class="tag">' + (ORIG_REC[x.origem] || x.origem) + '</span>' : esc(['projeto', 'pedido'].includes(x.origem) && x.parcela ? x.parcela : x.descricao)}${typeof tagsNotas === 'function' ? tagsNotas(RU.nfs[x.origem === 'pedido' ? x.ref_id : x.id]) : ''}</td>
+      <td>${x.empresa || '<span style="color:var(--amar)">definir</span>'}</td><td style="text-align:right;white-space:nowrap">${R$(x.valor)}</td><td>${tagSit(x.situacao)}</td>
+      <td style="white-space:nowrap">${nivelTela('fn_receber') >= 3 ? acoesReceber(x) + (typeof emitirDoReceber === 'function' && x.situacao !== 'nao_liberado' ? `<button class="btn peq" data-emnf="${x.id}" title="Emitir nota fiscal">🧾 Nota</button>` : '') : ''}</td></tr>`; }
+  const tabela = (l, comCliente) => `<div style="overflow:auto"><table class="reg"><thead><tr><th>Data</th>${comCliente ? '<th>Cliente · obra</th>' : ''}<th>Descrição</th><th>Empresa</th><th style="text-align:right">Valor</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${l.map(x => linha(x, comCliente)).join('') || `<tr><td colspan="${comCliente ? 7 : 6}" class="vazio">Nada aqui.</td></tr>`}</tbody>
+      ${l.length > 1 ? `<tfoot><tr><td colspan="${comCliente ? 4 : 3}" style="text-align:right"><b>Total</b></td><td style="text-align:right"><b>${R$(soma(l))}</b></td><td colspan="2"></td></tr></tfoot>` : ''}</table></div>`;
+  function ligaAcoes(){
+    document.querySelectorAll('#conteudo [data-rec]').forEach(b => b.onclick = ev => { ev.stopPropagation(); mudarReceber(RU.dados.find(x => x.id === b.dataset.rec), b.dataset.acao); });
+    document.querySelectorAll('#conteudo [data-emnf]').forEach(b => b.onclick = ev => { ev.stopPropagation(); emitirDoReceber(RU.dados.find(x => x.id === b.dataset.emnf)); });
+  }
+  const ordData = (a, b) => String(dataDe(a) || '9999').localeCompare(String(dataDe(b) || '9999'));
+  const pesoSit = x => x.situacao === 'recebido' ? 0 : x.situacao === 'nao_liberado' ? 2 : 1;
+  const ordCli = (a, b) => pesoSit(a) - pesoSit(b) || (pesoSit(a) === 0 ? String(a.recebido_em).localeCompare(String(b.recebido_em)) : ordData(a, b));
+
+  /* ---------- Precisa de você ---------- */
+  function abaPrecisa(){ const l = filtrados(), h = hoje(), mes = h.slice(0, 7), f = ST.rec;
+    const grupos = ALERTAS.map(a => ({ k: a[0], cor: a[1], t: a[2], sub: a[3], l: l.filter(x => a[4](x, h)) })).filter(g => g.l.length);
+    if(f.alerta && !grupos.some(g => g.k === f.alerta)) f.alerta = '';
+    const sel = grupos.find(g => g.k === f.alerta);
+    const rec = d => soma(l.filter(x => x.situacao === 'recebido' && String(x.recebido_em || '').startsWith(d)));
+    return `<div class="kpis ruK" style="margin-bottom:14px">
+        <div class="kpi"><span class="muted">Previsto para hoje</span><b>${R$(soma(l.filter(x => cobravel(x) && dataDe(x) === h)))}</b></div>
+        <div class="kpi"><span class="muted">Recebido hoje</span><b style="color:var(--verde)">${R$(rec(h))}</b></div>
+        <div class="kpi"><span class="muted">Recebido no mês</span><b style="color:var(--verde)">${R$(rec(mes))}</b></div>
+        <div class="kpi v"><span class="muted">Em aberto já liberado</span><b>${R$(soma(l.filter(cobravel)))}</b></div></div>
+      <div class="card"><h2>Precisa de você <span class="muted" style="font-weight:400">· só o que pede uma ação, de todas as origens</span></h2>${filtrosHtml()}
+      ${grupos.length ? `<div class="ruAl">${grupos.map(g => `<button data-rual="${g.k}" class="${f.alerta === g.k ? 'ativo' : ''}" style="border-left-color:${g.cor}"><b class="q" style="color:${g.cor}">${g.l.length}</b><div><span>${g.t}</span><small>${R$(soma(g.l))} · ${g.sub}</small></div></button>`).join('')}</div>` : '<p class="vazio">Nada pendente. 👏</p>'}
+      ${sel ? `<h3 style="margin:16px 0 6px">${sel.t} <span class="muted" style="font-weight:400">· ${sel.l.length} · ${R$(soma(sel.l))}</span></h3>${tabela(sel.l.slice().sort(ordData), true)}` : grupos.length ? '<p class="muted" style="margin-top:12px;font-size:13px">Toque num aviso para ver os títulos e resolver ali mesmo.</p>' : ''}</div>`; }
+
+  /* ---------- Por cliente ---------- */
+  function abaClientes(){ const l = filtrados(), f = ST.rec, h = hoje(), mapa = new Map();
+    for(const x of l){ const k = nomeCli(x); if(!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(x); }
+    let cs = [...mapa.entries()].map(([nome, ts]) => { const ab = ts.filter(aberto), prox = ab.filter(x => dataDe(x)).sort(ordData)[0];
+      return { nome, ts, contratado: soma(ts), recebido: soma(ts.filter(x => !aberto(x))), saldo: soma(ab), cobrar: ab.filter(x => x.situacao === 'a_cobrar').length, venc: ab.some(x => cobravel(x) && dataDe(x) && dataDe(x) < h), prox, emps: [...new Set(ts.map(x => x.empresa).filter(Boolean))] }; });
+    const fs = { saldo: c => c.saldo > 0.004, cobrar: c => c.cobrar > 0, vencidos: c => c.venc, quitados: c => c.saldo <= 0.004, todos: () => true };
+    cs = cs.filter(fs[f.cliSit] || fs.saldo).sort((a, b) => (b.venc - a.venc) || (b.cobrar > 0) - (a.cobrar > 0) || a.nome.localeCompare(b.nome, 'pt'));
+    const tot = { c: soma(cs.map(c => ({ valor: c.contratado }))), r: soma(cs.map(c => ({ valor: c.recebido }))), s: soma(cs.map(c => ({ valor: c.saldo }))) };
+    const det = c => { const g = new Map(); for(const x of c.ts){ const k = x.origem + '|' + (x.ref_id || x.id); if(!g.has(k)) g.set(k, []); g.get(k).push(x); }
+      return [...g.values()].map(ts => { const x = ts[0], tit = (ORIG_REC[x.origem] || x.origem) + (x.numero ? ' ' + x.numero : '') + (x.obra && x.obra !== c.nome ? ' · ' + x.obra : '');
+        return `<div class="ruGrp">${esc(tit)} <span class="muted" style="font-weight:400">· ${R$(soma(ts))} · recebido ${R$(soma(ts.filter(y => !aberto(y))))}</span></div>${tabela(ts.slice().sort(ordCli), false)}`; }).join(''); };
+    return `<div class="kpis ruK" style="margin-bottom:14px"><div class="kpi"><span class="muted">Contratado (${cs.length} cliente${cs.length === 1 ? '' : 's'})</span><b>${R$(tot.c)}</b></div>
+        <div class="kpi"><span class="muted">Recebido</span><b style="color:var(--verde)">${R$(tot.r)}</b></div><div class="kpi v"><span class="muted">Saldo a receber</span><b>${R$(tot.s)}</b></div></div>
+      <div class="card"><h2>Por cliente <span class="muted" style="font-weight:400">· projetos, pedidos, OS e preventivas de cada um</span></h2>
+      ${filtrosHtml(`<select id="ruCliSit" style="max-width:200px">${[['saldo', 'Com saldo a receber'], ['cobrar', 'Com parcela a cobrar'], ['vencidos', 'Com atraso'], ['quitados', 'Quitados'], ['todos', 'Todos']].map(([k, r]) => `<option value="${k}" ${f.cliSit === k ? 'selected' : ''}>${r}</option>`).join('')}</select>`)}
+      ${cs.slice(0, 200).map(c => { const pct = c.contratado > 0 ? Math.round(c.recebido / c.contratado * 100) : 0, ab = f.cliAberto === c.nome;
+        return `<div class="ruCli"><div class="ruCliCab" data-rucli="${esc(c.nome)}">
+          <div class="nm">${esc(c.nome)} ${c.emps.map(e => `<span class="tag">${e}</span>`).join('')}${c.cobrar ? `<span class="tag" style="background:#d0151b1a;color:#d0151b">${c.cobrar} a cobrar</span>` : ''}${c.venc ? '<span class="tag" style="background:#d0151b;color:#fff">atraso</span>' : ''}
+            <div class="ruBarra"><i style="width:${pct}%"></i></div></div>
+          <div class="v"><small>Contratado</small>${R$(c.contratado)}</div><div class="v"><small>Recebido · ${pct}%</small><span style="color:var(--verde)">${R$(c.recebido)}</span></div>
+          <div class="v"><small>Saldo</small><b>${c.saldo > 0.004 ? R$(c.saldo) : '<span class="tag" style="background:#1f8a4c1a;color:#1f8a4c">quitado</span>'}</b></div>
+          <div class="v px"><small>Próxima</small>${c.prox ? `<span style="${dataDe(c.prox) < h ? 'color:var(--verm);font-weight:600' : ''}">${dataBR(dataDe(c.prox))} · ${R$(c.prox.valor)}</span>` : '<span class="muted">—</span>'}</div></div>
+          ${ab ? `<div class="ruCliDet">${det(c)}</div>` : ''}</div>`; }).join('') || '<p class="vazio">Nenhum cliente neste filtro.</p>'}
+      ${cs.length > 200 ? `<p class="muted">Mostrando 200 de ${cs.length}. Use a busca.</p>` : ''}</div>`; }
+
+  /* ---------- Previsão e calendário ---------- */
+  function periodo(){ const f = ST.rec, ref = f.prevRef || hoje(), d = new Date(ref + 'T12:00:00');
+    if(f.prevPer === 'semana'){ const i = new Date(d); i.setDate(d.getDate() - ((d.getDay() + 6) % 7)); const de = isoLocal(i); return { de, ate: mais(de, 6), rot: 'Semana de ' + dataBR(de) + ' a ' + dataBR(mais(de, 6)), passo: 7 }; }
+    if(f.prevPer === 'ano') return { de: ref.slice(0, 4) + '-01-01', ate: ref.slice(0, 4) + '-12-31', rot: 'Ano de ' + ref.slice(0, 4), passo: 365 };
+    const ult = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    return { de: ref.slice(0, 7) + '-01', ate: ref.slice(0, 7) + '-' + String(ult).padStart(2, '0'), rot: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }), passo: 30 }; }
+  function abaPrevisao(){ const l = filtrados(), f = ST.rec, h = hoje(), P = periodo();
+    const abertos = l.filter(cobravel), noPer = abertos.filter(x => dataDe(x) && dataDe(x) >= P.de && dataDe(x) <= P.ate).sort(ordData);
+    const antes = abertos.filter(x => dataDe(x) && dataDe(x) < P.de && dataDe(x) < h).sort(ordData), semData = abertos.filter(x => !dataDe(x));
+    const naoLib = l.filter(x => x.situacao === 'nao_liberado');
+    let cal = '';
+    if(f.prevPer === 'mes'){ const ini = new Date(P.de + 'T12:00:00'), c0 = new Date(ini); c0.setDate(1 - ((ini.getDay() + 6) % 7)); const cel = [];
+      for(let i = 0; i < 42; i++){ const d = new Date(c0); d.setDate(c0.getDate() + i); const iso = isoLocal(d);
+        const pv = soma(abertos.filter(x => dataDe(x) === iso)), rc = soma(l.filter(x => x.situacao === 'recebido' && x.recebido_em === iso));
+        cel.push(`<div class="${iso.slice(0, 7) !== P.de.slice(0, 7) ? 'fora' : ''} ${iso === h ? 'hoje' : ''}"><b>${d.getDate()}</b>${pv ? `<span class="${iso < h ? 'at' : 'pv'}">${R$(pv)}</span><br>` : ''}${rc ? `<span class="rc">✓ ${R$(rc)}</span>` : ''}</div>`); }
+      if(cel.slice(35).every(c => c.includes('class="fora'))) cel.length = 35;
+      cal = `<div class="ruCal">${['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(d => `<div class="dsm">${d}</div>`).join('')}${cel.join('')}</div>
+        <p class="muted" style="font-size:12px;margin:0 0 10px"><span style="color:#1d4ed8">■</span> previsto · <span style="color:var(--verm)">■</span> previsto e já passou · <span style="color:var(--verde)">■</span> recebido</p>`; }
+    let corpo;
+    if(f.prevPer === 'ano'){ const porMes = new Map(); noPer.forEach(x => { const m = dataDe(x).slice(0, 7); if(!porMes.has(m)) porMes.set(m, []); porMes.get(m).push(x); });
+      corpo = [...porMes.entries()].map(([m, ts]) => `<div class="ruGrp">${new Date(m + '-15T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} <span class="muted" style="font-weight:400">· ${ts.length} · ${R$(soma(ts))}</span></div>${tabela(ts, true)}`).join('') || '<p class="vazio">Nada previsto neste ano.</p>';
+    } else corpo = tabela(noPer, true);
+    return `<div class="kpis ruK" style="margin-bottom:14px"><div class="kpi"><span class="muted">Previsto no período</span><b>${R$(soma(noPer))}</b></div>
+        <div class="kpi"><span class="muted">Em aberto de antes</span><b style="color:var(--verm)">${R$(soma(antes))}</b></div>
+        <div class="kpi"><span class="muted">Liberado sem data</span><b>${R$(soma(semData))}</b></div>
+        <div class="kpi"><span class="muted">Ainda não liberado</span><b style="color:#bbb">${R$(soma(naoLib))}</b></div></div>
+      <div class="card"><h2>Previsão de recebimentos</h2>
+      <div class="ruNav"><div class="abasLanc" style="margin:0">${[['semana', 'Semana'], ['mes', 'Mês'], ['ano', 'Ano']].map(([k, r]) => `<button data-ruper="${k}" class="${f.prevPer === k ? 'ativo' : ''}">${r}</button>`).join('')}</div>
+        <button class="btn peq" data-runav="-1">‹</button><b style="min-width:150px;text-align:center;text-transform:capitalize">${P.rot}</b><button class="btn peq" data-runav="1">›</button><button class="btn peq" data-runav="0">Hoje</button>
+        <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="ruAntes" style="width:auto" ${f.prevAntes ? 'checked' : ''}> mostrar em aberto de antes</label></div>
+      ${filtrosHtml()}${cal}${corpo}
+      ${f.prevAntes && antes.length ? `<h3 style="margin:16px 0 6px;color:var(--verm)">Em aberto de antes <span class="muted" style="font-weight:400">· ${antes.length} · ${R$(soma(antes))}</span></h3>${tabela(antes, true)}` : ''}
+      ${semData.length ? `<h3 style="margin:16px 0 6px">Liberados sem data <span class="muted" style="font-weight:400">· ${semData.length} · ${R$(soma(semData))} · fora da previsão até ganharem vencimento ou data combinada</span></h3>${tabela(semData, true)}` : ''}</div>`; }
+
+  /* ---------- Recebido por mês ---------- */
+  function abaRecebido(){ const l = filtrados().filter(x => x.situacao === 'recebido' && x.recebido_em), f = ST.rec, mes = f.recMes || hoje().slice(0, 7);
+    const doMes = l.filter(x => x.recebido_em.slice(0, 7) === mes).sort((a, b) => a.recebido_em.localeCompare(b.recebido_em));
+    const porOrig = Object.keys(ORIG_REC).map(k => [k, soma(doMes.filter(x => x.origem === k))]).filter(x => x[1]);
+    const meses = []; { const d = new Date(mes + '-15T12:00:00'); for(let i = 11; i >= 0; i--){ const m = new Date(d.getFullYear(), d.getMonth() - i, 15); meses.push(isoLocal(m).slice(0, 7)); } }
+    const tot = meses.map(m => soma(l.filter(x => x.recebido_em.slice(0, 7) === m))), mx = Math.max(1, ...tot);
+    const porCli = new Map(); doMes.forEach(x => { const k = nomeCli(x); if(!porCli.has(k)) porCli.set(k, []); porCli.get(k).push(x); });
+    return `<div class="kpis ruK" style="margin-bottom:14px"><div class="kpi v"><span class="muted">Recebido em ${new Date(mes + '-15T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span><b style="color:var(--verde)">${R$(soma(doMes))}</b></div>
+        ${porOrig.map(([k, v]) => `<div class="kpi"><span class="muted">${ORIG_REC[k]}</span><b>${R$(v)}</b></div>`).join('')}</div>
+      <div class="card"><h2>Recebido por mês</h2>
+      <div class="ruNav"><button class="btn peq" data-rumes="-1">‹</button><b style="min-width:150px;text-align:center;text-transform:capitalize">${new Date(mes + '-15T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</b><button class="btn peq" data-rumes="1">›</button><button class="btn peq" data-rumes="0">Este mês</button></div>
+      ${filtrosHtml()}
+      <div style="display:flex;gap:3px;align-items:flex-end;height:120px;margin:6px 0 4px">${meses.map((m, i) => `<div data-rumesvai="${m}" title="${m}: ${R$(tot[i])}" style="flex:1;min-width:0;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%">
+          <div style="width:100%;max-width:44px;height:${Math.round(tot[i] / mx * 92)}px;min-height:2px;border-radius:6px 6px 0 0;background:${m === mes ? 'var(--verm,#d0151b)' : '#c9c9cf'}"></div><small class="muted" style="font-size:10px">${m.slice(5)}/${m.slice(2, 4)}</small></div>`).join('')}</div>
+      ${[...porCli.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt')).map(([n, ts]) => `<div class="ruGrp">${esc(n)} <span class="muted" style="font-weight:400">· ${R$(soma(ts))}</span></div>${tabela(ts, false)}`).join('') || '<p class="vazio">Nada recebido neste mês.</p>'}</div>`; }
+
+  function desenha(){ const f = ST.rec;
+    $('#conteudo').innerHTML = abasHtml() + (f.aba === 'clientes' ? abaClientes() : f.aba === 'previsao' ? abaPrevisao() : f.aba === 'recebido' ? abaRecebido() : abaPrecisa());
+    ligaAbas(); ligaFiltros(); ligaAcoes();
+    document.querySelectorAll('[data-rual]').forEach(b => b.onclick = () => { f.alerta = f.alerta === b.dataset.rual ? '' : b.dataset.rual; desenha(); });
+    document.querySelectorAll('[data-rucli]').forEach(b => b.onclick = () => { f.cliAberto = f.cliAberto === b.dataset.rucli ? '' : b.dataset.rucli; desenha(); });
+    if($('#ruCliSit')) $('#ruCliSit').onchange = e => { f.cliSit = e.target.value; desenha(); };
+    document.querySelectorAll('[data-ruper]').forEach(b => b.onclick = () => { f.prevPer = b.dataset.ruper; desenha(); });
+    document.querySelectorAll('[data-runav]').forEach(b => b.onclick = () => { const n = +b.dataset.runav, P = periodo();
+      if(!n) f.prevRef = ''; else if(f.prevPer === 'semana') f.prevRef = mais(P.de, 7 * n); else { const d = new Date(P.de + 'T12:00:00'); if(f.prevPer === 'ano') d.setFullYear(d.getFullYear() + n); else d.setMonth(d.getMonth() + n); f.prevRef = isoLocal(d); }
+      desenha(); });
+    if($('#ruAntes')) $('#ruAntes').onchange = e => { f.prevAntes = e.target.checked; desenha(); };
+    document.querySelectorAll('[data-rumes]').forEach(b => b.onclick = () => { const n = +b.dataset.rumes; if(!n) f.recMes = ''; else { const d = new Date((f.recMes || hoje().slice(0, 7)) + '-15T12:00:00'); d.setMonth(d.getMonth() + n); f.recMes = isoLocal(d).slice(0, 7); } desenha(); });
+    document.querySelectorAll('[data-rumesvai]').forEach(b => b.onclick = () => { f.recMes = b.dataset.rumesvai; desenha(); });
+  }
+
+  window.telaReceber = async function(...a){
+    if(ST.rec.aba === 'lista'){ const r = await lista0.apply(this, a);
+      try{ RU.dados = RU.dados.length ? RU.dados : []; if(!$('#conteudo .ruAbas')){ $('#conteudo').insertAdjacentHTML('afterbegin', abasHtml()); ligaAbas(); } }catch(e){}
+      return r; }
+    const guarda = { y: window.scrollY, c: $('#conteudo') ? $('#conteudo').scrollTop : 0, tem: !!$('#conteudo .ruAbas') };
+    if(!guarda.tem) carregandoTela();
+    const r = await tudo(() => sb.from('receber_geral').select('*').order('id'));
+    if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
+    RU.dados = (r.data || []).filter(x => x.situacao !== 'cancelado');
+    try{ RU.nfs = typeof notasPorOrigem === 'function' ? await notasPorOrigem() : {}; }catch(e){ RU.nfs = {}; }
+    if(ST.aba !== 'fn_receber') return;
+    desenha();
+    if(guarda.tem){ window.scrollTo(0, guarda.y); if($('#conteudo')) $('#conteudo').scrollTop = guarda.c; }   // depois de uma ação, a tela fica onde estava
+  };
+  Object.assign(TELAS, { fn_receber: window.telaReceber });
 })();
 
 /* ================== Contas fixas (script 22 + 27) ==================
