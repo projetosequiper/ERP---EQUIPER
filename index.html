@@ -10359,7 +10359,7 @@ async function acPessoa(id){
           <input type="date" id="apValInd" value="${valInd || ''}"></label><button class="btn peq" id="apCopiar" style="align-self:flex-end">Copiar permissões de outra pessoa</button></div>`}
       <div id="apEditor"></div></div></div>`);
   $('#folha').style.width = 'min(940px,100%)';
-  const recarrega = async () => { ST.ac = await carregaAcessos(); acPessoa(id); };
+  const recarrega = async () => { ST.ac = await carregaAcessos(); await acMantemPosicao(() => acPessoa(id)); };
   const salva = async (q, ok) => { const r = await q; if(r.error){ await aviso('Não foi possível salvar', esc(erroBanco(r.error))); return recarrega(); } toast(ok); await recarrega(); };
   if(!ag){
     $('#apNome').onchange = async () => { const v = $('#apNome').value.trim(); if(!v){ await aviso('Nome obrigatório', 'Informe o nome.'); return recarrega(); }
@@ -10397,7 +10397,7 @@ async function acPessoa(id){
           : sb.from('acesso_excecoes').upsert({ usuario_id: id, tela, nivel, valido_ate: ((ST.acValInd || {})[id] !== undefined ? ST.acValInd[id] : valInd) || null }, { onConflict: 'usuario_id,tela' });
         const r = await q; if(r.error){ await aviso('Não foi possível salvar', esc(erroBanco(r.error))); break; }
       }
-      ST.ac = await carregaAcessos(); if(id === ST.eu.id) atualizaMeusAcessos(); acPessoa(id);
+      ST.ac = await carregaAcessos(); if(id === ST.eu.id) atualizaMeusAcessos(); await acMantemPosicao(() => acPessoa(id));
     }
   });
 }
@@ -10443,7 +10443,7 @@ function acPerfis(){
     gravar: async lista => {
       const r = await sb.from('acesso_grade').upsert(lista.map(([tela, nivel]) => ({ perfil_id: p.id, tela, nivel })), { onConflict: 'perfil_id,tela' });
       if(r.error) await aviso('Não foi possível salvar', esc(erroBanco(r.error)));
-      ST.ac = await carregaAcessos(); if(p.id === ST.eu.perfil_id) atualizaMeusAcessos(); acPerfis();
+      ST.ac = await carregaAcessos(); if(p.id === ST.eu.perfil_id) atualizaMeusAcessos(); await acMantemPosicao(() => acPerfis());
     }
   });
 }
@@ -10456,10 +10456,18 @@ function acTrava(tipo, t){
   if(tipo === 'agente' && !t.teto_agente) return 'Bloqueado para o Claude (segurança)';
   return null;
 }
+// redesenha sem a tela pular para o topo (o cadastro abre num painel que voltava ao início a cada clique)
+async function acMantemPosicao(fn){
+  const f = $('#folha'), painel = !$('#painel').classList.contains('hidden'), y = painel ? f.scrollTop : 0, yJ = window.scrollY, c = $('#conteudo'), yC = c ? c.scrollTop : 0;
+  await fn();
+  if(painel){ f.scrollTop = y; requestAnimationFrame(() => { f.scrollTop = y; }); }
+  window.scrollTo(0, yJ); if(c) c.scrollTop = yC;
+}
+// pastas da árvore: Início e Chat (Geral) valem em todas as áreas — ficam numa pasta própria, fora do Administrativo
 function acPastas(telas){
   const top = new Map();
   for(const t of telas){
-    const [a, b] = t.area.split(' · ');
+    const [a, b] = t.area === 'Administrativo · Geral' ? ['Geral (todas as áreas)', ''] : t.area.split(' · ');
     if(!top.has(a)) top.set(a, new Map());
     const m = top.get(a), k = b ? b.charAt(0).toUpperCase() + b.slice(1) : '';
     if(!m.has(k)) m.set(k, []); m.get(k).push(t);
@@ -10497,7 +10505,7 @@ function acEditor(alvo, ctx){
     const on = ts.filter(t => ctx.valor(t) > 0).length; cb.checked = on === ts.length && on > 0; cb.indeterminate = on > 0 && on < ts.length;
     d.ontoggle = () => { d.open ? ab.add(d.dataset.pasta) : ab.delete(d.dataset.pasta); };
     cb.onclick = e => e.stopPropagation();
-    cb.onchange = () => { const liga = cb.checked; ab.add(d.dataset.pasta);
+    cb.onchange = () => { const liga = !ts.some(t => !acTrava(ctx.tipo, t) && ctx.valor(t) > 0); ab.add(d.dataset.pasta);
       ctx.gravar(ts.filter(t => !acTrava(ctx.tipo, t)).filter(t => liga ? !ctx.valor(t) : ctx.valor(t)).map(t => [t.tela, liga ? padraoLigar(t) : 0])); };
   });
   alvo.querySelectorAll('[data-acck]').forEach(c => c.onchange = () => { const t = tela(c.dataset.acck); ctx.gravar([[t.tela, c.checked ? padraoLigar(t) : 0]]); });
