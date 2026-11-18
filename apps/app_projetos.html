@@ -2583,7 +2583,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
     try{
       if(!(window.firebase && firebase.__erp)) return;
       window.__erpOuvFin = true;
-      window.__erpFin = { lista: function(){ return state.financeiro; }, salvar: function(){ return saveFinanceiro(); }, regra: function(rec){ return avaliarAutoCobranca(rec); } };   // leitura para os testes do ERP
+      window.__erpFin = { fantasia: erpPjFantasia, carregarCadastro: erpPjCarregar, cadastro: ERP_PJ, lista: function(){ return state.financeiro; }, salvar: function(){ return saveFinanceiro(); }, regra: function(rec){ return avaliarAutoCobranca(rec); } };   // leitura para os testes do ERP
       firebase.database().ref('storage/clm-financeiro').on('value', function(snap){
         var v = snap && snap.val();
         if(typeof v !== 'string' || !financeiroFoiCarregadoAlgumaVez || financeiroBloqueado) return;
@@ -5575,7 +5575,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
       var vistos = {};
       var linhas = state.projetos.slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'', 'pt-BR', {sensitivity:'base'}); }).filter(function(p){
         var k = chaveNomeCliente(p.cliente || p.nome); if(vistos[k]) return false; vistos[k] = true;
-        if(q && normalizarTexto((p.nome||'')+' '+(p.cliente||'')).indexOf(q) === -1) return false;
+        if(q && normalizarTexto((p.nome||'')+' '+(p.cliente||'')+' '+(function(){ var f = dadosDoCliente(p.id); return f && f.fin ? erpPjTexto(f.fin.id) : ''; })()).indexOf(q) === -1) return false;
         return true;
       }).map(function(p){
         var d = dadosDoCliente(p.id);
@@ -5587,7 +5587,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
           var s = d.fin.disciplinasStatus[x]; return '<span class="'+classeStatusDisciplina(s)+'" style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:10.5px;margin:2px 4px 0 0;">'+escapeHtml(x)+': '+escapeHtml(s)+'</span>';
         }).join('') : '';
         return '<div class="cli-linha" data-pid="'+escapeHtml(p.id)+'">'+
-          '<div style="min-width:0;"><b>'+escapeHtml(p.nome)+'</b>'+(d.fin && d.fin.localidade ? ' <span class="mut">· '+escapeHtml(d.fin.localidade)+'</span>' : '')+(st ? '<div>'+st+'</div>' : '')+'</div>'+
+          '<div style="min-width:0;"><b>'+escapeHtml(p.nome)+'</b>'+(d.fin && d.fin.localidade ? ' <span class="mut">· '+escapeHtml(d.fin.localidade)+'</span>' : '')+(d.fin ? erpPjHtml(d.fin.id, p.nome) : '')+(st ? '<div>'+st+'</div>' : '')+'</div>'+
           '<div class="cli-num">'+
             (atras ? '<span class="cli-tag r">'+atras+' atrasada'+(atras>1?'s':'')+'</span>' : '')+
             (esp ? '<span class="cli-tag a">'+esp+' aguardando</span>' : '')+
@@ -5620,6 +5620,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
     var permRel = podeUsarRelatorios();
     var info = [];
     if(fin){
+      var fantErp = erpPjFantasia(fin.id, fin.cliente); if(fantErp) info.push('<b>'+escapeHtml(fantErp)+'</b>');   // ERP: nome fantasia do cadastro
       if(fin.enderecoCompleto) info.push(escapeHtml(fin.enderecoCompleto)); else if(fin.localidade) info.push(escapeHtml(fin.localidade));
       if(fin.numeroProposta) info.push('proposta '+escapeHtml(fin.numeroProposta));
       if(fin.areaM2) info.push(escapeHtml(String(fin.areaM2))+' m²');
@@ -8280,6 +8281,46 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
   }
   window.__erpParc = { sit: erpSit5, mudar: erpMudarSit };   // leitura para os testes do ERP
 
+  /* ===== ERP (18/11, Júlio): nome fantasia do cadastro do ERP embaixo do nome da proposta ===== */
+  var ERP_PJ = { porFin: {}, carregado: false, carregando: null };
+  function erpPjSb(){ try{ return window.top !== window && window.top.__erpSupabase ? window.top.__erpSupabase : null; }catch(e){ return null; } }
+  function erpPjFold(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+  function erpPjTitulo(t){ var peq = { de: 1, da: 1, 'do': 1, das: 1, dos: 1, e: 1 };
+    return String(t || '').toLowerCase().split(/\s+/).filter(Boolean).map(function(w, i){ return i && peq[w] ? w : w.charAt(0).toUpperCase() + w.slice(1); }).join(' '); }
+  function erpPjCarregar(){
+    var sb = erpPjSb(); if(!sb) return null;
+    if(ERP_PJ.carregando) return ERP_PJ.carregando;
+    ERP_PJ.carregando = (async function(){
+      try{
+        var v = await sb.from('vinculos_apps').select('id_app,pessoa_id').eq('app', 'projetos').eq('colecao', 'clm-financeiro').eq('situacao', 'confirmado');
+        if(v.error) return;
+        var ids = [], por = {};
+        (v.data || []).forEach(function(x){ if(x.pessoa_id){ por[x.id_app] = x.pessoa_id; if(ids.indexOf(x.pessoa_id) === -1) ids.push(x.pessoa_id); } });
+        var pes = {};
+        for(var i = 0; i < ids.length; i += 150){ var r = await sb.from('pessoas_leve').select('id,nome,apelido').in('id', ids.slice(i, i + 150)); (r.data || []).forEach(function(p){ pes[p.id] = p; }); }
+        var porFin = {};
+        Object.keys(por).forEach(function(k){ var p = pes[por[k]]; if(p) porFin[k] = p; });
+        ERP_PJ.porFin = porFin; ERP_PJ.carregado = true;
+        try{ renderFinanceiroLista(); }catch(e){}
+        try{ var cf = document.getElementById('clientesFicha'); if(cf && cf.offsetParent) renderClientesPagina(); }catch(e){}
+      }catch(e){ console.warn('[ERP] cadastro dos clientes de Projetos', e); }
+    })();
+    return ERP_PJ.carregando;
+  }
+  // nome fácil do cadastro (fantasia; sem fantasia, a razão social); vazio quando não há ligação ou é igual ao nome da proposta
+  function erpPjFantasia(finId, nomeProposta){
+    if(!finId) return '';
+    if(!ERP_PJ.carregado){ erpPjCarregar(); return ''; }
+    var p = ERP_PJ.porFin[finId]; if(!p) return '';
+    var n = erpPjTitulo((p.apelido || '').trim() || p.nome);
+    var base = erpPjFold(String(nomeProposta || '').replace(/\([^)]*\)/g, ' ').replace(/\b(bim|revis[aã]o)\b/gi, ' '));
+    return base && erpPjFold(n) === base ? '' : n;
+  }
+  function erpPjTexto(finId){ var p = ERP_PJ.porFin[finId]; return p ? (p.nome || '') + ' ' + (p.apelido || '') : ''; }
+  function erpPjHtml(finId, nomeProposta){ var n = erpPjFantasia(finId, nomeProposta);
+    return n ? '<div class="erp-pj-fant" style="font-size:12px;font-weight:500;color:var(--ink-soft);margin-top:2px;white-space:normal">'+escapeHtml(n)+'</div>' : ''; }
+  if(erpPjSb()) setTimeout(erpPjCarregar, 1200);
+
   function renderFinanceiroLista(){
     var el = document.getElementById('finLista');
     if(!el) return;
@@ -8308,7 +8349,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     }
     if(buscaFinanceiroTexto){
       var q = buscaFinanceiroTexto.toLowerCase();
-      lista = lista.filter(function(r){ return r.cliente.toLowerCase().indexOf(q) !== -1 || (r.localidade||'').toLowerCase().indexOf(q) !== -1; });
+      lista = lista.filter(function(r){ return r.cliente.toLowerCase().indexOf(q) !== -1 || (r.localidade||'').toLowerCase().indexOf(q) !== -1 || erpPjFold(erpPjTexto(r.id)).indexOf(erpPjFold(q)) !== -1; });
     }
     var lbl = document.getElementById('lblFinLista');
     var expandidoAgora = buscaFinanceiroTexto ? true : !colapsadoFinListaGeral;
@@ -8363,7 +8404,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
       if(abertas[0]){ proxParcela = abertas[0]; proxParcela.atrasada = proxParcela.data < todayISO(); }
     }
     header.innerHTML =
-      '<div class="nome">'+(isColapsado?'▸ ':'▾ ')+escapeHtml(rec.cliente)+
+      '<div class="nome">'+(isColapsado?'▸ ':'▾ ')+escapeHtml(rec.cliente)+erpPjHtml(rec.id, rec.cliente)+
         (temCobrar?' <span style="color:#fff;background:var(--red);font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:999px;margin-left:6px;vertical-align:middle;letter-spacing:0.2px;">💰 COBRAR</span>':'')+
         (temCobrancaEnviada?' <span style="color:var(--ink);background:var(--paper);border:1px solid var(--border);font-size:10.5px;font-weight:600;padding:4px 10px;border-radius:999px;margin-left:6px;vertical-align:middle;">✉ Cobrança enviada</span>':'')+
         (temPrevisto?' <span style="color:var(--ink);background:var(--amber-soft);border:1px solid var(--amber);font-size:10.5px;font-weight:600;padding:4px 10px;border-radius:999px;margin-left:6px;vertical-align:middle;">📅 paga em '+escapeHtml(fmtDate(temPrevisto))+'</span>':'')+
