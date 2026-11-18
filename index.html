@@ -1816,6 +1816,7 @@ img.f{width:220px;height:165px;object-fit:cover;margin:4px;border:1px solid #ddd
 .bt{position:fixed;top:10px;right:10px;background:#141414;color:#fff;border:0;border-radius:8px;padding:10px 14px;font:600 13px Helvetica,Arial;cursor:pointer;z-index:9}
 @media screen{body{max-width:900px;margin:24px auto;padding:0 24px}body.pais{max-width:1250px}}
 @media print{.bt{display:none}}
+@media screen and (max-width:640px){.bt{position:sticky;top:6px;display:block;width:100%;margin:0 0 10px}}   /* celular: o botão não cobre o título */
 `;
 const pdfEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 /* faixa de dados: [[rótulo, valor (texto), detalhe opcional (html)], …] */
@@ -6248,7 +6249,7 @@ async function formBoleto(x, depois){
     cs = cs.filter(fs[f.cliSit] || fs.saldo).sort((a, b) => (b.venc - a.venc) || (b.cobrar > 0) - (a.cobrar > 0) || a.nome.localeCompare(b.nome, 'pt'));
     const tot = { c: soma(cs.map(c => ({ valor: c.contratado }))), r: soma(cs.map(c => ({ valor: c.recebido }))), s: soma(cs.map(c => ({ valor: c.saldo }))) };
     const det = c => { const g = new Map(); for(const x of c.ts){ const k = x.origem + '|' + (x.ref_id || x.id); if(!g.has(k)) g.set(k, []); g.get(k).push(x); }
-      return [...g.values()].map(ts => { const x = ts[0], tit = (ORIG[x.origem] || x.origem) + (x.numero ? ' ' + x.numero : '') + (x.obra && x.obra !== c.nome ? ' · ' + x.obra : '');
+      return [...g.values()].map(ts => { const x = ts[0], lugar = x.obra || (x.app ? x.cliente : ''), tit = (ORIG[x.origem] || x.origem) + (x.numero ? ' ' + x.numero : '') + (lugar && norm(lugar) !== norm(c.nome) ? ' · ' + lugar : '');   // nome/local no app: cada lugar do cliente separado
         const art = x.art ? (x.art === 'pendente' ? ' <span class="tag" style="background:#b453091a;color:#b45309">ART pendente</span>' : ` <span class="tag" style="background:#1f8a4c1a;color:#1f8a4c">ART ${x.art === 'emitida' ? 'emitida' : esc(x.art)}</span>`) : '';
         return `<div class="ruGrp">${esc(tit)}${art} <span class="muted" style="font-weight:400">· ${R$(soma(ts))} · recebido ${R$(soma(ts.filter(y => !aberto(y))))}</span></div>${tabela(ts.slice().sort(ordCli), false)}`; }).join(''); };
     return `<div class="kpis ruK" style="margin-bottom:14px"><div class="kpi"><span class="muted">Contratado (${cs.length} cliente${cs.length === 1 ? '' : 's'})</span><b>${R$(tot.c)}</b></div>
@@ -10257,6 +10258,204 @@ async function telaRegrasFiscais(){
 }
 
 Object.assign(TELAS, { fn_contabil: telaContabil, adm_regras: telaRegrasFiscais });
+
+/* =================== Documentos: pedido de equipamentos, ordem de serviço e ordem de compra (18/11) ===================
+   Conteúdo e organização tomados dos documentos do CIGAM (pastas Comercial/ORÇAMENTOS/EQUIPAMENTOS, Serviços/ORDENS DE SERVIÇO e
+   Suprimentos/Ordens de Compra), no padrão visual do ERP (pdfJanela, mod/01_pdf_padrao.js). Só entra o que está registrado no ERP;
+   o que o ERP ainda não guarda fica de fora (lista em MEMORIA-ERP.md). As tabelas repetem o cabeçalho em cada página
+   (thead) e os totais ficam sempre no fim; o rodapé numera "Página N de M". */
+
+const DOC_EMPRESA = { Equiper: '1', EQP: '3' };          // código do CIGAM da empresa do grupo (cadastro de empresas)
+const docFmtDoc = s => { const d = String(s || '').replace(/\D/g, ''); return !d ? '' : d.length === 11 ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : d.length === 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : s; };
+const docEnd = (x, extra) => [[x && x.logradouro, x && x.numero].filter(Boolean).join(', '), x && x.complemento, (extra || x || {}).bairro, [(extra || x || {}).municipio, (extra || x || {}).uf].filter(Boolean).join(' - '), x && x.cep ? 'CEP ' + String(x.cep).replace(/^(\d{5})(\d{3})$/, '$1-$2') : ''].filter(Boolean).join(' · ');
+const docTel = x => [...(x && x.telefones || [])].filter(Boolean).slice(0, 2).join(' · ');
+const docPodePriv = () => ST.eu && ['diretoria', 'administrativo', 'projetos', 'servicos'].includes(ST.eu.perfil);
+const docNum = (v, c = 2) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: c, maximumFractionDigits: c });
+const docQtd = (q, u) => typeof qtdTxt === 'function' ? qtdTxt(q, u) : `${Number(q).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${u || ''}`.trim();
+const docHora = t => t ? new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+const docDia = t => t ? new Date(t).toLocaleDateString('pt-BR') : '';
+const docArq = s => String(s || '').replace(/[\\/:*?"<>|]/g, '').trim();
+
+async function docDadosPessoa(id){
+  if(!id) return { p: null, d: null };
+  const p = pessoa(id) || ((await sb.from('pessoas_leve').select('*').eq('id', id).maybeSingle()).data || null);
+  const d = docPodePriv() ? ((await priv().from('pessoas_dados').select('*').eq('pessoa_id', id).maybeSingle()).data || null) : null;
+  return { p, d };
+}
+const docRodape = e => e && e.d ? [e.p.nome, [[e.d.logradouro, e.d.numero].filter(Boolean).join(', '), e.d.bairro, [e.d.municipio, e.d.uf].filter(Boolean).join(' - ')].filter(Boolean).join(' · '), docTel(e.d)].filter(Boolean).join(' · ') : '';
+async function docEmpresaGrupo(emp){
+  const cod = DOC_EMPRESA[emp]; if(!cod) return null;
+  const r = await sb.from('pessoas_leve').select('id,nome,apelido').contains('codigos_cigam', [cod]).limit(1);
+  const p = (r.data || [])[0]; if(!p) return null;
+  const d = docPodePriv() ? ((await priv().from('pessoas_dados').select('*').eq('pessoa_id', p.id).maybeSingle()).data || null) : null;
+  return { p, d };
+}
+const docCaixa = (tit, linhas) => { const l = linhas.filter(x => x && x[1]); return l.length ? `<div class="dcx"><span class="dct">${pdfEsc(tit)}</span>${l.map(([r, v]) => `<div><i>${pdfEsc(r)}</i><b>${v}</b></div>`).join('')}</div>` : ''; };
+const DOC_CSS = `<style>
+  .dgr{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px;margin:0 0 12px;break-inside:avoid}
+  .dcx{background:#f4f4f4;border-left:4px solid #d71920;padding:8px 11px;font-size:10px;break-inside:avoid}
+  .dcx+.dcx{border-left-color:#8a8a8a}
+  .dct{display:block;color:#777;font-size:8.5px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;font-weight:700}
+  .dcx div{display:flex;gap:6px;margin:1px 0}.dcx i{font-style:normal;color:#777;min-width:78px;flex-shrink:0}.dcx b{font-weight:600}
+  .dass{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:14px;border:1px solid #141414;break-inside:avoid}
+  .dass div{min-height:52px;padding:5px 8px;font-size:8.5px;text-transform:uppercase;color:#555;border-right:1px solid #141414}.dass div:last-child{border-right:0}
+  .dbloco{border:1px solid #d6d6d6;padding:0 10px 8px;margin:10px 0 14px}
+  .dbloco h3{margin:0 -10px 6px;padding:7px 10px;background:#ececec;font-size:11px}
+  .dbloco h3,.dbloco h3+table thead{break-after:avoid;page-break-after:avoid}.dbloco h3+table,.dbloco h3+p{break-before:avoid}
+  .drc{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 8px;break-inside:avoid}.drc>div{background:#f7f7f7;padding:6px 9px;font-size:10px}.drc span{display:block;color:#777;font-size:8.5px;text-transform:uppercase;margin-bottom:2px}
+  td.cod{font-family:Consolas,monospace;font-size:9.5px;white-space:nowrap}
+  @media screen and (max-width:640px){ .dtab{overflow-x:auto;-webkit-overflow-scrolling:touch} .dtab table{min-width:560px} }
+  @media (max-width:640px){ body{padding:0 10px!important;margin:12px auto!important} .dass{grid-template-columns:1fr 1fr} .dass div:nth-child(2){border-right:0} .dass div:nth-child(-n+2){border-bottom:1px solid #141414} .drc{grid-template-columns:1fr} table{font-size:9.5px} th,td{padding:3px 4px} .pcab h1{font-size:17px} .pcab img{height:44px} .pfx{flex-wrap:wrap}.pfx>div{min-width:45%} }
+</style>`;
+
+/* ---------------------------------------------------------------- PEDIDO DE EQUIPAMENTOS ---------------------------------------------------------------- */
+async function pdfPedido(id){
+  const [a, b, g] = await Promise.all([sb.from('pedidos_servico').select('*').eq('id', id).single(), sb.from('parcelas_servico').select('*').eq('pedido_id', id).order('ordem'),
+    sb.from('orcamento_grupos').select('*, orcamento_itens(*)').eq('destino', 'pedido').eq('destino_id', id).limit(1)]);
+  if(a.error) return aviso('Erro', esc(erroBanco(a.error)));
+  const P = a.data, PA = b.data || [], G = (g.data || [])[0] || null;
+  const O = G ? ((await sb.from('orcamentos').select('*').eq('id', G.orcamento_id).maybeSingle()).data || null) : null;
+  const itens = G ? (G.orcamento_itens || []).sort((x, y) => x.ordem - y.ordem) : [];
+  const ob = obra(P.obra_id) || {}, cli = await docDadosPessoa(P.pagador_id || (O && O.pagador_id));
+  const ent = docPodePriv() && P.obra_id ? ((await priv().from('obras_endereco').select('*').eq('obra_id', P.obra_id).maybeSingle()).data || null) : null;
+  const op = O && O.tipo_operacao ? ((await sb.from('tipos_operacao').select('codigo,descricao').eq('codigo', O.tipo_operacao).maybeSingle()).data || null) : null;
+  const cond = O && O.condicao_pagamento_id ? ((await sb.from('condicoes_pagamento').select('descricao').eq('codigo', O.condicao_pagamento_id).maybeSingle()).data || {}).descricao : null;
+  const emp = P.empresa || (G && G.empresa) || (O && O.empresa) || '';
+  const numero = P.numero || (O ? numOrc(O.numero) : '');
+  const nomeCli = cli.p ? cli.p.nome : (ob.nome || '');
+  const endCli = cli.d ? docEnd(cli.d) : '', endEnt = ent ? docEnd(ent, ob) : [ob.bairro, [ob.municipio, ob.uf].filter(Boolean).join(' - ')].filter(Boolean).join(' · ');
+  const SIT = { nao_comecou: 'Não começou', em_andamento: 'Em andamento', finalizada: 'Finalizada', cancelada: 'Cancelada' };
+  const INT = { aguardando_sinal: 'Aguardando o sinal', aguardando_compra: 'Aguardando compra', comprado: 'Comprado', em_deposito: 'Em depósito', liberado_entrega: 'Liberado para entrega', entregue: 'Entregue' };
+  // itens: as linhas "título" do orçamento são as categorias, com subtotal
+  let k = 0, sub = 0, cat = null; const linhas = [], cats = [];
+  const fecha = () => { if(cat !== null){ linhas.push({ sub: true, rot: 'Subtotal · ' + cat, v: sub }); cats.push([cat, sub]); } };
+  itens.forEach(it => {
+    if(it.tipo === 'titulo'){ fecha(); cat = it.descricao; sub = 0; linhas.push({ tit: it.descricao }); return; }
+    k++; sub += Number(it.total || 0);
+    linhas.push([String(k).padStart(2, '0'), `<span class="cod">${esc(it.codigo || '·')}</span>`, esc(it.descricao) + (it.tipo === 'mao_obra' ? ' <small>mão de obra</small>' : it.tipo === 'material' ? ' <small>material auxiliar</small>' : ''),
+      docQtd(it.quantidade, it.unidade), R$(it.preco_unit), R$(it.total)]);
+  });
+  if(cat !== null) fecha();
+  const somaItens = itens.filter(it => it.tipo !== 'titulo').reduce((s, it) => s + Number(it.total || 0), 0), total = Number(P.valor || 0);
+  const desc = Math.round((somaItens - total) * 100) / 100;
+  const corpoItens = itens.length ? `<div class="dtab"><table><thead><tr><th style="width:34px">Item</th><th style="width:62px">Código</th><th>Descrição</th><th class="num" style="width:70px">Qtd.</th><th class="num" style="width:86px">Unitário</th><th class="num" style="width:94px">Total</th></tr></thead><tbody>
+      ${linhas.map(l => Array.isArray(l) ? `<tr>${l.map((v, i) => `<td${i >= 3 ? ' class="num"' : i === 1 ? ' class="cod"' : ''}>${v}</td>`).join('')}</tr>`
+        : l.tit ? `<tr class="grp"><td colspan="6">${esc(l.tit)}</td></tr>` : `<tr class="sub"><td colspan="5" class="num">${esc(l.rot)}</td><td class="num">${R$(l.v)}</td></tr>`).join('')}
+      <tr class="tt"><td colspan="5" class="num">Total dos itens</td><td class="num">${R$(somaItens)}</td></tr></tbody></table></div>`
+    : pdfNota('Este pedido não tem itens registrados no ERP (foi criado à mão, sem orçamento). Vale o valor total abaixo.');
+  const resumo = pdfResumo([['Itens', R$(somaItens || total), 'g'], desc > 0.004 ? ['Desconto', '− ' + R$(desc), 'g'] : null, ['Total do pedido', R$(total), 'v']]);
+  const parc = PA.length ? pdfTabela(['Parcela', 'Vencimento', 'Situação', { t: 'Valor', num: true, w: '110px' }],
+      PA.map(x => [esc(x.tipo), x.vencimento ? dataBR(x.vencimento) : (x.situacao === 'nao_liberado' ? 'conforme a condição' : '—'), esc((typeof SIT_REC !== 'undefined' && SIT_REC[x.situacao] ? SIT_REC[x.situacao][0] : x.situacao) || ''), R$(x.valor)]),
+      ['Total', null, null, R$(PA.reduce((s, x) => s + Number(x.valor || 0), 0))]) : '';
+  const corpo = DOC_CSS + `<div class="dgr">
+      ${docCaixa('Cliente (faturamento)', [['Nome', esc(nomeCli)], ['CPF/CNPJ', esc(docFmtDoc(cli.d && cli.d.documento))], ['Insc. est.', esc(cli.d && cli.d.ie)], ['Endereço', esc(endCli)], ['Telefone', esc(docTel(cli.d))], ['Contato', esc(O && O.aos_cuidados)]])}
+      ${docCaixa('Local de entrega / obra', [['Obra', esc(ob.nome)], ['Endereço', esc(endEnt)], ['Referência', esc(ent && ent.referencia)]])}
+      ${docCaixa('Pedido', [['Empresa', esc(emp || 'a definir')], ['Operação', esc(op ? op.codigo + ' · ' + op.descricao : '')], ['Situação', esc([SIT[P.situacao], INT[P.andamento_interno]].filter(Boolean).join(' · '))],
+          ['Orçamento', O ? 'nº ' + esc(numOrc(O.numero)) + (O.data_orcamento ? ' de ' + dataBR(O.data_orcamento) : '') : ''], ['Prazo', esc(O && O.prazo_texto)], ['Entregue em', P.entregue_em ? dataBR(P.entregue_em) : '']])}</div>
+    <h2>Itens</h2>${corpoItens}${resumo}
+    <h2>Condições de pagamento</h2>${cond ? `<p class="form">${esc(cond)}</p>` : ''}${parc || '<p class="muted">Parcelas não registradas.</p>'}
+    ${pdfNota([P.observacoes && !(O && P.observacoes === O.prazo_texto) ? `<b>Observações:</b> ${esc(P.observacoes).replace(/\n/g, '<br>')}` : '', O && O.observacoes && O.observacoes !== P.observacoes ? `<b>Do orçamento:</b> ${esc(O.observacoes).replace(/\n/g, '<br>')}` : '',
+      O && Number(O.frete) ? `<b>Frete do orçamento:</b> ${R$(O.frete)} (conferir se já está no valor)` : '', O && O.vendedor ? `<b>Vendedor:</b> ${esc(O.vendedor)}` : ''].filter(Boolean).join('<br>'))}
+    <div class="dass"><div>Local e data</div><div>Compra autorizada por</div><div>Cargo</div><div>Carimbo e assinatura</div></div>`;
+  const ge = await docEmpresaGrupo(emp);
+  return pdfJanela({ rodape: docRodape(ge) || undefined, titulo: 'Pedido de venda', sub: `Pedido nº ${pdfEsc(numero)}${P.descricao ? ' · ' + pdfEsc(P.descricao) : ''}`, emissao: dataBR(hojeISO()), empresa: emp === 'EQP' ? 'EQP' : '',
+    faixa: pdfFaixa([['Pedido', numero, P.descricao ? pdfEsc(P.descricao) : ''], ['Cliente', nomeCli, pdfEsc(ob.nome && ob.nome !== nomeCli ? ob.nome : '')], ['Faturamento', emp || 'a definir'], ['Total', R$(total)]]),
+    corpo, direita: 'Pedido ' + numero, arquivo: docArq('PEDIDO_' + numero + '_' + nomeCli + (P.descricao ? '_' + P.descricao : '')) });
+}
+
+/* ---------------------------------------------------------------- ORDEM DE SERVIÇO ---------------------------------------------------------------- */
+async function pdfOrdemServico(id){
+  const r0 = await sb.from('atividades_servico').select('*').eq('id', id).single(); if(r0.error) return aviso('Erro', esc(erroBanco(r0.error)));
+  const A0 = r0.data;
+  // a OS reúne as atividades com o mesmo número (cada uma é um item da OS, como no CIGAM)
+  const lista = A0.os_numero ? (((await sb.from('atividades_servico').select('*').eq('os_numero', A0.os_numero).neq('status', 'inativo').order('data')).data) || [A0]) : [A0];
+  if(typeof carregaTecnicos === 'function' && !(ST.tecnicos || []).length){ try{ await carregaTecnicos(); }catch(e){} }
+  const ids = lista.map(x => x.id);
+  const [mv, ofs, cts] = await Promise.all([sb.from('estoque_movimentos').select('*').in('atividade_id', ids),
+    sb.from('oficina_equipamentos').select('id,equipamento,motivo').in('id', lista.map(x => x.oficina_id).filter(Boolean).concat(['00000000-0000-0000-0000-000000000000'])),
+    sb.from('contratos_manutencao').select('id,ultima_visita,intervalo_meses,local,sistemas').in('id', lista.map(x => x.contrato_id).filter(Boolean).concat(['00000000-0000-0000-0000-000000000000']))]);
+  const movs = mv.data || [], itensEst = movs.length ? ((await sb.from('estoque_itens').select('id,nome,unidade,produto_id').in('id', [...new Set(movs.map(m => m.item_id))])).data || []) : [];
+  const prods = itensEst.some(i => i.produto_id) ? ((await sb.from('produtos').select('id,codigo').in('id', itensEst.map(i => i.produto_id).filter(Boolean))).data || []) : [];
+  const ob = obra(A0.obra_id) || {}, pg = (ST.pagadores || []).find(g => g.obra_id === A0.obra_id && g.padrao) || (ST.pagadores || []).find(g => g.obra_id === A0.obra_id);
+  const cli = await docDadosPessoa(pg && pg.pessoa_id);
+  const ent = docPodePriv() && A0.obra_id ? ((await priv().from('obras_endereco').select('*').eq('obra_id', A0.obra_id).maybeSingle()).data || null) : null;
+  const emp = A0.os_empresa || '', num = A0.os_numero || '';
+  const SITOS = { a_decidir: 'A decidir', cobrar: 'Cobrar', nao_cobrar: 'Não cobrar' };
+  const total = lista.reduce((s, x) => s + Number(x.os_valor || 0), 0);
+  const blocos = lista.map((A, i) => {
+    const of = (ofs.data || []).find(o => o.id === A.oficina_id), ct = (cts.data || []).find(c => c.id === A.contrato_id);
+    const ms = movs.filter(m => m.atividade_id === A.id);
+    const tipo = A.garantia ? 'Garantia' : A.tipo_os ? ({ corretiva: 'Manutenção corretiva', preventiva: 'Manutenção preventiva', instalacao: 'Instalação', visita: 'Visita técnica' }[A.tipo_os] || A.tipo_os) : (A.contrato_id ? 'Manutenção preventiva' : 'Atendimento');
+    const servicos = pdfTabela(['Atividade', 'Técnico(s)', { t: 'Data', w: '72px' }, { t: 'Início', w: '50px' }, { t: 'Fim', w: '50px' }],
+      [[esc(tipo), esc((A.tecnicos || []).map(nomeTec).join(', ') || '—'), A.check_in ? docDia(A.check_in) : (A.data ? dataBR(A.data) : '—'), docHora(A.check_in) || '—', docHora(A.check_out) || '—']]);
+    const mats = ms.length ? pdfTabela([{ t: 'Código', w: '62px' }, 'Material', { t: 'Quant.', num: true, w: '90px' }],
+      ms.map(m => { const it = itensEst.find(x => x.id === m.item_id) || {}, pr = prods.find(p => p.id === it.produto_id); return [`<span class="cod">${esc(pr ? pr.codigo : '·')}</span>`, esc(it.nome || '—'), docQtd(Math.abs(Number(m.quantidade)), it.unidade)]; })) : '<p class="muted" style="margin:2px 0 6px">Nenhum material lançado.</p>';
+    return `<div class="dbloco"><h3>Item ${i + 1} · ${esc(of ? of.equipamento : tipo + (A.data ? ' de ' + dataBR(A.data) : ''))}</h3>
+      <div class="dgr" style="margin-bottom:4px">${docCaixa('Atendimento', [['Tipo', esc(tipo)], ['Data', A.data ? dataBR(A.data) : 'sem data'], ['Prazo (SLA)', A.prazo_sla ? fmtData(A.prazo_sla) : ''], ['Concluído em', A.concluido_em ? fmtData(A.concluido_em) : ''], ['Retorno', A.precisa_retorno ? 'precisa voltar' + (A.motivo_retorno ? ' · ' + esc(A.motivo_retorno) : '') : '']])}
+        ${docCaixa('Equipamento / preventiva', [['Equipamento', esc(of && of.equipamento)], ['Motivo', esc(of && of.motivo)], ['Contrato', ct ? 'a cada ' + ct.intervalo_meses + ' meses' + (ct.local ? ' · ' + esc(ct.local) : '') : ''], ['Última visita', ct && ct.ultima_visita ? dataBR(ct.ultima_visita) : '']])}</div>
+      <div class="drc"><div><span>Reclamado / pedido</span>${esc(A.descricao || '—').replace(/\n/g, '<br>')}</div><div><span>Solução / relatório</span>${esc(A.relatorio || '—').replace(/\n/g, '<br>')}</div></div>
+      <h3 style="background:none;margin:8px 0 2px;padding:0">Serviços executados</h3>${servicos}
+      <h3 style="background:none;margin:8px 0 2px;padding:0">Materiais utilizados</h3>${mats}
+      <table data-sem-dest><tbody><tr class="sub"><td class="num">Valor do item</td><td class="num" style="width:120px">${A.os_valor != null ? R$(A.os_valor) : 'a definir'}</td></tr></tbody></table></div>`; }).join('');
+  const corpo = DOC_CSS + `<div class="dgr">
+      ${docCaixa('Cliente', [['Nome', esc(cli.p ? cli.p.nome : ob.nome)], ['CPF/CNPJ', esc(docFmtDoc(cli.d && cli.d.documento))], ['Endereço', esc(ent ? docEnd(ent, ob) : cli.d ? docEnd(cli.d) : '')], ['Telefone', esc(docTel(cli.d))]])}
+      ${docCaixa('Ordem de serviço', [['Número', esc(num || '—')], ['Empresa', esc(emp || 'a definir')], ['Situação', esc(SITOS[A0.os_situacao] || A0.os_situacao || '')], ['Itens', String(lista.length)], ['Local', esc(ob.nome)]])}</div>
+    ${blocos}
+    ${pdfResumo([['Itens da OS', String(lista.length), 'g'], ['Total da OS', R$(total), 'v']])}
+    ${A0.os_obs ? pdfNota(`<b>Observação:</b> ${esc(A0.os_obs)}`) : ''}
+    <div class="dass"><div>Data</div><div>Técnico responsável</div><div>Cliente (nome legível)</div><div>Assinatura do cliente</div></div>`;
+  const ge = await docEmpresaGrupo(emp);
+  return pdfJanela({ rodape: docRodape(ge) || undefined, titulo: 'Ordem de serviço', sub: 'OS nº ' + pdfEsc(num || '—'), emissao: dataBR(hojeISO()), empresa: emp === 'EQP' ? 'EQP' : '',
+    faixa: pdfFaixa([['OS', num || '—', pdfEsc(SITOS[A0.os_situacao] || '')], ['Cliente', cli.p ? cli.p.nome : (ob.nome || '—'), ''], ['Empresa', emp || 'a definir'], ['Total', R$(total)]]),
+    corpo, direita: 'OS ' + (num || ''), arquivo: docArq('OS_' + (num || 'sem_numero') + '_' + (cli.p ? cli.p.nome : ob.nome || '')) });
+}
+
+/* ---------------------------------------------------------------- ORDEM DE COMPRA ---------------------------------------------------------------- */
+async function pdfOrdemCompra(id){
+  const [o, it] = await Promise.all([sb.from('compras_resumo').select('*').eq('id', id).single(), sb.from('compras_itens').select('*').eq('ordem_id', id).order('descricao')]);
+  if(o.error) return aviso('Erro', esc(erroBanco(o.error)));
+  const O = o.data, its = it.data || [];
+  const prods = its.some(i => i.produto_id) ? ((await sb.from('produtos').select('id,codigo').in('id', its.map(i => i.produto_id).filter(Boolean))).data || []) : [];
+  const [forn, comp] = await Promise.all([docDadosPessoa(O.fornecedor_id), docEmpresaGrupo(O.empresa)]);
+  const resp = O.criado_por ? ((await sb.from('usuarios').select('nome').eq('id', O.criado_por).maybeSingle()).data || {}).nome : '';
+  const SITOC = { rascunho: 'Rascunho', enviada: 'Enviada', parcial: 'Recebida em parte', recebida: 'Recebida', cancelada: 'Cancelada' };
+  const totProd = its.reduce((s, i) => s + Number(i.quantidade || 0) * Number(i.valor_unitario || 0), 0), frete = Number(O.frete || 0), total = Number(O.total || (totProd + frete));
+  const nomeForn = forn.p ? forn.p.nome : (O.fornecedor || O.fornecedor_nome || '');
+  const corpo = DOC_CSS + `<div class="dgr">
+      ${docCaixa('Comprador e local de entrega', [['Empresa', esc(comp && comp.p ? comp.p.nome : O.empresa)], ['CNPJ', esc(docFmtDoc(comp && comp.d && comp.d.documento))], ['Insc. est.', esc(comp && comp.d && comp.d.ie)], ['Endereço', esc(comp && comp.d ? docEnd(comp.d) : '')], ['Telefone', esc(docTel(comp && comp.d))]])}
+      ${docCaixa('Fornecedor', [['Nome', esc(nomeForn)], ['CNPJ', esc(docFmtDoc(forn.d && forn.d.documento))], ['Insc. est.', esc(forn.d && forn.d.ie)], ['Endereço', esc(forn.d ? docEnd(forn.d) : '')], ['Telefone', esc(docTel(forn.d))], ['Código CIGAM', esc(forn.p && (forn.p.codigos_cigam || []).join(', '))]])}
+      ${docCaixa('Ordem de compra', [['Situação', esc(SITOC[O.situacao] || O.situacao)], ['Responsável', esc(resp)], ['Pedido do cliente', O.pedido_numero ? esc(O.pedido_numero) + (O.obra ? ' · ' + esc(O.obra) : '') : 'estoque próprio'], ['Previsão de entrega', O.previsao_entrega ? dataBR(O.previsao_entrega) : 'a combinar'], ['Enviada em', O.enviada_em ? docDia(O.enviada_em) : '']])}</div>
+    <h2>Itens</h2>
+    <div class="dtab"><table><thead><tr><th style="width:30px">Item</th><th style="width:96px">Cód. fornecedor</th><th style="width:58px">Nosso cód.</th><th>Especificação</th><th class="num" style="width:76px">Quant.</th><th class="num" style="width:82px">Unitário</th><th class="num" style="width:92px">Total</th></tr></thead><tbody>
+      ${its.map((i, n) => { const pr = prods.find(p => p.id === i.produto_id); return `<tr><td>${String(n + 1).padStart(2, '0')}</td><td class="cod">${esc(i.codigo_fornecedor || '·')}</td><td class="cod">${esc(pr ? pr.codigo : '·')}</td><td>${esc(i.descricao)}</td><td class="num">${docQtd(i.quantidade, i.unidade)}</td><td class="num">${R$(i.valor_unitario)}</td><td class="num">${R$(Number(i.quantidade || 0) * Number(i.valor_unitario || 0))}</td></tr>`; }).join('') || '<tr><td colspan="7" class="muted">Sem itens.</td></tr>'}
+      <tr class="tt"><td colspan="6" class="num">Total dos produtos</td><td class="num">${R$(totProd)}</td></tr></tbody></table></div>
+    ${pdfResumo([['Produtos', R$(totProd), 'g'], frete ? ['Frete', R$(frete), 'g'] : null, ['Total da ordem', R$(total), 'v']])}
+    ${Math.abs(total - totProd - frete) > 0.01 ? pdfNota('O total da ordem difere de produtos + frete em ' + R$(total - totProd - frete) + ' — conferir.') : ''}
+    <h2>Condições</h2>${pdfNota([`<b>Pagamento:</b> ${esc(O.condicao || 'a combinar')}`, O.observacao ? `<b>Observação:</b> ${esc(O.observacao).replace(/\n/g, '<br>')}` : '', '<b>Importante:</b> a nota fiscal deve acompanhar o material e citar o número desta ordem de compra.'].filter(Boolean).join('<br>'))}
+    <div class="dass"><div>Data</div><div>Divisão de suprimentos</div><div>Autorizado por (nome)</div><div>Assinatura</div></div>`;
+  return pdfJanela({ rodape: docRodape(comp) || undefined, titulo: 'Ordem de compra', sub: 'OC nº ' + pdfEsc(String(O.numero)) + ' · ' + pdfEsc(O.empresa || ''), emissao: O.criado_em ? docDia(O.criado_em) : dataBR(hojeISO()), empresa: O.empresa === 'EQP' ? 'EQP' : '',
+    faixa: pdfFaixa([['OC', String(O.numero), pdfEsc(SITOC[O.situacao] || '')], ['Fornecedor', nomeForn], ['Comprador', O.empresa || ''], ['Total', R$(total)]]),
+    corpo, direita: 'OC ' + O.numero, arquivo: docArq('OC_' + String(O.numero).padStart(5, '0') + '_' + nomeForn + (O.obra ? '_' + O.obra : '')) });
+}
+
+/* ---------------------------------------------------------------- botões nas telas ---------------------------------------------------------------- */
+(function(){
+  // Pedido: botão "📄 Pedido (PDF)" no formulário do pedido
+  if(typeof window.formPedido === 'function'){ const f0 = window.formPedido;
+    window.formPedido = async function(id, pre){ const r = await f0.apply(this, arguments);
+      if(id && $('#folha .rodape') && !$('#pdPdf')){ $('#folha .rodape').insertAdjacentHTML('afterbegin', '<button class="btn" id="pdPdf">📄 Pedido (PDF)</button>'); $('#pdPdf').onclick = () => pdfPedido(id); }
+      return r; }; }
+  // OS: botão "📄 Ordem de serviço" ao lado do relatório
+  if(typeof window.formOS === 'function'){ const f0 = window.formOS;
+    window.formOS = async function(id){ const r = await f0.apply(this, arguments);
+      if(id && $('#bImp') && !$('#osPdf')){ $('#bImp').insertAdjacentHTML('beforebegin', '<button class="btn" id="osPdf">📄 Ordem de serviço</button>'); $('#osPdf').onclick = () => pdfOrdemServico(id); }
+      return r; }; }
+  // OC: "Imprimir para o fornecedor" passa a gerar o documento novo
+  if(typeof window.verOC === 'function'){ const f0 = window.verOC;
+    window.verOC = async function(id){ const r = await f0.apply(this, arguments);
+      const b = $('#voImp'); if(b){ b.textContent = '📄 Ordem de compra (PDF)'; b.onclick = () => pdfOrdemCompra(id); }
+      return r; }; }
+})();
 
 /* ================== Tipos de OS, garantia e comissão dos técnicos (script 25) ================== */
 const TIPO_OS = { obra:'Instalação de pedido', preventiva:'Preventiva', corretiva:'Corretiva', oficina:'Retirada p/ oficina' };
