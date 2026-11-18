@@ -728,7 +728,6 @@ window.__ponteCfg={sobDemanda:true,tabela:'app_servicos_nos',prefixo:'ERPTESTE-S
   /* Subtítulos que são frases (não datas) não devem virar Title Case. */
   #tabAgenda > .tecnicos-head .tecnicos-date,
   #tabOS > .tecnicos-head .tecnicos-date,
-  #tabAcessos > .tecnicos-head .tecnicos-date{ text-transform:none; }
   #tabClientes > .tecnicos-head .tecnicos-date{ text-transform:none; line-height:1.5; max-width: 520px; }
   .tecnicos-grid{
     display:grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px;
@@ -2130,10 +2129,6 @@ window.__ponteCfg={sobDemanda:true,tabela:'app_servicos_nos',prefixo:'ERPTESTE-S
   .tech-pin-row .tech-pin-name{ flex:1; font-size: 13.5px; font-weight:600; color: var(--text); }
   .tech-pin-row input{ width: 90px; text-align:center; background: var(--panel); }
   .tech-pin-row .btn-text-danger{ font-size:11.5px; white-space:nowrap; }
-  .tech-pin-row[data-acessosuser]{ flex-wrap: wrap; row-gap: 8px; }
-  .acessos-acoes{ display:flex; gap:8px; margin-left:auto; }
-  .acessos-acoes .btn-excluir{ color: var(--danger); border-color: var(--danger); }
-  .acessos-acoes .btn-excluir[disabled]{ opacity:.45; cursor:not-allowed; }
   /* iOS/Safari amplia a página ao focar um campo com fonte menor que 16px e NÃO volta sozinho
      (a tela fica "ampliada" até o usuário pinçar). Só no celular, os campos ficam com 16px —
      é a correção da causa; nada de zoom/transform/overflow/meta. Listados também os campos com
@@ -3160,8 +3155,6 @@ window.__ponteCfg={sobDemanda:true,tabela:'app_servicos_nos',prefixo:'ERPTESTE-S
   .btn-ghost:disabled{ opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
   .btn-ghost.done{ border-color: rgba(44,138,90,0.55); color: var(--success); }
   .btn-ghost.done:hover{ border-color: var(--success); color: var(--success-dark); }
-  .acessos-acoes .btn-excluir{ color: var(--danger); border-color: rgba(192,57,43,0.45); }
-  .acessos-acoes .btn-excluir:hover{ border-color: var(--danger); color: var(--danger-dark); }
   .btn-ghost.oe-mini, .btn-primary.oe-mini{ padding: 6px 12px; font-size: 12.5px; }
   /* Excluir em texto: mais nítido, vermelho só no hover */
   .btn-text-danger{ color: var(--text-dim); font-weight: 600; border-radius: 6px; }
@@ -4151,7 +4144,6 @@ window.__ponteCfg={sobDemanda:true,tabela:'app_servicos_nos',prefixo:'ERPTESTE-S
       <button type="button" class="sidebar-nav-btn" id="sidebarBtnTecnicos"><svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg><span>Enviar agenda</span></button>
       <button type="button" class="sidebar-nav-btn" id="sidebarBtnOS"><svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v1h1a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/><path d="M9 11h6M9 15h6M9 7h6"/></svg><span>Cadastros e OS</span><span class="os-badge" id="osBadgeSidebar" style="display:none;"></span></button>
       <button type="button" class="sidebar-nav-btn" id="sidebarBtnClientes"><svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Clientes</span></button>
-      <button type="button" class="sidebar-nav-btn" id="sidebarBtnAcessos"><svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.5 12.5 20 3M20 3h-4M20 3v4"/></svg><span>Acessos</span></button>
       <button type="button" class="sidebar-nav-btn" id="sidebarBtnPainel"><svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg><span>Estatísticas</span></button>
       <button type="button" class="sidebar-nav-btn" id="sidebarBtnGaleria"><svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span>Galeria</span></button>
       <button type="button" class="sidebar-nav-btn" id="sidebarBtnEstoque"><svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg><span>Estoque</span></button>
@@ -4180,7 +4172,6 @@ window.__ponteCfg={sobDemanda:true,tabela:'app_servicos_nos',prefixo:'ERPTESTE-S
     <button class="tab-btn" id="tabBtnManutencoes">Manutenções</button>
     <button class="tab-btn" id="tabBtnOS">Cadastros e OS<span class="os-badge" id="osBadge" style="display:none;"></span></button>
     <button class="tab-btn" id="tabBtnClientes">Clientes</button>
-    <button class="tab-btn" id="tabBtnAcessos">Acessos</button>
     <button class="tab-btn" id="tabBtnPainel">Estatísticas</button>
   </div>
 
@@ -4227,10 +4218,6 @@ window.__ponteCfg={sobDemanda:true,tabela:'app_servicos_nos',prefixo:'ERPTESTE-S
     <button type="button" class="bottom-nav-sheet-item" id="bottomNavBtnClientes">
       <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span>Clientes</span>
-    </button>
-    <button type="button" class="bottom-nav-sheet-item" id="bottomNavBtnAcessos">
-      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.5 12.5 20 3M20 3h-4M20 3v4"/></svg>
-      <span>Acessos</span>
     </button>
     <button type="button" class="bottom-nav-sheet-item" id="bottomNavBtnPainel">
       <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
@@ -4504,99 +4491,6 @@ window.__ponteCfg={sobDemanda:true,tabela:'app_servicos_nos',prefixo:'ERPTESTE-S
     <div id="clientesList"></div>
   </div>
 
-  <div id="tabAcessos" style="display:none;">
-    <div class="tecnicos-head">
-      <div>
-        <div class="tecnicos-title">Acessos</div>
-      </div>
-    </div>
-    <div style="padding:0 20px 14px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;"><button type="button" class="btn-primary" id="acessosNovoUsuarioBtn">+ Novo usuário</button></div>
-    <div id="acessosUsuariosList" style="padding:0 20px 30px;"></div>
-
-    <!-- Estruturas legadas (Etapas 1-3): funções e nós ainda existem e continuam sendo lidos/
-         gravados como antes (compatibilidade), mas a partir da Etapa 4 não fazem mais parte da
-         apresentação principal de Acessos — mantidas fora de vista só por auditoria/compatibilidade. -->
-    <div class="access-settings" style="display:none;">
-      <div class="access-section">
-        <div class="access-settings-title">Gestores<span class="access-count mono" id="managerCountLabel"></span></div>
-        <div id="managerPinList"></div>
-        <div class="access-settings-row" style="margin-top:12px;">
-          <input type="text" id="newManagerNameInput" placeholder="Nome do novo gestor">
-          <button class="btn-ghost" id="addManagerBtn">+ Adicionar gestor</button>
-        </div>
-      </div>
-
-      <div class="access-section">
-        <div class="access-settings-title">Técnicos<span class="access-count mono" id="techCountLabel"></span></div>
-        <div id="techPinList"></div>
-        <div class="access-settings-row" style="margin-top:12px;">
-          <input type="text" id="newTechNameInput" placeholder="Nome do novo técnico">
-          <button class="btn-ghost" id="addTechBtn">+ Adicionar técnico</button>
-        </div>
-      </div>
-
-      <div class="access-section">
-        <div class="access-settings-title">Financeiro<span class="access-count mono" id="financeiroCountLabel"></span></div>
-        <div id="financeiroPinList"></div>
-        <div class="access-settings-row" style="margin-top:12px;">
-          <input type="text" id="newFinanceiroNameInput" placeholder="Nome da nova pessoa">
-          <button class="btn-ghost" id="addFinanceiroBtn">+ Adicionar ao Financeiro</button>
-        </div>
-      </div>
-
-      <div class="access-section">
-        <div class="access-settings-title">Oficina<span class="access-count mono" id="oficinaCountLabel"></span></div>
-        <div id="oficinaPinList"></div>
-        <div class="access-settings-row" style="margin-top:12px;">
-          <input type="text" id="newOficinaNameInput" placeholder="Nome da nova pessoa">
-          <button class="btn-ghost" id="addOficinaBtn">+ Adicionar à Oficina</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Criar/editar usuário unificado (Etapa 4) — mesmo padrão visual dos demais modais do app. -->
-  <div class="overlay" id="acessosUsuarioModalOverlay">
-    <div class="modal">
-      <h3 id="acessosUsuarioModalTitulo">Novo usuário</h3>
-      <div class="field"><label>Nome</label><input type="text" id="acessosUsuarioNomeInput"></div>
-      <div class="field-error" id="acessosNomeAvisoAlteracao" style="color:var(--text-dim);"></div>
-      <div class="field">
-        <label>Perfis</label>
-        <label style="display:flex; align-items:center; gap:8px; margin-top:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="acessosPerfilManager" style="width:auto;"> Gestor</label>
-        <label style="display:flex; align-items:center; gap:8px; margin-top:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="acessosPerfilTech" style="width:auto;"> Técnico</label>
-        <label style="display:flex; align-items:center; gap:8px; margin-top:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="acessosPerfilOficina" style="width:auto;"> Oficina</label>
-        <label style="display:flex; align-items:center; gap:8px; margin-top:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="acessosPerfilFinanceiro" style="width:auto;"> Financeiro</label>
-      </div>
-      <div class="field">
-        <label style="display:flex; align-items:center; gap:8px; font-weight:400; cursor:pointer;"><input type="checkbox" id="acessosMasterInput" style="width:auto;" disabled> Gestor Master</label>
-      </div>
-      <div class="field">   <!-- Fase 35 -->
-        <label style="display:flex; align-items:flex-start; gap:8px; font-weight:400; cursor:pointer;"><input type="checkbox" id="acessosContaOficinaInput" style="width:auto; margin-top:3px;"> <span><b>Conta do computador da Oficina</b><br><small style="color:var(--text-secondary);">Entra como qualquer pessoa com perfil Técnico ou Oficina, cada uma com o próprio PIN. Não tem perfil nem PIN próprios.</small></span></label>
-      </div>
-      <div class="field" id="acessosAbasSection" style="display:none;">
-        <label>Abas que este gestor poderá acessar <small style="font-weight:400; color:var(--text-secondary);">(vale também para Gestor Master; Acessos fica sempre liberada para o Master)</small></label>
-        <div id="acessosAbasList"></div>
-        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-          <button type="button" class="btn-ghost" id="acessosAbasMarcarTodas">Marcar todas</button>
-          <button type="button" class="btn-ghost" id="acessosAbasDesmarcarTodas">Desmarcar todas</button>
-        </div>
-        <div style="font-size:12px; color:var(--text-dim); margin-top:6px;">Com todas marcadas o gestor acessa tudo (como hoje). O Gestor Master sempre acessa todas as abas, e "Acessos" é exclusiva do Master.</div>
-      </div>
-      <div id="acessosPinsContainer"></div>
-      <div class="field"><label>E-mail de acesso <small style="font-weight:400; color:var(--text-secondary);">(conta com que a pessoa entra no app)</small></label><input type="email" id="acessosEmailInput" autocomplete="off" placeholder="nome@equiper.com.br"></div>
-      <div id="acessosContaBox" style="font-size:12.5px; color:var(--text-dim); margin:-4px 0 10px;">
-        <div id="acessosContaStatus"></div>
-        <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:6px;"><div class="field" style="flex:1; min-width:160px; margin:0;"><label>Senha inicial (6+ caracteres)</label><input type="text" id="acessosSenhaInicialInput" autocomplete="off" placeholder="a pessoa troca depois"></div><button type="button" class="btn-ghost" id="acessosCriarContaBtn">Criar conta de acesso</button></div>
-        <div id="acessosContaMsg" style="margin-top:4px;"></div>
-      </div>
-      <div class="field-error" id="acessosUsuarioModalErr"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn-ghost" id="acessosUsuarioModalCancelBtn">Cancelar</button>
-        <button type="button" class="btn-primary" id="acessosUsuarioModalSalvarBtn">Salvar</button>
-      </div>
-    </div>
-  </div>
 
   <div id="tabOficinaGestor" style="display:none;">
     <div class="tech-day-panel">
@@ -9517,7 +9411,6 @@ function attachRealtimeTechRosterListener(){
     mergeRemoteTechRoster(raw || {});
     if(isUserBusyTyping()) return;
     if(currentRole === 'manager'){
-      renderTechPinList();
       renderTecnicosAmanha();
       renderTechList();
     }
@@ -12075,7 +11968,6 @@ function attachRealtimeManagersListener(){
     mergeRemoteManagers(raw || {});
     if(isUserBusyTyping()) return;
     if(currentRole === 'manager'){
-      renderManagerPinList();
     }
   }, (err) => {
     console.error('Falha na sincronização em tempo real dos gestores:', err);
@@ -12206,62 +12098,7 @@ async function saveManagerPin(name, pin){
   await saveManagers();
 }
 
-function renderManagerPinList(){
-  const box = document.getElementById('managerPinList');
-  if(!box) return;
-  const countLabel = document.getElementById('managerCountLabel');
-  if(countLabel) countLabel.textContent = `(${MANAGERS.length})`;
-  box.innerHTML = MANAGERS.map(m => `
-    <div class="tech-pin-row">
-      <div class="tech-pin-name">${escapeHtml(m.name)}</div>
-      <input type="text" class="mono" data-managerpin="${escapeHtml(m.name)}" value="${escapeHtml(m.pin || '')}" placeholder="PIN" maxlength="6">
-      <button type="button" class="btn-text-danger" data-removemanager="${escapeHtml(m.name)}">remover</button>
-    </div>
-  `).join('');
-  box.querySelectorAll('[data-managerpin]').forEach(inp => {
-    inp.addEventListener('blur', (e) => {
-      saveManagerPin(e.target.dataset.managerpin, e.target.value.trim());
-    });
-  });
-  box.querySelectorAll('[data-removemanager]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const name = e.target.dataset.removemanager;
-      customConfirm(`Remover o gestor "${name}"? Ele não vai mais conseguir entrar como gestor.`, async () => {
-        await removeManager(name);
-        renderManagerPinList();
-      });
-    });
-  });
-}
 
-function renderTechPinList(){
-  const pinList = document.getElementById('techPinList');
-  if(!pinList) return;
-  const countLabel = document.getElementById('techCountLabel');
-  if(countLabel) countLabel.textContent = `(${TECHS.length})`;
-  pinList.innerHTML = TECHS.map(t => `
-    <div class="tech-pin-row">
-      <div class="tech-pin-name">${escapeHtml(t.name)}</div>
-      <input type="text" class="mono" data-techpin="${escapeHtml(t.name)}" value="${escapeHtml(t.pin || '')}" placeholder="PIN" maxlength="6">
-      <button type="button" class="btn-text-danger" data-removetech="${escapeHtml(t.name)}">remover</button>
-    </div>
-  `).join('');
-  pinList.querySelectorAll('[data-techpin]').forEach(inp => {
-    inp.addEventListener('blur', (e) => {
-      if(!isCurrentUserMaster()){ alert('Você não tem permissão para alterar PINs de técnicos. Só um Gestor Master pode fazer isso.'); renderTechPinList(); return; }
-      saveTechPin(e.target.dataset.techpin, e.target.value.trim());
-    });
-  });
-  pinList.querySelectorAll('[data-removetech]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const name = e.target.dataset.removetech;
-      customConfirm(`Remover o técnico "${name}"? As atividades já registradas com o nome dele continuam no histórico, mas ele não vai mais aparecer pra receber novas atividades.`, async () => {
-        await removeTechnician(name);
-        renderTechPinList();
-      });
-    });
-  });
-}
 
 let FINANCEIRO = [
   { name: 'Bernardo', pin: '0000' },
@@ -12389,7 +12226,6 @@ function attachRealtimeFinanceiroListener(){
     mergeRemoteFinanceiro(raw || {});
     if(isUserBusyTyping()) return;
     if(currentRole === 'manager'){
-      renderFinanceiroPinList();
     }
   }, (err) => {
     console.error('Falha na sincronização em tempo real do Financeiro:', err);
@@ -12524,33 +12360,6 @@ function populateFinanceiroLoginSelect(){
   sel.innerHTML = opcoes.map(nome => `<option value="${escapeHtml(nome)}">${escapeHtml(nome)}</option>`).join('');
 }
 
-function renderFinanceiroPinList(){
-  const box = document.getElementById('financeiroPinList');
-  if(!box) return;
-  const countLabel = document.getElementById('financeiroCountLabel');
-  if(countLabel) countLabel.textContent = `(${FINANCEIRO.length})`;
-  box.innerHTML = FINANCEIRO.map(m => `
-    <div class="tech-pin-row">
-      <div class="tech-pin-name">${escapeHtml(m.name)}</div>
-      <input type="text" class="mono" data-financeiropin="${escapeHtml(m.name)}" value="${escapeHtml(m.pin || '')}" placeholder="PIN" maxlength="6">
-      <button type="button" class="btn-text-danger" data-removefinanceiro="${escapeHtml(m.name)}">remover</button>
-    </div>
-  `).join('');
-  box.querySelectorAll('[data-financeiropin]').forEach(inp => {
-    inp.addEventListener('blur', (e) => {
-      saveFinanceiroPin(e.target.dataset.financeiropin, e.target.value.trim());
-    });
-  });
-  box.querySelectorAll('[data-removefinanceiro]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const name = e.target.dataset.removefinanceiro;
-      customConfirm(`Remover "${name}" do Financeiro? Essa pessoa não vai mais conseguir entrar.`, async () => {
-        await removeFinanceiro(name);
-        renderFinanceiroPinList();
-      });
-    });
-  });
-}
 
 // ===== Perfil OFICINA — mesma infraestrutura de usuários/PINs do Financeiro (nó "oficina") =====
 let OFICINA = [
@@ -12641,7 +12450,6 @@ function attachRealtimeOficinaListener(){
     mergeRemoteOficina(raw || {});
     if(isUserBusyTyping()) return;
     if(currentRole === 'manager'){
-      renderOficinaPinList();
     }
   }, (err) => {
     console.error('Falha na sincronização em tempo real do Oficina:', err);
@@ -14044,33 +13852,6 @@ function populateOficinaLoginSelect(){
   sel.innerHTML = opcoes.map(nome => `<option value="${escapeHtml(nome)}">${escapeHtml(nome)}</option>`).join('');
 }
 
-function renderOficinaPinList(){
-  const box = document.getElementById('oficinaPinList');
-  if(!box) return;
-  const countLabel = document.getElementById('oficinaCountLabel');
-  if(countLabel) countLabel.textContent = `(${OFICINA.length})`;
-  box.innerHTML = OFICINA.map(m => `
-    <div class="tech-pin-row">
-      <div class="tech-pin-name">${escapeHtml(m.name)}</div>
-      <input type="text" class="mono" data-oficinapin="${escapeHtml(m.name)}" value="${escapeHtml(m.pin || '')}" placeholder="PIN" maxlength="6">
-      <button type="button" class="btn-text-danger" data-removeoficina="${escapeHtml(m.name)}">remover</button>
-    </div>
-  `).join('');
-  box.querySelectorAll('[data-oficinapin]').forEach(inp => {
-    inp.addEventListener('blur', (e) => {
-      saveOficinaPin(e.target.dataset.oficinapin, e.target.value.trim());
-    });
-  });
-  box.querySelectorAll('[data-removeoficina]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const name = e.target.dataset.removeoficina;
-      customConfirm(`Remover "${name}" do Oficina? Essa pessoa não vai mais conseguir entrar.`, async () => {
-        await removeOficina(name);
-        renderOficinaPinList();
-      });
-    });
-  });
-}
 
 let adminPin = '1234'; // mantido só para compatibilidade com backups antigos exportados antes dos gestores terem PIN próprio
 async function loadAdminPin(){
@@ -14153,7 +13934,6 @@ function attachRealtimeTechPinsListener(){
     mergeRemoteTechPins(raw || {});
     if(isUserBusyTyping()) return;
     if(currentRole === 'manager'){
-      renderTechPinList();
     }
   }, (err) => {
     console.error('Falha na sincronização em tempo real dos PINs de técnicos:', err);
@@ -15125,7 +14905,7 @@ function switchTab(tab){
   if(tab === 'quadros'){ switchTab('oficinagestor'); oficinaGestorSwitchSubTab('quadros'); return; }
   // Etapa 4: proteção REAL de estado — Gestor comum não abre Acessos nem chamando switchTab
   // direto (não é só esconder o botão). Se recusado, fica na tela atual, sem erro.
-  if(tab === 'acessos' && !isCurrentUserMaster()) tab = activeTab;
+  if(tab === 'acessos') tab = activeTab;   /* ERP: a aba Acessos saiu do app (os acessos são do ERP) */
   // Permissões de abas do Gestor comum: recusa a troca (fica onde está; se onde está também não é
   // permitido — ex.: sobra de outra sessão — vai para a primeira aba autorizada).
   if(currentRole === 'manager' && !gestorPodeAbrirAba(tab)){
@@ -15138,7 +14918,6 @@ function switchTab(tab){
   document.getElementById('tabManutencoes').style.display = tab === 'manutencoes' ? '' : 'none';
   document.getElementById('tabOS').style.display = tab === 'os' ? '' : 'none';
   document.getElementById('tabClientes').style.display = tab === 'clientes' ? '' : 'none';
-  document.getElementById('tabAcessos').style.display = tab === 'acessos' ? '' : 'none';
   document.getElementById('tabPainel').style.display = tab === 'painel' ? '' : 'none';
   document.getElementById('tabOficinaGestor').style.display = tab === 'oficinagestor' ? '' : 'none';
   document.getElementById('tabEstoque').style.display = tab === 'estoque' ? '' : 'none';
@@ -15151,7 +14930,6 @@ function switchTab(tab){
   document.getElementById('tabBtnManutencoes').classList.toggle('active', tab === 'manutencoes');
   document.getElementById('tabBtnOS').classList.toggle('active', tab === 'os');
   document.getElementById('tabBtnClientes').classList.toggle('active', tab === 'clientes');
-  document.getElementById('tabBtnAcessos').classList.toggle('active', tab === 'acessos');
   document.getElementById('tabBtnPainel').classList.toggle('active', tab === 'painel');
   // Sidebar desktop: mesma lógica de estado ativo, espelhando as abas originais (que continuam
   // existindo no DOM e funcionando normalmente em telas estreitas).
@@ -15160,7 +14938,6 @@ function switchTab(tab){
   document.getElementById('sidebarBtnManutencoes').classList.toggle('active', tab === 'manutencoes');
   document.getElementById('sidebarBtnOS').classList.toggle('active', tab === 'os');
   document.getElementById('sidebarBtnClientes').classList.toggle('active', tab === 'clientes');
-  document.getElementById('sidebarBtnAcessos').classList.toggle('active', tab === 'acessos');
   document.getElementById('sidebarBtnPainel').classList.toggle('active', tab === 'painel');
   document.getElementById('sidebarBtnOficinaGestor').classList.toggle('active', tab === 'oficinagestor');
   document.getElementById('sidebarBtnEstoque').classList.toggle('active', tab === 'estoque');
@@ -15170,7 +14947,7 @@ function switchTab(tab){
   document.getElementById('sidebarBtnPAlex').classList.toggle('active', tab === 'palex');
   // Navegação inferior (mobile): 4 destinos primários + "Mais" (fica ativo quando o destino
   // atual é um dos 3 que moram dentro da folha "Mais": Enviar agenda, Clientes, Acessos).
-  const maisAtivo = tab === 'os' || tab === 'clientes' || tab === 'acessos' || tab === 'oficinagestor' || tab === 'estoque' || tab === 'obras' || tab === 'orcamentos' || tab === 'pgestor' || tab === 'palex';
+  const maisAtivo = tab === 'os' || tab === 'clientes' || tab === 'oficinagestor' || tab === 'estoque' || tab === 'obras' || tab === 'orcamentos' || tab === 'pgestor' || tab === 'palex';
   document.getElementById('bottomNavBtnAgenda').classList.toggle('active', tab === 'agenda');
   document.getElementById('bottomNavBtnManutencoes').classList.toggle('active', tab === 'manutencoes');
   document.getElementById('bottomNavBtnOS').classList.toggle('active', tab === 'os');
@@ -15178,7 +14955,6 @@ function switchTab(tab){
   document.getElementById('bottomNavBtnMais').classList.toggle('active', maisAtivo);
   document.getElementById('bottomNavBtnTecnicos').classList.toggle('active', tab === 'tecnicos');
   document.getElementById('bottomNavBtnClientes').classList.toggle('active', tab === 'clientes');
-  document.getElementById('bottomNavBtnAcessos').classList.toggle('active', tab === 'acessos');
   document.getElementById('bottomNavBtnOficinaGestor').classList.toggle('active', tab === 'oficinagestor');
   document.getElementById('bottomNavBtnEstoque').classList.toggle('active', tab === 'estoque');
   document.getElementById('bottomNavBtnObras').classList.toggle('active', tab === 'obras');
@@ -15186,7 +14962,6 @@ function switchTab(tab){
   document.getElementById('bottomNavBtnPGestor').classList.toggle('active', tab === 'pgestor');
   document.getElementById('bottomNavBtnPAlex').classList.toggle('active', tab === 'palex');
   if(tab === 'clientes') renderClientes();
-  if(tab === 'acessos'){ renderAcessosUsuariosList(); if(AUTH_FIREBASE) Promise.all([carregarVinculosAcessos(), isCurrentUserMaster() ? carregarPrivadoTodos() : Promise.resolve()]).then(() => { if(currentRole === 'manager') renderAcessosUsuariosList(); }); }   // Fase 1: situação das contas, atualizada ao abrir a aba
   if(tab === 'painel') renderPainelDeControle();
   if(tab === 'oficinagestor') renderOficinaGestorTab();
   if(tab === 'estoque') openEstoqueGestorTab();
@@ -15197,7 +14972,6 @@ function switchTab(tab){
 }
 document.getElementById('tabBtnAgenda').addEventListener('click', () => switchTab('agenda'));
 document.getElementById('tabBtnTecnicos').addEventListener('click', () => switchTab('tecnicos'));
-document.getElementById('tabBtnAcessos').addEventListener('click', () => switchTab('acessos'));
 document.getElementById('tabBtnPainel').addEventListener('click', () => switchTab('painel'));
 // Sidebar desktop — mesmos destinos das abas originais, nenhuma lógica nova.
 document.getElementById('sidebarBtnAgenda').addEventListener('click', () => switchTab('agenda'));
@@ -15205,7 +14979,6 @@ document.getElementById('sidebarBtnTecnicos').addEventListener('click', () => sw
 document.getElementById('sidebarBtnManutencoes').addEventListener('click', () => switchTab('manutencoes'));
 document.getElementById('sidebarBtnOS').addEventListener('click', () => switchTab('os'));
 document.getElementById('sidebarBtnClientes').addEventListener('click', () => switchTab('clientes'));
-document.getElementById('sidebarBtnAcessos').addEventListener('click', () => switchTab('acessos'));
 document.getElementById('sidebarBtnOficinaGestor').addEventListener('click', () => switchTab('oficinagestor'));
 document.getElementById('sidebarBtnObras').addEventListener('click', () => switchTab('obras'));
 document.getElementById('sidebarBtnPGestor').addEventListener('click', () => switchTab('pgestor'));
@@ -15233,7 +15006,6 @@ document.getElementById('bottomNavSheetBackdrop').addEventListener('click', () =
 document.getElementById('bottomNavBtnTecnicos').addEventListener('click', () => { switchTab('tecnicos'); toggleBottomNavSheet(false); });
 document.getElementById('bottomNavBtnOS').addEventListener('click', () => { switchTab('os'); toggleBottomNavSheet(false); });
 document.getElementById('bottomNavBtnClientes').addEventListener('click', () => { switchTab('clientes'); toggleBottomNavSheet(false); });
-document.getElementById('bottomNavBtnAcessos').addEventListener('click', () => { switchTab('acessos'); toggleBottomNavSheet(false); });
 document.getElementById('sendAgendaPrev').addEventListener('click', () => {
   sendAgendaMode = sendAgendaMode === 'hoje' ? 'amanha' : 'hoje';
   renderTecnicosAmanha();
@@ -15241,35 +15013,6 @@ document.getElementById('sendAgendaPrev').addEventListener('click', () => {
 document.getElementById('sendAgendaNext').addEventListener('click', () => {
   sendAgendaMode = sendAgendaMode === 'hoje' ? 'amanha' : 'hoje';
   renderTecnicosAmanha();
-});
-document.getElementById('addTechBtn').addEventListener('click', async () => {
-  const input = document.getElementById('newTechNameInput');
-  const ok = await addTechnician(input.value);
-  if(ok){
-    input.value = '';
-    renderTechPinList();
-  }
-});
-document.getElementById('addManagerBtn').addEventListener('click', async () => {
-  const input = document.getElementById('newManagerNameInput');
-  const ok = await addManager(input.value);
-  if(ok){
-    input.value = '';
-    renderManagerPinList();
-  }
-});
-document.getElementById('addOficinaBtn').addEventListener('click', async () => {
-  const input = document.getElementById('newOficinaNameInput');
-  const ok = await addOficina(input.value);
-  if(ok){ input.value = ''; renderOficinaPinList(); }
-});
-document.getElementById('addFinanceiroBtn').addEventListener('click', async () => {
-  const input = document.getElementById('newFinanceiroNameInput');
-  const ok = await addFinanceiro(input.value);
-  if(ok){
-    input.value = '';
-    renderFinanceiroPinList();
-  }
 });
 document.getElementById('tabBtnManutencoes').addEventListener('click', () => switchTab('manutencoes'));
 document.getElementById('tabBtnOS').addEventListener('click', () => switchTab('os'));
@@ -16056,7 +15799,6 @@ function enterManager(name){
   const sidebarUser = document.getElementById('sidebarUserLabel');
   if(sidebarUser) sidebarUser.textContent = currentManagerName || 'Gestor';
   if(galeriaNoGestor) galeriaFecharNoGestor(); // sobra de uma sessão anterior que saiu dentro da Galeria
-  atualizarVisibilidadeAcessos(); // Etapa 4: só Gestor Master vê o botão de Acessos
   aplicarPermissoesDeAbas();
   if(!gestorTemAlgumaAba()){
     alert('Seu usuário não tem nenhuma aba liberada. Peça a um Gestor Master para ajustar suas permissões.');
@@ -19560,7 +19302,7 @@ function erpVe(t, padrao){ var n = erpNivelApp(t); return n == null ? padrao : n
 const ERP_SV_PERFIL = { manager: 'app_sv_gerenciador', tech: 'app_sv_tecnico', financeiro: 'app_sv_financeiro', oficina: 'app_sv_oficina' };
 const ERP_SV_ABAS = { PGestor: 'app_sv_g_pgestor', PAlex: 'app_sv_g_palex', Agenda: 'app_sv_g_agenda', Orcamentos: 'app_sv_g_orcamentos', Obras: 'app_sv_g_obras',
   Manutencoes: 'app_sv_g_manutencoes', OficinaGestor: 'app_sv_g_oficina', Tecnicos: 'app_sv_g_enviar', OS: 'app_sv_g_os', Clientes: 'app_sv_g_clientes',
-  Acessos: 'app_sv_g_acessos', Painel: 'app_sv_g_estatisticas', Galeria: 'app_sv_g_galeria', Estoque: 'app_sv_g_estoque' };
+  Painel: 'app_sv_g_estatisticas', Galeria: 'app_sv_g_galeria', Estoque: 'app_sv_g_estoque' };
 const ERP_SV_FIN = { OS: 'app_sv_f_os', Obras: 'app_sv_f_obras', Manut: 'app_sv_f_manut' };
 /* ERP: esconde as abas que a pessoa não tem (menu lateral e barra do celular) e sai de aba escondida */
 function erpAplicarAbas(){
@@ -19668,7 +19410,7 @@ let galeriaReturnViewId = null;
 let galeriaNoGestor = false;
 let galeriaPrecisaRestaurarAba = false; // gestor saiu (logout) de dentro da Galeria: os painéis de aba ficaram escondidos
 const galeriaOrigem = { pai: null, prox: null };
-const PAINEIS_DE_ABA_GESTOR = ['tabAgenda','tabTecnicos','tabManutencoes','tabOS','tabClientes','tabAcessos','tabPainel','tabOficinaGestor','tabEstoque','tabQuadros'];
+const PAINEIS_DE_ABA_GESTOR = ['tabAgenda','tabTecnicos','tabManutencoes','tabOS','tabClientes','tabPainel','tabOficinaGestor','tabEstoque','tabQuadros'];
 function galeriaMoverParaGestor(){
   const g = document.getElementById('galeriaView');
   if(!galeriaOrigem.pai){ galeriaOrigem.pai = g.parentNode; galeriaOrigem.prox = g.nextSibling; }
@@ -21787,7 +21529,7 @@ function normalizarPermissoesAbas(entrada, ignorarDesconhecidas){
 // Decide se a sessão de Gestor atual pode abrir uma aba. Fora de sessão de Gestor não se aplica.
 function gestorPodeAbrirAba(tab){
   if(currentRole !== 'manager') return true;
-  if(tab === 'acessos') return isCurrentUserMaster();
+  if(tab === 'acessos') return false;   /* ERP: a aba Acessos saiu do app */
   if(!ABAS_GESTOR_IDS.includes(tab)) return false;
   const u = USERS.find(x => x.id === currentUserId);
   const perm = u && u.tabPermissions;
@@ -21843,116 +21585,15 @@ async function atualizarPermissoesAbasDoServidor(){
 }
 
 // Só esconde os botões (a proteção de verdade é o switchTab); chamado uma vez por login de Gestor.
-function atualizarVisibilidadeAcessos(){
-  const master = isCurrentUserMaster();
-  ['sidebarBtnAcessos', 'tabBtnAcessos', 'bottomNavBtnAcessos'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.style.display = master ? '' : 'none';
-  });
-}
 
 const ACESSOS_PERFIL_LABEL = { manager: 'Gestor', tech: 'Técnico', oficina: 'Oficina', financeiro: 'Financeiro' };
 // Fase 1: quais usuários já têm conta vinculada (authUsers/<uid>.userId) — leitura só do Master, só ao abrir Acessos.
-let acessosVinculos = {};
-async function carregarVinculosAcessos(){
-  if(!AUTH_FIREBASE || !rtdb) return;
-  try{ const s = await rtdb.ref('authUsers').get(); const v = s.exists() ? s.val() : {}; acessosVinculos = {}; Object.keys(v).forEach(uid => { if(v[uid] && v[uid].userId) acessosVinculos[v[uid].userId] = uid; }); }
-  catch(e){ /* sem permissão ou offline: a lista mostra só o e-mail */ }
-}
-function renderAcessosUsuariosList(){
-  const box = document.getElementById('acessosUsuariosList'); if(!box) return;
 
-  const lista = USERS.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
-  box.innerHTML = lista.length ? lista.map(u => {
-    const perfisTxt = Object.keys(u.profiles || {}).filter(p => u.profiles[p]).map(p => ACESSOS_PERFIL_LABEL[p] || p).join(' · ');
-    return `<div class="tech-pin-row" data-acessosuser="${u.id}">
-      <div class="tech-pin-name">${escapeHtml(u.name)}</div>
-      <div class="sub" style="flex:1; color:var(--text-dim); font-size:12.5px;">${u.contaOficina ? '<b>Conta do computador da Oficina</b> (entra como Técnico/Oficina)' : ''}${escapeHtml(perfisTxt)}${u.isMaster ? ' · <b>Master</b>' : ''}${AUTH_FIREBASE ? `<br>${emailDoUsuario(u) ? '✉ ' + escapeHtml(emailDoUsuario(u)) + (acessosVinculos[u.id] ? ' · <span style="color:#1D5E39;">vinculado</span>' : ' · <span style="color:#8a6d00;">aguardando 1º acesso</span>') : '<span style="color:var(--danger-dark);">sem e-mail de acesso</span>'}` : ''}</div>
-      <div class="acessos-acoes">
-        <button type="button" class="btn-ghost" data-acessoseditar="${u.id}">Editar</button>
-        ${u.id === currentUserId
-          ? `<button type="button" class="btn-ghost btn-excluir" disabled title="Você não pode excluir a própria conta">Excluir</button>`
-          : `<button type="button" class="btn-ghost btn-excluir" data-acessosexcluir="${u.id}">Excluir</button>`}
-      </div>
-    </div>`;
-  }).join('') : '<div class="painel-block-empty">Nenhum usuário cadastrado ainda.</div>';
-  box.querySelectorAll('[data-acessoseditar]').forEach(btn => btn.addEventListener('click', () => abrirAcessosUsuarioModal(btn.dataset.acessoseditar)));
-  box.querySelectorAll('[data-acessosexcluir]').forEach(btn => btn.addEventListener('click', () => confirmarExclusaoUsuarioAcessos(btn.dataset.acessosexcluir)));
-}
-
-function acessosAtualizarCamposPin(){
-  const cont = document.getElementById('acessosPinsContainer');
-  { const co = document.getElementById('acessosContaOficinaInput') && document.getElementById('acessosContaOficinaInput').checked;   // Fase 35: conta da Oficina não tem perfil próprio
-    ['Manager', 'Tech', 'Oficina', 'Financeiro'].forEach(p => { const cb = document.getElementById('acessosPerfil' + p); if(co) cb.checked = false; cb.disabled = !!co; }); }
-  const perfisSelecionados = ['manager', 'tech', 'oficina', 'financeiro'].filter(p => document.getElementById('acessosPerfil' + p[0].toUpperCase() + p.slice(1)).checked);
-  const existentes = {}; cont.querySelectorAll('[data-acessospinperfil]').forEach(inp => { existentes[inp.dataset.acessospinperfil] = inp.value; });
-  cont.innerHTML = perfisSelecionados.map(p => `<div class="field"><label>PIN do ${ACESSOS_PERFIL_LABEL[p]}</label><input type="text" maxlength="6" data-acessospinperfil="${p}" value="${escapeHtml(existentes[p] || '')}"></div>`).join('');
-  const masterInput = document.getElementById('acessosMasterInput');
-  if(!perfisSelecionados.includes('manager')){ masterInput.checked = false; masterInput.disabled = true; }
-  else { masterInput.disabled = false; }
-  acessosAtualizarSecaoAbas();
-}
 // Seção de abas: aparece para todo Gestor, inclusive Master.
-function acessosAtualizarSecaoAbas(){
-  const sec = document.getElementById('acessosAbasSection'); if(!sec) return;
-  const gestor = document.getElementById('acessosPerfilManager').checked;
-  const master = document.getElementById('acessosMasterInput').checked;
-  sec.style.display = gestor ? '' : 'none';          // Master também pode ter as abas escolhidas (Acessos continua sempre liberada para ele)
-}
 // Padrão = TODAS marcadas (é o acesso que os gestores têm hoje): novo gestor, gestor legado sem
 // permissões salvas, ou usuário que está virando gestor. Restringir é desmarcar. Com permissões
 // salvas: mostra exatamente as salvas.
-function acessosPreencherAbas(u){
-  const box = document.getElementById('acessosAbasList'); if(!box) return;
-  const salvo = u && u.tabPermissions && typeof u.tabPermissions === 'object' && !Array.isArray(u.tabPermissions) ? u.tabPermissions : null;
-  box.innerHTML = ABAS_GESTOR.map(a => {
-    const marcado = salvo ? salvo[a.id] === true : true;
-    return `<label style="display:flex; align-items:center; gap:8px; margin-top:6px; font-weight:400; cursor:pointer;"><input type="checkbox" style="width:auto;" data-acessosaba="${a.id}"${marcado ? ' checked' : ''}> ${escapeHtml(a.label)}</label>`;
-  }).join('');
-}
-function acessosMarcarTodasAbas(valor){ document.querySelectorAll('#acessosAbasList [data-acessosaba]').forEach(cb => { cb.checked = valor; }); }
-document.getElementById('acessosMasterInput').addEventListener('change', acessosAtualizarSecaoAbas);
-document.getElementById('acessosContaOficinaInput').addEventListener('change', acessosAtualizarCamposPin);   // Fase 35
-document.getElementById('acessosAbasMarcarTodas').addEventListener('click', () => acessosMarcarTodasAbas(true));
-document.getElementById('acessosAbasDesmarcarTodas').addEventListener('click', () => acessosMarcarTodasAbas(false));
-['acessosPerfilManager', 'acessosPerfilTech', 'acessosPerfilOficina', 'acessosPerfilFinanceiro'].forEach(id => {
-  document.getElementById(id).addEventListener('change', acessosAtualizarCamposPin);
-});
 
-let acessosUsuarioEditandoId = null;
-let acessosUsuarioSalvarInFlight = false;
-function abrirAcessosUsuarioModal(userId){
-  acessosUsuarioEditandoId = userId || null;
-  const u = userId ? USERS.find(x => x.id === userId) : null;
-  document.getElementById('acessosUsuarioModalTitulo').textContent = u ? 'Editar usuário' : 'Novo usuário';
-  const nomeInput = document.getElementById('acessosUsuarioNomeInput');
-  nomeInput.value = u ? u.name : '';
-  nomeInput.dataset.nomeOriginal = u ? u.name : '';
-  document.getElementById('acessosPerfilManager').checked = !!(u && u.profiles && u.profiles.manager);
-  document.getElementById('acessosPerfilTech').checked = !!(u && u.profiles && u.profiles.tech);
-  document.getElementById('acessosPerfilOficina').checked = !!(u && u.profiles && u.profiles.oficina);
-  document.getElementById('acessosPerfilFinanceiro').checked = !!(u && u.profiles && u.profiles.financeiro);
-  document.getElementById('acessosMasterInput').checked = !!(u && u.isMaster);
-  document.getElementById('acessosContaOficinaInput').checked = !!(u && u.contaOficina);   // Fase 35
-  acessosPreencherAbas(u);
-  acessosAtualizarCamposPin();
-  if(u){
-    ['manager', 'tech', 'oficina', 'financeiro'].forEach(p => {
-      const inp = document.querySelector(`#acessosPinsContainer [data-acessospinperfil="${p}"]`); const v = pinDoUsuarioParaPerfil(u, p);
-      if(inp && v != null) inp.value = v;
-    });
-  }
-  document.getElementById('acessosNomeAvisoAlteracao').textContent = '';
-  document.getElementById('acessosUsuarioModalErr').textContent = '';
-  document.getElementById('acessosEmailInput').value = u ? emailDoUsuario(u) : '';
-  document.getElementById('acessosSenhaInicialInput').value = ''; document.getElementById('acessosContaMsg').textContent = '';
-  document.getElementById('acessosContaBox').style.display = AUTH_FIREBASE ? '' : 'none';
-  document.getElementById('acessosContaStatus').innerHTML = !AUTH_FIREBASE ? '' : !u ? 'Salve o usuário com o e-mail; depois, se a pessoa ainda não tiver conta, crie a conta de acesso aqui. Toda conta precisa verificar o e-mail (link enviado na criação) antes do 1º acesso.' : !emailDoUsuario(u) ? 'Sem e-mail de acesso: esta pessoa <b>não consegue entrar</b> no app.' : acessosVinculos[u.id] ? '✅ Conta vinculada (já entrou pelo menos uma vez).' : 'E-mail salvo. Falta a conta existir no Firebase e a pessoa entrar uma vez.';
-  document.getElementById('acessosUsuarioModalOverlay').classList.add('open');
-  setTimeout(() => nomeInput.focus(), 50);
-}
-function fecharAcessosUsuarioModal(){ document.getElementById('acessosUsuarioModalOverlay').classList.remove('open'); acessosUsuarioEditandoId = null; }
-document.getElementById('acessosNovoUsuarioBtn').addEventListener('click', () => abrirAcessosUsuarioModal(null));
 // ---- Fase 1c: migração controlada de PIN/e-mail para usersPrivado ----
 // Nunca roda sozinha: só por este botão, depois da prévia e da confirmação do Master. Idempotente: o que já está no privado não é
 // sobrescrito; users/<id> só perde pinByProfile/email depois de o privado ser lido de volta do servidor com os valores esperados.
@@ -21995,7 +21636,6 @@ async function executarMigracaoPrivado(){
       delete u.pinByProfile; delete u.email; feitos.push(x.nome);
     }catch(e){ console.error('migração usersPrivado:', x.nome, e); falhas.push(x.nome + ' (' + ((e && (e.code || e.message)) || 'erro') + ')'); }
   }
-  renderAcessosUsuariosList();
   const box = document.getElementById('acessosMigrarBox');
   box.innerHTML = `<b>Migração concluída.</b> Movidos: ${feitos.length}${feitos.length ? ' (' + feitos.map(escapeHtml).join(', ') + ')' : ''}. ${falhas.length ? '<span style="color:var(--danger-dark);">Falharam: ' + falhas.map(escapeHtml).join(', ') + ' — rode de novo; o que já foi movido não se repete.</span>' : 'Nenhuma falha.'} <button type="button" class="btn-ghost oe-mini" data-migrar="fechar">Fechar</button>`;
   return { ok: !falhas.length, feitos, falhas };
@@ -22133,26 +21773,6 @@ async function chavesShallowServicesMedia(){ // lista só as CHAVES de servicesM
   const j = await resp.json(); return j && typeof j === 'object' ? Object.keys(j) : [];
 }
 window.migrarMidiasParaStorage = migrarMidiasParaStorage; window.varrerStorageOrfaos = varrerStorageOrfaos;
-document.getElementById('acessosCriarContaBtn').addEventListener('click', async () => {
-  const msg = (t, cor) => { const el = document.getElementById('acessosContaMsg'); el.textContent = t || ''; el.style.color = cor || ''; };
-  if(!isCurrentUserMaster()) return msg('Só um Gestor Master pode criar contas.', 'var(--danger-dark)');
-  const email = emailNormal(document.getElementById('acessosEmailInput').value), senha = document.getElementById('acessosSenhaInicialInput').value;
-  if(!emailValido(email)) return msg('Informe o e-mail de acesso primeiro.', 'var(--danger-dark)');
-  if(!senha || senha.length < 6) return msg('Digite uma senha inicial com pelo menos 6 caracteres (a pessoa pode trocar com "Esqueci a senha").', 'var(--danger-dark)');
-  const btn = document.getElementById('acessosCriarContaBtn'); btn.disabled = true; btn.textContent = 'Criando…';
-  const r = await criarContaAcesso(email, senha);
-  btn.disabled = false; btn.textContent = 'Criar conta de acesso';
-  if(r.ok){ document.getElementById('acessosSenhaInicialInput').value = ''; msg('Conta criada para ' + email + (r.verifEnviada ? '; e-mail de verificação enviado' : '; o e-mail de verificação será reenviado quando a pessoa entrar') + '. Salve o usuário com este e-mail (se ainda não salvou) e passe a senha inicial. A pessoa precisa abrir o link de verificação antes do 1º acesso.', '#1D5E39'); }
-  else msg(r.reason, r.jaExiste ? '#8a6d00' : 'var(--danger-dark)');
-});
-document.getElementById('acessosUsuarioModalCancelBtn').addEventListener('click', fecharAcessosUsuarioModal);
-document.getElementById('acessosUsuarioModalOverlay').addEventListener('click', (e) => { if(e.target === e.currentTarget) fecharAcessosUsuarioModal(); });
-document.getElementById('acessosUsuarioNomeInput').addEventListener('input', () => {
-  const original = document.getElementById('acessosUsuarioNomeInput').dataset.nomeOriginal;
-  const atual = document.getElementById('acessosUsuarioNomeInput').value.trim();
-  document.getElementById('acessosNomeAvisoAlteracao').textContent = (acessosUsuarioEditandoId && original && atual && atual !== original)
-    ? 'Este nome já é utilizado em registros históricos do sistema. Alterar o nome não altera registros antigos.' : '';
-});
 
 // Única função de gravação: cada usuário grava independente em users/<id> — nunca um blob global,
 // nunca sobrescreve campo que não mudou, nunca toca outro usuário.
@@ -22312,182 +21932,6 @@ function mensagemFalhaParcial(acaoUsers, nos, motivos){
   return 'O usuário foi ' + acaoUsers + ' em users, mas o cadastro legado ficou incompleto. Resultado por nó — ' + resumirNos(nos) + '. ' +
     motivos.join(' ') + ' Nada foi apagado. Clique em Salvar de novo para repetir só o que falhou (não cria outro usuário).';
 }
-async function salvarUsuarioAcessos(dados){
-  // Proteção de autorização (Passo 1, pós Etapa 14): antes desta correção, esta função podia ser
-  // chamada diretamente (ex.: pelo console do navegador) por qualquer perfil, sem nenhuma checagem
-  // de quem está pedindo — a única barreira era a aba Acessos ficar escondida na interface para
-  // quem não é Master. Isso permitia escalonamento de privilégio (confirmado na Etapa 14: um
-  // Gestor comum conseguiu criar um usuário Master novo chamando esta função direto).
-  // IMPORTANTE: esta checagem roda inteiramente no JavaScript do navegador da própria pessoa —
-  // não é uma barreira contra alguém que edite ou remova este trecho de código no seu próprio
-  // navegador, nem substitui autorização real no Firebase (Rules/Auth), que ainda não existe.
-  // Ela impede o uso NORMAL da função por quem não é Master (interface e chamadas diretas comuns),
-  // mas não impede manipulação direta do JavaScript carregado localmente.
-  if(!isCurrentUserMaster()){
-    return { ok: false, reason: 'Você não tem permissão para administrar usuários. Só um Gestor Master pode fazer isso.' };
-  }
-  const nome = (dados.name || '').trim();
-  if(!nome) return { ok: false, reason: 'Informe o nome.' };
-  if(dados.contaOficina){ Object.keys(dados.profiles).forEach(p => { dados.profiles[p] = false; }); dados.isMaster = false; dados.pinByProfile = {}; delete dados.tabPermissions; }   // Fase 35
-  const perfisSelecionados = Object.keys(dados.profiles).filter(p => dados.profiles[p]);
-  if(!perfisSelecionados.length && !dados.contaOficina) return { ok: false, reason: 'Selecione ao menos um perfil.' };
-  if(dados.contaOficina && !dados.id && !(dados.email || '').trim() && AUTH_FIREBASE) return { ok: false, reason: 'Informe o e-mail da conta do computador da Oficina.' };
-  if(dados.isMaster && !dados.profiles.manager) return { ok: false, reason: 'Master só é permitido com o perfil Gestor selecionado.' };
-  const emailNovo = dados.email === undefined ? undefined : emailNormal(dados.email);   // undefined = chamada antiga, não mexe no e-mail
-  if(emailNovo){ if(!emailValido(emailNovo)) return { ok: false, reason: 'E-mail de acesso inválido.' }; const dono = USERS.find(u => u.id !== dados.id && emailNormal(emailDoUsuario(u)) === emailNovo); if(dono) return { ok: false, reason: 'Este e-mail já é o acesso de "' + dono.name + '".' }; }
-  if(USERS.some(u => u.id !== dados.id && normNomeExato(u.name) === normNomeExato(nome))) return { ok: false, reason: 'Já existe um usuário com esse nome. Se o cadastro dele ficou incompleto, abra-o em "Editar" e salve de novo para completar.' };
-
-  // Permissões de abas (só Gestor comum). undefined = não mexe (chamadas antigas continuam iguais).
-  let permissoesNorm = null;
-  if(dados.tabPermissions !== undefined && dados.profiles.manager){
-    const v = normalizarPermissoesAbas(dados.tabPermissions);
-    if(!v.ok) return { ok: false, reason: v.reason };
-    if(!Object.values(v.mapa).some(Boolean)) return { ok: false, reason: 'Selecione ao menos uma aba para este Gestor — sem nenhuma aba liberada ele não conseguiria usar o sistema.' };
-    permissoesNorm = v.mapa;
-  }
-
-  const now = new Date().toISOString();
-
-  if(!dados.id){
-    const novoId = 'u' + Date.now() + Math.floor(Math.random() * 1000000);
-    const profiles = {}, pinByProfile = {}, legacyNames = {};
-    // Valida a chave legada de cada perfil ANTES de gravar qualquer coisa (nome inválido pro
-    // Firebase ou chave já usada por outro usuário não deixa usuário meio criado pra trás).
-    const chave = chaveLegadaSegura(nome);
-    if(!chave) return { ok: false, reason: 'Nome inválido para o cadastro legado: precisa ter ao menos uma letra ou número (os caracteres . $ # [ ] / não são aceitos como chave).' };
-    for(const p of perfisSelecionados){
-      const dono = donoDaChaveLegada(p, chave, null);
-      if(dono) return { ok: false, reason: 'A chave legada "' + chave + '" já pertence ao usuário "' + dono.name + '" neste perfil. Use um nome diferente.' };
-    }
-    perfisSelecionados.forEach(p => { profiles[p] = true; pinByProfile[p] = (dados.pinByProfile[p] || '').trim() || '0000'; legacyNames[p] = chave; });
-    const registro = { name: nome, profiles, legacyNames, isMaster: !!dados.isMaster, createdAt: now, updatedAt: now };   // Fase 1c: sem PIN e sem e-mail aqui
-    if(dados.contaOficina) registro.contaOficina = true;   // Fase 35
-    if(permissoesNorm && !ABAS_GESTOR_IDS.every(id => permissoesNorm[id])) registro.tabPermissions = permissoesNorm; // todas marcadas = sem restrição, nada a gravar
-    const privado = { pinByProfile }; if(emailNovo) privado.email = emailNovo;
-    try{
-      const upNovo = { ['users/' + novoId]: registro, ['usersPrivado/' + novoId]: privado }; if(emailNovo) upNovo['emailIndex/' + emailChave(emailNovo)] = novoId;
-      await rtdb.ref().update(upNovo);
-      USERS.push(Object.assign({ id: novoId }, registro)); USERS_PRIVADO[novoId] = privado;
-    }catch(e){ return { ok: false, reason: 'Não foi possível salvar. Verifique sua internet e tente novamente.', nos: { users: 'falhou' } }; }
-    // users já confirmado — a ponte agora só REFLETE pro legado; falha aqui não desfaz o usuário
-    // já criado (não fingir sucesso total, mas também não apagar o que já foi salvo de verdade).
-    const nos = { users: 'ok' };
-    const falhasPonte = [];
-    for(const p of perfisSelecionados){
-      const r = await PONTE_LEGADO[p].criarOuAtualizar(legacyNames[p], pinByProfile[p]);
-      Object.assign(nos, r.nos || {});
-      if(!r.ok) falhasPonte.push(r.reason);
-    }
-    if(falhasPonte.length) return { ok: false, id: novoId, nos, reason: mensagemFalhaParcial('criado', nos, falhasPonte) };
-    return { ok: true, id: novoId, nos };
-  }
-
-  const existente = USERS.find(u => u.id === dados.id);
-  if(!existente) return { ok: false, reason: 'Usuário não encontrado.' };
-  if(existente.isMaster && !dados.isMaster){
-    if(acessosMastersAtivos().filter(u => u.id !== existente.id).length === 0){
-      return { ok: false, reason: 'Não é possível remover o último Gestor Master do sistema.' };
-    }
-  }
-
-  const updates = {};
-  const acoesPonte = []; // { perfil, tipo: 'criarOuAtualizar'|'remover', nomeLegado, pin }
-  let erroValidacao = null;
-  // Resolve a chave legada de um perfil: mantém a existente se for válida; se tiver caracteres
-  // proibidos (ex.: "Adão Jr." gravado antes desta correção), corrige a chave em users.legacyNames
-  // (o usuário e o PIN ficam como estão); se não houver, deriva do nome. Tudo antes de qualquer gravação.
-  function resolverChaveLegada(p){
-    const atual = existente.legacyNames && existente.legacyNames[p];
-    if(atual && chaveLegadaValida(atual)) return atual;
-    const chave = chaveLegadaSegura(atual || nome);
-    if(!chave){ erroValidacao = 'Nome inválido para o cadastro legado: precisa ter ao menos uma letra ou número (os caracteres . $ # [ ] / não são aceitos como chave).'; return null; }
-    const dono = donoDaChaveLegada(p, chave, existente.id);
-    if(dono){ erroValidacao = 'A chave legada "' + chave + '" já pertence ao usuário "' + dono.name + '" neste perfil. Use um nome diferente.'; return null; }
-    updates[`users/${existente.id}/legacyNames/${p}`] = chave;
-    return chave;
-  }
-  if(existente.name !== nome) updates[`users/${existente.id}/name`] = nome;
-  ['manager', 'tech', 'oficina', 'financeiro'].forEach(p => {
-    const tinha = !!(existente.profiles && existente.profiles[p]);
-    const tem = !!dados.profiles[p];
-    if(tem && !tinha){
-      const pin = (dados.pinByProfile[p] || '').trim() || '0000';
-      updates[`users/${existente.id}/profiles/${p}`] = true;
-      updates[`usersPrivado/${existente.id}/pinByProfile/${p}`] = pin;
-      const nomeLegadoNovo = resolverChaveLegada(p);
-      if(nomeLegadoNovo) acoesPonte.push({ perfil: p, tipo: 'criarOuAtualizar', nomeLegado: nomeLegadoNovo, pin });
-    } else if(!tem && tinha){
-      updates[`users/${existente.id}/profiles/${p}`] = null;
-      updates[`usersPrivado/${existente.id}/pinByProfile/${p}`] = null; // legacyNames preservado de propósito (histórico)
-      if(existente.pinByProfile && existente.pinByProfile[p] !== undefined) updates[`users/${existente.id}/pinByProfile/${p}`] = null;   // resto antigo, se houver
-      acoesPonte.push({ perfil: p, tipo: 'remover', nomeLegado: existente.legacyNames && existente.legacyNames[p] });
-    } else if(tem && tinha){
-      const novoPin = (dados.pinByProfile[p] || '').trim() || '0000';
-      if(pinDoUsuarioParaPerfil(existente, p) !== novoPin || !(privadoDe(existente) && privadoDe(existente).pinByProfile && privadoDe(existente).pinByProfile[p] != null)) updates[`usersPrivado/${existente.id}/pinByProfile/${p}`] = novoPin;
-      // Sempre reafirma a ponte pra esse perfil, mesmo sem mudança de PIN — auto-corrige uma
-      // reflexão legada que tenha falhado numa tentativa anterior (retry seguro e idempotente:
-      // as funções de ponte só gravam de verdade se algo realmente estiver diferente no legado).
-      const temChave = !!(existente.legacyNames && existente.legacyNames[p]);
-      const chave = temChave ? resolverChaveLegada(p) : null; // sem chave legada: nada a refletir (como antes)
-      if(chave) acoesPonte.push({ perfil: p, tipo: 'criarOuAtualizar', nomeLegado: chave, pin: novoPin });
-    }
-  });
-  if(erroValidacao) return { ok: false, reason: erroValidacao }; // nada foi gravado até aqui
-  if(permissoesNorm){
-    const salvo = existente.tabPermissions && typeof existente.tabPermissions === 'object' && !Array.isArray(existente.tabPermissions) ? existente.tabPermissions : null;
-    const todasMarcadas = ABAS_GESTOR_IDS.every(id => permissoesNorm[id]);
-    if(todasMarcadas){
-      // Todas marcadas = sem restrição (e abas futuras entram sozinhas). Se havia mapa salvo, limpa.
-      if(salvo) updates[`users/${existente.id}/tabPermissions`] = null;
-    } else {
-      const igual = salvo && ABAS_GESTOR_IDS.every(id => (salvo[id] === true) === permissoesNorm[id]);
-      if(!igual) updates[`users/${existente.id}/tabPermissions`] = permissoesNorm;
-    }
-  }
-  if(!!existente.isMaster !== !!dados.isMaster) updates[`users/${existente.id}/isMaster`] = !!dados.isMaster;
-  if(dados.contaOficina !== undefined && !!existente.contaOficina !== !!dados.contaOficina) updates[`users/${existente.id}/contaOficina`] = dados.contaOficina ? true : null;   // Fase 35
-  const emailAtual = emailNormal(emailDoUsuario(existente));
-  if(emailNovo !== undefined && emailAtual !== emailNovo){      // Fase 1c: e-mail de acesso no privado + índice (a chave antiga sai, a nova entra)
-    updates[`usersPrivado/${existente.id}/email`] = emailNovo || null;
-    if(existente.email !== undefined) updates[`users/${existente.id}/email`] = null;   // resto antigo, se houver
-    if(emailAtual) updates['emailIndex/' + emailChave(emailAtual)] = null;
-    if(emailNovo) updates['emailIndex/' + emailChave(emailNovo)] = existente.id;
-  }
-
-  if(Object.keys(updates).length > 0){
-    updates[`users/${existente.id}/updatedAt`] = now;
-    try{
-      await rtdb.ref().update(updates); // mesmo padrão já usado no app (ex.: createEstoqueStore): update na raiz com caminhos completos
-      Object.keys(updates).filter(path => path.indexOf('users/') === 0 || path.indexOf('usersPrivado/') === 0).forEach(path => {
-        const parts = path.split('/').slice(2); // remove "users/<id>/" ou "usersPrivado/<id>/" — o resto é o caminho dentro do registro
-        const alvo = path.indexOf('usersPrivado/') === 0 ? (USERS_PRIVADO[existente.id] = USERS_PRIVADO[existente.id] || {}) : existente;
-        if(parts.length === 1){ if(updates[path] === null) delete alvo[parts[0]]; else alvo[parts[0]] = updates[path]; }
-        else {
-          alvo[parts[0]] = alvo[parts[0]] || {};
-          if(updates[path] === null) delete alvo[parts[0]][parts[1]];
-          else alvo[parts[0]][parts[1]] = updates[path];
-        }
-      });
-    }catch(e){ return { ok: false, reason: 'Não foi possível salvar. Verifique sua internet e tente novamente.', nos: { users: 'falhou' } }; }
-  }
-  // Mesmo sem nenhuma mudança em users (ex.: reafirmar o mesmo PIN), a ponte ainda roda — é assim
-  // que um retry depois de uma falha parcial anterior consegue se autocorrigir sem duplicar nada.
-
-  // users confirmado — reflete as mudanças de perfil/PIN no legado (nome NUNCA propagado: a
-  // chave legada é sempre legacyNames[perfil], intocada por rename).
-  const nos = { users: 'ok' };
-  const falhasPonte = [];
-  for(const acao of acoesPonte){
-    if(!acao.nomeLegado) continue; // nada a refletir sem uma chave legada válida
-    const r = acao.tipo === 'remover'
-      ? await PONTE_LEGADO[acao.perfil].remover(acao.nomeLegado)
-      : await PONTE_LEGADO[acao.perfil].criarOuAtualizar(acao.nomeLegado, acao.pin);
-    Object.assign(nos, r.nos || {});
-    if(!r.ok) falhasPonte.push(r.reason);
-  }
-  if(falhasPonte.length) return { ok: false, id: existente.id, nos, reason: mensagemFalhaParcial('salvo', nos, falhasPonte) };
-  return { ok: true, id: existente.id, nos };
-}
 
 // =====================================================================================
 // ACESSOS — exclusão de usuário. Remove o ACESSO (users/<id> e os registros legados vinculados a
@@ -22498,23 +21942,10 @@ async function salvarUsuarioAcessos(dados){
 // Firebase: ou remove tudo, ou nada) — não existe estado "meio excluído" no servidor.
 // =====================================================================================
 const EXCLUSAO_TIMEOUT_MS = 20000;
-let acessosExcluirEmAndamento = false;
 
 function atividadesDoTecnico(chaveTech){
   if(!chaveTech || !Array.isArray(services)) return [];
   return services.filter(s => s && (s.technician === chaveTech || (Array.isArray(s.technicians) && s.technicians.includes(chaveTech))));
-}
-function mensagemConfirmacaoExclusao(u){
-  const perfis = Object.keys(u.profiles || {}).filter(p => u.profiles[p]).map(p => ACESSOS_PERFIL_LABEL[p] || p).join(', ');
-  let msg = 'Deseja realmente excluir o usuário ' + u.name + '? Essa ação removerá seus acessos ao sistema' + (perfis ? ' (' + perfis + ')' : '') + ' e não poderá ser desfeita automaticamente.';
-  const ativ = atividadesDoTecnico(u.profiles && u.profiles.tech ? (u.legacyNames && u.legacyNames.tech) : null);
-  if(ativ.length){
-    const abertas = ativ.filter(s => s.status !== 'concluido').length;
-    msg += ' O histórico é preservado: ' + ativ.length + ' atividade(s) com este técnico continuam salvas' + (abertas ? ' (' + abertas + ' ainda em aberto, que ficarão atribuídas a um técnico que deixa de existir na equipe)' : '') + '.';
-  } else {
-    msg += ' O histórico de atividades é preservado.';
-  }
-  return msg;
 }
 
 // Remove do estado local (listas em memória + snapshots de diff) exatamente o que saiu do servidor.
@@ -22529,148 +21960,8 @@ function limparAcessoLegadoLocal(perfil, chave){
   }
 }
 
-async function excluirUsuarioAcessos(id){
-  // Autorização dentro da função (não só na interface) — e reconfirmada contra o servidor abaixo.
-  if(!isCurrentUserMaster()){
-    return { ok: false, reason: 'Você não tem permissão para excluir usuários. Só um Gestor Master pode fazer isso.' };
-  }
-  if(typeof id !== 'string' || !chaveLegadaValida(id)) return { ok: false, reason: 'Identificação de usuário inválida. Nada foi excluído.' };
-  if(id === currentUserId) return { ok: false, reason: 'Você não pode excluir a própria conta enquanto está logado com ela.' };
 
-  // users não tem listener em tempo real: o que decide é o servidor, não a lista em memória.
-  let servidor;
-  try{
-    const snap = await rtdb.ref('users').get();
-    const v = snap.exists() ? snap.val() : null;
-    servidor = (v && typeof v === 'object') ? v : {};
-  }catch(e){
-    console.error('Exclusão de usuário: falha ao ler users no servidor', e);
-    return { ok: false, reason: 'Não foi possível confirmar os cadastros no servidor. Verifique sua internet e tente novamente. Nada foi excluído.' };
-  }
-  const euServidor = servidor[currentUserId];
-  if(!euServidor || euServidor.isMaster !== true || !(euServidor.profiles && euServidor.profiles.manager)){
-    return { ok: false, reason: 'O servidor não confirma que a sua conta é Gestor Master. Nada foi excluído.' };
-  }
-  const alvo = servidor[id];
-  if(!alvo){
-    if(!USERS.some(u => u.id === id)) return { ok: false, reason: 'Usuário não encontrado.' };
-    USERS = USERS.filter(u => u.id !== id); // já tinha sido excluído em outro aparelho
-    return { ok: true, id, jaRemovido: true, removidos: [], preservados: [] };
-  }
-  const mastersRestantes = Object.keys(servidor).filter(k => k !== id && servidor[k] && servidor[k].isMaster === true && servidor[k].profiles && servidor[k].profiles.manager);
-  if(alvo.isMaster === true && mastersRestantes.length === 0){
-    return { ok: false, reason: 'Não é possível excluir o último Gestor Master do sistema.' };
-  }
 
-  // Planejamento (nada é gravado até aqui): só os perfis ATIVOS do usuário, só a chave legada dele.
-  const caminhos = {};
-  const removidos = ['users'];
-  const preservados = [];
-  const aplicarLocal = []; // { perfil, chave }
-  const NOS_POR_PERFIL = LEGADO_PINS_ATIVO ? {
-    manager: ['managers'], financeiro: ['financeiro'], oficina: ['oficina'], tech: ['techRoster', 'techPins', 'techPhones']
-  } : { manager: [], financeiro: [], oficina: [], tech: ['techRoster', 'techPhones'] };   // Fase 2b
-  for(const p of ['manager', 'tech', 'oficina', 'financeiro']){
-    if(!(alvo.profiles && alvo.profiles[p] === true)) continue;
-    const rotulo = ACESSOS_PERFIL_LABEL[p] || p;
-    const chave = alvo.legacyNames && alvo.legacyNames[p];
-    if(!chave){ preservados.push(rotulo + ': sem chave legada registrada — nada a remover no cadastro legado'); continue; }
-    if(!chaveLegadaValida(chave)){ preservados.push(rotulo + ': a chave legada "' + chave + '" nunca pôde ser gravada no Firebase — não há registro legado a remover'); continue; }
-    if(p === 'oficina' && normNomeExato(chave) === USERS_GENERIC_OFICINA_NAME){ preservados.push(rotulo + ': "Oficina" genérico nunca é removido'); continue; }
-    const compartilhada = Object.keys(servidor).find(k => k !== id && servidor[k] && servidor[k].legacyNames && servidor[k].legacyNames[p] === chave);
-    if(compartilhada){
-      preservados.push(rotulo + ': o registro legado "' + chave + '" também é referenciado por "' + servidor[compartilhada].name + '" — preservado');
-      continue;
-    }
-    // Mesmas travas de "última pessoa" já usadas ao remover um perfil (evita recriar a lista padrão).
-    if(LEGADO_PINS_ATIVO && p === 'manager' && MANAGERS.some(m => m.name === chave) && MANAGERS.length <= 1) return { ok: false, reason: 'Este é o último registro do cadastro legado de Gestores; a exclusão foi bloqueada para não recriar a lista padrão. Nada foi excluído.' };
-    if(LEGADO_PINS_ATIVO && p === 'financeiro' && FINANCEIRO.some(f => f.name === chave) && FINANCEIRO.length <= 1) return { ok: false, reason: 'Esta é a última pessoa do cadastro legado de Financeiro; a exclusão foi bloqueada. Nada foi excluído.' };
-    if(LEGADO_PINS_ATIVO && p === 'oficina' && OFICINA.some(o => o.name === chave) && OFICINA.length <= 1) return { ok: false, reason: 'Esta é a última pessoa do cadastro legado de Oficina; a exclusão foi bloqueada. Nada foi excluído.' };
-    NOS_POR_PERFIL[p].forEach(no => { caminhos[no + '/' + chave] = null; if(!removidos.includes(no)) removidos.push(no); });
-    aplicarLocal.push({ perfil: p, chave });
-  }
-  caminhos['users/' + id] = null;
-  caminhos['usersPrivado/' + id] = null;                                                                   // Fase 1c
-  { const em = emailNormal(emailDoUsuario(USERS.find(x => x.id === id))); if(em) caminhos['emailIndex/' + emailChave(em)] = null; }
-  if(typeof acessosVinculos === 'object' && acessosVinculos[id]) caminhos['authUsers/' + acessosVinculos[id]] = null;
-
-  // UMA escrita multi-caminho: atômica no Firebase. Falhou = nada mudou no servidor.
-  let timer;
-  try{
-    await Promise.race([
-      rtdb.ref().update(caminhos),
-      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('__timeout__')), EXCLUSAO_TIMEOUT_MS); })
-    ]);
-  }catch(e){
-    clearTimeout(timer);
-    console.error('Exclusão de usuário: falha na gravação', e);
-    if(e && e.message === '__timeout__'){
-      return { ok: false, semConfirmacao: true, reason: 'O servidor não confirmou a exclusão a tempo (possível falta de conexão). Esta tela não foi alterada e o usuário continua listado, mas a exclusão pode ser concluída sozinha quando a conexão voltar — confira a lista de Acessos antes de tentar de novo.' };
-    }
-    return { ok: false, reason: 'Não foi possível excluir o usuário. A exclusão é gravada em uma única operação: nada foi removido no servidor e o usuário continua com acesso. Verifique sua internet e tente novamente.' };
-  }
-  clearTimeout(timer);
-
-  // Servidor confirmou — agora (e só agora) o estado local acompanha.
-  USERS = USERS.filter(u => u.id !== id); delete USERS_PRIVADO[id];
-  aplicarLocal.forEach(a => limparAcessoLegadoLocal(a.perfil, a.chave));
-  try{ renderManagerPinList(); renderTechPinList(); renderFinanceiroPinList(); renderOficinaPinList(); }catch(e){ /* painéis legados ocultos — só higiene visual */ }
-  try{ if(aplicarLocal.some(a => a.perfil === 'tech')) renderAll(); }catch(e){ console.error('Falha ao atualizar telas após a exclusão:', e); }
-  return { ok: true, id, removidos, preservados };
-}
-
-function confirmarExclusaoUsuarioAcessos(id){
-  const u = USERS.find(x => x.id === id);
-  if(!u || id === currentUserId) return;
-  customConfirm(mensagemConfirmacaoExclusao(u), async () => {
-    if(acessosExcluirEmAndamento) return;
-    acessosExcluirEmAndamento = true;
-    try{
-      const r = await excluirUsuarioAcessos(id);
-      if(!r.ok) alert(r.reason);
-      else if(r.preservados && r.preservados.length) alert('Usuário excluído. Itens preservados no cadastro legado:\n• ' + r.preservados.join('\n• '));
-    } finally {
-      acessosExcluirEmAndamento = false;
-      renderAcessosUsuariosList();
-    }
-  }, 'Excluir');
-}
-
-document.getElementById('acessosUsuarioModalSalvarBtn').addEventListener('click', async () => {
-  if(acessosUsuarioSalvarInFlight) return;
-  acessosUsuarioSalvarInFlight = true;
-  const btn = document.getElementById('acessosUsuarioModalSalvarBtn'); const lbl = btn.textContent; btn.disabled = true; btn.textContent = 'Salvando...';
-  const dados = {
-    id: acessosUsuarioEditandoId,
-    name: document.getElementById('acessosUsuarioNomeInput').value,
-    profiles: {
-      manager: document.getElementById('acessosPerfilManager').checked,
-      tech: document.getElementById('acessosPerfilTech').checked,
-      oficina: document.getElementById('acessosPerfilOficina').checked,
-      financeiro: document.getElementById('acessosPerfilFinanceiro').checked
-    },
-    pinByProfile: {},
-    isMaster: document.getElementById('acessosMasterInput').checked,
-    email: document.getElementById('acessosEmailInput').value,
-    contaOficina: document.getElementById('acessosContaOficinaInput').checked   // Fase 35
-  };
-  document.querySelectorAll('#acessosPinsContainer [data-acessospinperfil]').forEach(inp => { dados.pinByProfile[inp.dataset.acessospinperfil] = inp.value; });
-  if(dados.profiles.manager){
-    dados.tabPermissions = {};
-    document.querySelectorAll('#acessosAbasList [data-acessosaba]').forEach(cb => { dados.tabPermissions[cb.dataset.acessosaba] = cb.checked; });
-  }
-  const r = await salvarUsuarioAcessos(dados);
-  btn.disabled = false; btn.textContent = lbl; acessosUsuarioSalvarInFlight = false;
-  if(!r.ok){
-    document.getElementById('acessosUsuarioModalErr').textContent = r.reason;
-    // Se o usuário já foi criado em users (falha foi só na ponte legada), o próximo clique em
-    // "Salvar" deve EDITAR esse mesmo registro (retry idempotente), nunca tentar criar de novo.
-    if(r.id) acessosUsuarioEditandoId = r.id;
-    return;
-  }
-  fecharAcessosUsuarioModal();
-  renderAcessosUsuariosList();
-});
 
 document.getElementById('appRetryBtn').addEventListener('click', init);
 document.getElementById('contaLoginBtn').addEventListener('click', entrarComConta);
