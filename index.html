@@ -1139,6 +1139,7 @@ async function telaApp(arquivo, titulo, modo, abas){
     const m = /<head[^>]*>/i.exec(html);
     if(m){ const css = JSON.stringify(window.__erpTemaApp || '').replace(/<\//g, '<\\/'),
         sc = '<script>window.__erpModo=' + JSON.stringify(modo) + ';document.addEventListener("DOMContentLoaded",function(){' + (abas ? 'document.body.classList.add("erpEmb");' : '') +
+          'document.documentElement.style.setProperty("--erpSafeB","' + appSafeB() + 'px");(' + String(window.__erpAppBoot || function(){}) + ')();' +
           'var s=document.createElement("style");s.id="erpTema";s.textContent=' + css + ';document.head.appendChild(s);});<\/script>';
       html = html.slice(0, m.index + m[0].length) + sc + html.slice(m.index + m[0].length); }
     const f = document.createElement('iframe'); f.title = titulo; f.dataset.app = arquivo; f.dataset.perfil = modo; f.dataset.chave = chave; f.srcdoc = html; w.appendChild(f);
@@ -1146,6 +1147,8 @@ async function telaApp(arquivo, titulo, modo, abas){
   }
   if(abas) appAbaVai(arquivo, chave);
 }
+// altura da faixa de baixo do aparelho (barra de gestos do iPhone): o aplicativo, dentro do quadro, não enxerga esse valor sozinho
+function appSafeB(){ const p = document.createElement('div'); p.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom,0px);visibility:hidden'; document.body.appendChild(p); const h = p.offsetHeight; p.remove(); return h; }
 // tela de espera por cima do aplicativo enquanto ele carrega e entra sozinho com o login do ERP
 function appCapa(mostra, titulo){
   let c = $('#appCapa'); if(!c){ c = document.createElement('div'); c.id = 'appCapa'; $('#appWrap').appendChild(c); }
@@ -3379,7 +3382,11 @@ function escolherSetor(inicial){
   'body.modoApp #menu{display:none!important}body.modoApp #appWrap{left:0!important}body.modoApp #btnMenu{display:none!important}' +
   // nas bases Serviços, Projetos, Técnico e Oficina a barra do topo fica só com a marca, a área (para trocar) e a conta — nada que leve para dentro do ERP
   'body.modoApp #btnVoltar,body.modoApp #btnInicio,body.modoApp #btnBusca,body.modoApp #btnCalc,body.modoApp #btnChat,body.modoApp #btnSino,body.modoApp .topo h1,body.modoApp .topo .amb,body.modoApp .hd-dir .hd-sep{display:none!important}' +
-  'body.modoApp .setorChip span{display:inline!important}body.modoApp .topo .marca{display:flex!important}' +
+  'body.modoApp .setorChip span{display:inline!important}' +
+  '@media (max-width:860px){body.modoApp .topo .marca{display:none!important}body.modoApp .setorChip{margin-left:6px}}' +
+  // o aplicativo ocupa a tela até o fim (sem faixa sobrando embaixo) e a página de fora não balança ao arrastar
+  'html{overscroll-behavior:none}body.modoApp{overflow:hidden}' +
+  '@supports (height:100dvh){body.modoApp #appWrap{bottom:auto!important;height:calc(100dvh - var(--topo,64px))}}' +
   // tela das bases: cheia e opaca (nada do ERP aparece por trás)
   '#setorTela{background:linear-gradient(180deg,#232326 0,#131315 60%,#0c0c0d 100%)!important;align-items:flex-start!important}' +
   '#setorTela .stCaixa{margin:auto}.stLogo{height:44px;margin-bottom:22px}#setorTela .stCab h2{color:#fff;font-size:24px;margin:0 0 6px}#setorTela .stCab p{color:#bdbdc3;margin:0 0 22px}' +
@@ -3404,8 +3411,38 @@ html:not([data-theme="dark"]) body:not(.tema-escuro){--background:#ececf0;--pape
 html:not([data-theme="dark"]) body:not(.tema-escuro) .app{background:#ececf0!important}
 /* a faixa do rodapé só aparece quando há erro ao salvar (a normal, "ERP TESTE · gravando no banco do ERP", some) */
 #faixa-erp[style*="rgb(17, 17, 17)"],#faixa-erp[style*="#111"]{display:none!important}
-/* a marca já está na barra do ERP: somem os cabeçalhos com a marca dentro dos aplicativos */
-#techView .portal-header-slim,#oficinaView .portal-header-slim,.masthead{display:none!important}
+/* a marca aparece uma vez só: no computador, na barra do ERP; no celular, dentro do aplicativo (como era no de Serviços) */
+@media (min-width:861px){#techView .portal-header-slim,#oficinaView .portal-header-slim,.masthead{display:none!important}}
+@media (max-width:860px){.masthead.erpMarca{display:flex!important;justify-content:flex-start!important;align-items:center;gap:10px;margin:0 0 12px!important}
+  .masthead.erpMarca img{height:36px;width:auto}.masthead.erpMarca b{font-size:19px;font-weight:700;letter-spacing:0;color:var(--ink)}.masthead:not(.erpMarca){display:none!important}}
+/* não balança ao arrastar; a barra de baixo encosta no fim da tela e respeita a barra de gestos do aparelho */
+html,body{overscroll-behavior:none!important}
+.bottom-nav{padding-bottom:calc(6px + var(--erpSafeB,0px))!important}
+.barra-inferior-mobile{padding-bottom:var(--erpSafeB,0px)!important}
+/* ===== mesmo visual do ERP nos dois aplicativos ===== */
+/* barra de baixo escura, como o menu do ERP */
+.bottom-nav,.barra-inferior-mobile{background:linear-gradient(180deg,#1e1e21,#0c0c0d)!important;border-top:0!important;box-shadow:0 -4px 18px rgba(0,0,0,.28)!important}
+.bottom-nav-btn,.barra-item{color:#c9c9cf!important}
+.bottom-nav-btn svg{color:inherit!important}
+.bottom-nav-btn.active,.barra-item.active{color:#ff4d4d!important}
+.barra-item .barra-label{color:inherit!important}
+/* cartões de números escuros com ícone vermelho, como os do Início do ERP */
+.prv-kpi,.hoje-kpi{background:linear-gradient(180deg,#28282c,#141416)!important;border:0!important;border-radius:16px!important;box-shadow:0 8px 22px rgba(0,0,0,.18)!important;color:#fff!important}
+.prv-kpi *,.hoje-kpi *{color:#fff!important}
+.prv-kpi small,.prv-kpi .prv-kpi-sub,.prv-kpi-legenda,.hoje-kpi small,.hoje-kpi span{color:#bdbdc3!important}
+.prv-kpi::before,.prv-kpi::after{display:none!important}
+.prv-kpi-icone{background:linear-gradient(180deg,#ff2b2b,#c2000c)!important;color:#fff!important;border-radius:50%!important}
+/* cartões brancos: mesmos cantos e sombra do ERP */
+.day-box,.painel-block,.week-day,.tech-task,.service-card{border-radius:16px!important;box-shadow:0 8px 26px rgba(20,20,30,.07),0 1px 2px rgba(0,0,0,.04)!important}
+/* abas: a ativa em vermelho */
+.portal-tab.active,.tabs .tab.active{background:linear-gradient(180deg,#ff2828,#c8000c)!important;color:#fff!important;box-shadow:0 4px 12px rgba(220,0,0,.22)!important}
+/* o ERP só tem o modo claro: somem os botões de tema dos aplicativos */
+#botaoTema,#temaToggle,.tema-toggle{display:none!important}
+header{border-bottom-color:#e3e3e8!important}
+/* quem sai é o ERP: sem "Sair" dentro do aplicativo; a marca do Técnico e da Oficina com respiro nas laterais */
+#managerLogoutBtn{display:none!important}
+.portal-header-slim{padding:12px 16px!important}
+@media (max-width:860px){.hoje-kpis{grid-template-columns:1fr 1fr!important}.masthead.erpMarca img{height:44px}}
 /* login único: quem sai é o ERP — some o Bloquear/Face ID do app de Projetos */
 #sidebarDesktopBloquear,#btnBloquear,#btnBloquearFinanceiro,#botaoFaceId{display:none!important}
 /* botão principal = vermelho do ERP */
@@ -3466,6 +3503,21 @@ const FIN_APP = {
     '#appAbas .abasLanc{margin:0;flex-wrap:nowrap}#appAbas .abasLanc button{white-space:nowrap}';
   document.head.appendChild(st);
 })();
+
+/* roda DENTRO do aplicativo, logo que ele abre (telaApp injeta o texto desta função): no app de Projetos, troca o título
+   "PROJETOS EQUIPER" pela marca + "Equiper Projetos", igual ao cabeçalho do app de Serviços */
+window.__erpAppBoot = function(){
+  var n = 0, t = setInterval(function(){
+    var l = document.getElementById('sidebarDesktopLogo'), m = document.querySelector('.masthead');
+    if(++n > 80 || !m) return clearInterval(t);
+    if(!l || !l.getAttribute('src')) return;
+    clearInterval(t);
+    while(m.firstChild) m.removeChild(m.firstChild);
+    var i = document.createElement('img'); i.src = l.src; i.alt = 'Equiper'; m.appendChild(i);
+    var b = document.createElement('b'); b.textContent = 'Equiper Projetos'; m.appendChild(b);
+    m.classList.add('erpMarca');
+  }, 250);
+};
 
 /* ================== Projetos · complementos (script 10) ==================
    Visitas e considerações · ART · Calendário · Comissões · Dimensionamento · Chat */
