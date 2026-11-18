@@ -1,5 +1,7 @@
 <meta charset="UTF-8">
 <style id="pjSubAbas">
+.fp-status.fp-sit-enviado{background:#1d4ed81a;color:#1d4ed8;border-color:#1d4ed855}
+.fp-status.fp-sit-agendado{background:#7c3aed1a;color:#7c3aed;border-color:#7c3aed55}
 .fin-subabas{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 12px}
 .fin-subabas button{border:1px solid var(--border,#d9d9de);background:var(--sheet,#fff);color:inherit;border-radius:999px;padding:8px 16px;font:inherit;font-weight:600;font-size:13px;cursor:pointer}
 .fin-subabas button.ativo{background:#d0151b;border-color:#d0151b;color:#fff}
@@ -1136,6 +1138,19 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
   Ref.prototype.onDisconnect=function(){ return { set:function(){return Promise.resolve();}, remove:function(){return Promise.resolve();}, update:function(){return Promise.resolve();}, cancel:function(){return Promise.resolve();} }; };
   Ref.prototype.toString=function(){ return 'erp://'+this.path; };
   var db = { ref:function(p){ return new Ref(p||''); }, goOnline:function(){}, goOffline:function(){} };
+  /* ERP (script 71): relê uma linha do banco e avisa quem está ouvindo — o ERP chama isto logo depois de alterar um dado do aplicativo
+     (ex.: baixa de parcela pelo A receber), sem depender do tempo real. */
+  window.__ponteRecarregar = async function(caminho){
+    try{
+      if(!sb || pendentes[caminho]) return false;
+      var r = await sb.from(TABELA).select('valor').eq('caminho', caminho).maybeSingle();
+      if(r.error) return false;
+      var novo = r.data ? r.data.valor : null;
+      if(JSON.stringify(ler(caminho)) === JSON.stringify(novo)) return false;
+      var antes = {}; ouvintes.forEach(function(o){ if(o.ev!=='value') antes[o.path]=clone(ler(o.path)); });
+      porNaArvore(caminho, novo); notificar(caminho, antes); return true;
+    }catch(e){ return false; }
+  };
 
   /* ---------- 6. Carga inicial + tempo real ---------- */
   async function carregarTudo(){
@@ -2560,6 +2575,26 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
   }
   async function saveFinanceiro(){ if(financeiroBloqueado){ avisarSalvamentoBloqueado(); return; } try{ await window.storage.set('clm-financeiro', JSON.stringify(state.financeiro), true); salvarClientesEquipe(); }catch(e){ mostrarErroSalvamento('dados financeiros', saveFinanceiro); } }
   var financeiroFoiCarregadoAlgumaVez = false;
+  /* ERP (script 71): o Financeiro de Projetos fica sincronizado com o A receber do Administrativo. Quando a lista muda no banco
+     (alguém deu baixa/marcou cobrança pelo ERP, ou em outro aparelho), esta tela recarrega sozinha — antes ela lia uma vez só e,
+     ao salvar, gravava por cima do que os outros tinham feito. A própria gravação desta tela não dispara nada (o texto é igual). */
+  function erpOuvirFinanceiro(){
+    if(window.__erpOuvFin) return;
+    try{
+      if(!(window.firebase && firebase.__erp)) return;
+      window.__erpOuvFin = true;
+      window.__erpFin = { lista: function(){ return state.financeiro; }, salvar: function(){ return saveFinanceiro(); }, regra: function(rec){ return avaliarAutoCobranca(rec); } };   // leitura para os testes do ERP
+      firebase.database().ref('storage/clm-financeiro').on('value', function(snap){
+        var v = snap && snap.val();
+        if(typeof v !== 'string' || !financeiroFoiCarregadoAlgumaVez || financeiroBloqueado) return;
+        if(v === JSON.stringify(state.financeiro)) return;
+        var nova; try{ nova = JSON.parse(v); }catch(e){ return; }
+        if(!Array.isArray(nova)) return;
+        state.financeiro = nova;
+        try{ renderFinanceiro(); }catch(e){}
+      });
+    }catch(e){}
+  }
   async function carregarFinanceiro(){
     var rs = await lerChaveSegura('clm-financeiro');
     var corrompido = false;
@@ -2579,6 +2614,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
       await saveFinanceiro();
     }
     financeiroFoiCarregadoAlgumaVez = true;
+    erpOuvirFinanceiro();
     var algumaMudanca = false;
     state.financeiro.forEach(function(rec){
       migrarLocalidade(rec);
@@ -7928,8 +7964,8 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     var alvoP2 = todosAnteprojetoOuMais ? 'Cobrar' : 'Aguardar';
     var alvoSaldo = todosProjetoFinal ? 'Cobrar' : 'Aguardar';
 
-    if(p2 && p2.status !== 'Recebido' && p2.status !== alvoP2){ p2.status = alvoP2; if(alvoP2==='Cobrar' && !p2.dataCobranca){ p2.dataCobranca = todayISO(); } mudou = true; }
-    if(saldo && saldo.status !== 'Recebido' && saldo.status !== alvoSaldo){ saldo.status = alvoSaldo; if(alvoSaldo==='Cobrar' && !saldo.dataCobranca){ saldo.dataCobranca = todayISO(); } mudou = true; }
+    if(p2 && p2.status !== 'Recebido' && p2.status !== alvoP2 && !(alvoP2 === 'Aguardar' && p2.manual)){   /* ERP: mudança feita à mão não é desfeita */ p2.status = alvoP2; if(alvoP2==='Cobrar' && !p2.dataCobranca){ p2.dataCobranca = todayISO(); } mudou = true; }
+    if(saldo && saldo.status !== 'Recebido' && saldo.status !== alvoSaldo && !(alvoSaldo === 'Aguardar' && saldo.manual)){ saldo.status = alvoSaldo; if(alvoSaldo==='Cobrar' && !saldo.dataCobranca){ saldo.dataCobranca = todayISO(); } mudou = true; }
 
     return mudou;
   }
@@ -8145,6 +8181,105 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
   }
 
   var colapsadoFinListaGeral = false;
+  /* ===== ERP (18/11, Júlio): parcela de Projetos com o mesmo controle do app de Serviços ===== */
+  var ERP_FORMAS = ['PIX', 'Transferência', 'Boleto', 'Cartão', 'Cheque', 'Dinheiro', 'Misto / parcelado', 'Outro'];
+  var ERP_SIT5 = [['nao_liberado', 'Não liberado'], ['a_cobrar', 'A cobrar'], ['enviado', 'Enviado'], ['agendado', 'Agendado'], ['recebido', 'Recebido']];
+  function erpSit5(p){ if(p.status === 'Recebido') return 'recebido'; if(p.status !== 'Cobrar') return 'nao_liberado'; if(p.dataPrevista) return 'agendado'; if(p.cobrancaEnviada) return 'enviado'; return 'a_cobrar'; }
+  function erpLerValor(t){ var x = String(t == null ? '' : t).trim().replace(/[R$\s]/g, ''); if(x.indexOf(',') !== -1) x = x.replace(/\./g, '').replace(',', '.'); var n = parseFloat(x); return isNaN(n) ? null : Math.round(n * 100) / 100; }
+  function erpValorTxt(v){ return (Math.round((Number(v)||0) * 100) / 100).toFixed(2).replace('.', ','); }
+  function erpDepoisDeMudar(){ saveFinanceiro(); try{ renderFinCalendario(); }catch(e){} try{ renderFinanceiroResumo(); }catch(e){} try{ renderFinRecebido(); }catch(e){} renderFinanceiroLista(); }
+  function erpCampo(rot, html){ return '<label style="display:block;font-size:12px;font-weight:600;margin:8px 0 0;">'+rot+'<div style="margin-top:4px;font-weight:400;">'+html+'</div></label>'; }
+  var ERP_INP = 'style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--sheet);color:inherit;font:inherit;"';
+  function erpJanela(titulo, corpo, okTxt, aoOk){
+    var ant = document.getElementById('erpParcOv'); if(ant) ant.remove();
+    var ov = document.createElement('div'); ov.id = 'erpParcOv';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML = '<div style="background:var(--sheet,#fff);color:var(--ink,#111);border-radius:16px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);">'+
+      '<h3 style="margin:0 0 6px;font-size:16px;">'+titulo+'</h3>'+corpo+'<div id="erpParcErr" style="color:#d0151b;font-size:12.5px;min-height:18px;margin-top:8px;"></div>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;"><button type="button" class="btn secondary" id="erpParcCancel">Cancelar</button><button type="button" class="btn" id="erpParcOk">'+okTxt+'</button></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target === ov || e.target.id === 'erpParcCancel') ov.remove(); });
+    document.getElementById('erpParcOk').onclick = function(){ var r = aoOk(ov); if(typeof r === 'string'){ document.getElementById('erpParcErr').textContent = r; return; } ov.remove(); };
+    return ov;
+  }
+  // Mesma regra do app de Serviços: Recebido e Agendado abrem a janela; sair de Recebido pede confirmação; as outras mudam na hora.
+  function erpMudarSit(rec, p, novo){
+    var antigo = erpSit5(p); if(novo === antigo) return;
+    if(novo === 'recebido') return erpReceber(rec, p);
+    if(novo === 'agendado') return erpAgendar(rec, p);
+    var aplicar = function(){
+      var h = todayISO();
+      if(antigo === 'recebido'){ p.data = p.vencimentoAntes || ''; p.pagoEm = null; }   // o valor fica como está (igual a Serviços): se houve parcial, o restante já virou outra parcela
+      p.manual = true;                                   // mudou à mão: a regra das disciplinas não desfaz (como a parcela "manual" de Serviços)
+      p.dataPrevista = '';
+      if(novo === 'nao_liberado'){ p.status = 'Aguardar'; p.cobrancaEnviada = false; p.dataCobrancaEnviada = ''; p.dataCobranca = ''; }
+      else if(novo === 'a_cobrar'){ p.status = 'Cobrar'; p.dataCobranca = p.dataCobranca || h; p.cobrancaEnviada = false; p.dataCobrancaEnviada = ''; }
+      else { p.status = 'Cobrar'; p.dataCobranca = p.dataCobranca || h; p.cobrancaEnviada = true; p.dataCobrancaEnviada = p.dataCobrancaEnviada || h; }
+      erpDepoisDeMudar();
+    };
+    if(antigo === 'recebido') return erpJanela('Desfazer o recebimento?', '<p style="margin:0;font-size:13.5px;line-height:1.5;">'+escapeHtml(p.nome)+' · <b>'+formatarMoeda(p.valor||0)+'</b>. A data do recebimento será apagada.</p>', 'Desfazer', function(){ aplicar(); });
+    aplicar();
+  }
+  // Agendar: a cobrança foi enviada e o cliente combinou uma data (entra no calendário).
+  function erpAgendar(rec, p){
+    erpJanela('Agendar pagamento — '+escapeHtml(p.nome), '<p style="margin:0;font-size:13px;line-height:1.5;">Valor: <b>'+formatarMoeda(p.valor||0)+'</b>. Informe a data que o cliente combinou para pagar; ela aparece no calendário.</p>'+
+      erpCampo('Data combinada para o pagamento *', '<input type="date" id="erpAgData" value="'+(p.dataPrevista||'')+'" '+ERP_INP+'>')+
+      erpCampo('Forma', '<select id="erpAgForma" '+ERP_INP+'><option value="">—</option>'+ERP_FORMAS.map(function(f){ return '<option'+(f === (p.forma||'') ? ' selected' : '')+'>'+f+'</option>'; }).join('')+'</select>')+
+      erpCampo('Observação', '<input type="text" id="erpAgObs" value="'+escapeHtml(p.obs||'')+'" placeholder="Ex.: combinado por WhatsApp" '+ERP_INP+'>'),
+      'Agendar', function(){
+        var d = document.getElementById('erpAgData').value; if(!d) return 'Informe a data combinada.';
+        var h = todayISO();
+        p.status = 'Cobrar'; p.dataCobranca = p.dataCobranca || h; p.dataPrevista = d; p.cobrancaEnviada = true; p.dataCobrancaEnviada = p.dataCobrancaEnviada || h;
+        p.forma = document.getElementById('erpAgForma').value || null; p.obs = document.getElementById('erpAgObs').value.trim() || null; p.manual = true;
+        erpDepoisDeMudar();
+      });
+  }
+  // Recebimento. Se entrar MENOS que o previsto, o restante pode virar uma nova parcela, ser somado à próxima ou ficar só no saldo.
+  function erpReceber(rec, p){
+    var lista = rec.parcelas || [], idx = lista.indexOf(p), prox = null;
+    for(var k = idx + 1; k < lista.length; k++){ if(lista[k].status !== 'Recebido'){ prox = lista[k]; break; } }
+    var ov = erpJanela('Registrar recebimento — '+escapeHtml(p.nome), '<p style="margin:0;font-size:13px;line-height:1.5;">Valor previsto: <b>'+formatarMoeda(p.valor||0)+'</b>. Se o cliente pagar menos, você escolhe o que fazer com o restante.</p>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px;">'+
+      erpCampo('Data do recebimento *', '<input type="date" id="erpRData" value="'+todayISO()+'" max="'+todayISO()+'" '+ERP_INP+'>')+
+      erpCampo('Valor recebido (R$) *', '<input type="text" id="erpRValor" inputmode="decimal" autocomplete="off" value="'+erpValorTxt(p.valor)+'" '+ERP_INP+'>')+
+      erpCampo('Forma', '<select id="erpRForma" '+ERP_INP+'><option value="">—</option>'+ERP_FORMAS.map(function(f){ return '<option'+(f === (p.forma||'') ? ' selected' : '')+'>'+f+'</option>'; }).join('')+'</select>')+
+      erpCampo('Observação', '<input type="text" id="erpRObs" value="'+escapeHtml(p.obs||'')+'" placeholder="Ex.: comprovante…" '+ERP_INP+'>')+'</div><div id="erpRResto"></div>',
+      'Confirmar recebimento', function(){
+        var v = erpLerValor(document.getElementById('erpRValor').value), data = document.getElementById('erpRData').value;
+        if(v == null || !(v > 0)) return 'Informe o valor recebido.';
+        if(!data) return 'Informe a data do recebimento.';
+        if(data > todayISO()) return 'A data do recebimento não pode ser futura.';
+        var f = Math.round(((Number(p.valor)||0) - v) * 100) / 100, ac = document.getElementById('erpRAcao'), acao = f > 0.004 && ac ? ac.value : null;
+        if(Math.abs(v - (Number(p.valor)||0)) > 0.004){ if(p.valorPrevisto == null) p.valorPrevisto = p.valor; p.valor = v; }
+        p.vencimentoAntes = p.status === 'Recebido' ? (p.vencimentoAntes || '') : (p.data || '');
+        p.status = 'Recebido'; p.data = data; p.pagoEm = data; p.dataPrevista = '';
+        p.forma = document.getElementById('erpRForma').value || null; p.obs = document.getElementById('erpRObs').value.trim() || null;
+        if(acao === 'nova'){
+          var st = document.getElementById('erpRSt').value, h = todayISO();
+          lista.splice(idx + 1, 0, { nome: 'Restante', restanteDe: p.nome, valor: f, data: '', status: st === 'nao_liberado' ? 'Aguardar' : 'Cobrar', dataCobranca: st === 'nao_liberado' ? '' : h,
+            cobrancaEnviada: st === 'enviado', dataCobrancaEnviada: st === 'enviado' ? h : '', dataPrevista: '', manual: true });
+        } else if(acao === 'proxima' && prox){
+          prox.valor = Math.round(((Number(prox.valor)||0) + f) * 100) / 100;
+          prox.obs = [prox.obs, 'inclui '+formatarMoeda(f)+' do restante de '+p.nome].filter(Boolean).join(' · ');
+        }
+        erpDepoisDeMudar();
+      });
+    var parcial = false;
+    var atualizar = function(){
+      var v = erpLerValor(document.getElementById('erpRValor').value), f = (v != null && v > 0) ? Math.round(((Number(p.valor)||0) - v) * 100) / 100 : 0, box = document.getElementById('erpRResto');
+      if(!(f > 0.004)){ box.innerHTML = ''; parcial = false; return; }
+      if(!parcial){ parcial = true;
+        box.innerHTML = '<div style="margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:13px;"><b>Pagamento parcial:</b> faltam <b id="erpRFalta"></b> desta parcela. O que fazer com o restante?'+
+          '<select id="erpRAcao" '+ERP_INP.replace('style="', 'style="margin-top:8px;')+'><option value="nova">Criar uma nova parcela com o restante</option>'+(prox ? '<option value="proxima">Somar na próxima parcela ('+escapeHtml(prox.nome)+')</option>' : '')+'<option value="nada">Não criar parcela agora (o restante fica só no saldo)</option></select>'+
+          '<div id="erpRNova">'+erpCampo('Situação da nova parcela', '<select id="erpRSt" '+ERP_INP+'><option value="a_cobrar">A cobrar</option><option value="enviado">Enviado</option><option value="nao_liberado">Não liberado</option></select>')+'</div></div>'; }
+      document.getElementById('erpRFalta').textContent = formatarMoeda(f);
+    };
+    ov.addEventListener('input', function(e){ if(e.target.id === 'erpRValor') atualizar(); });
+    ov.addEventListener('change', function(e){ if(e.target.id === 'erpRAcao') document.getElementById('erpRNova').style.display = e.target.value === 'nova' ? '' : 'none'; });
+    setTimeout(function(){ var c = document.getElementById('erpRValor'); if(c){ c.focus(); c.select(); } }, 40);
+  }
+  window.__erpParc = { sit: erpSit5, mudar: erpMudarSit };   // leitura para os testes do ERP
+
   function renderFinanceiroLista(){
     var el = document.getElementById('finLista');
     if(!el) return;
@@ -8279,38 +8414,41 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
       var secParcelas = document.createElement('div');
       secParcelas.className = 'fin-secao';
       secParcelas.innerHTML = '<div class="fin-secao-titulo">Parcelas</div>';
+      /* ERP (18/11, Júlio): controle da parcela IGUAL ao do app de Serviços — uma situação só (Não liberado · A cobrar · Enviado ·
+         Agendado · Recebido). "Agendado" pede a data combinada; "Recebido" pede data, valor, forma e o que fazer se veio a menos.
+         Por baixo continuam os campos de sempre (status, cobrancaEnviada, dataPrevista), então etiquetas, calendário e o A receber do ERP não mudam. */
       (rec.parcelas||[]).forEach(function(p, idx){
         var linha = document.createElement('div');
         linha.className = 'fin-parcela';
-        var statusOpts = PARCELA_STATUS_OPCOES.map(function(s){ return '<option value="'+s+'"'+(p.status===s?' selected':'')+'>'+s+'</option>'; }).join('');
+        var sit = erpSit5(p);
+        var opts = ERP_SIT5.map(function(o){ return '<option value="'+o[0]+'"'+(sit===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('');
+        var info = [];
+        if(sit === 'enviado' && p.dataCobrancaEnviada) info.push('enviada em '+fmtDate(p.dataCobrancaEnviada));
+        if(sit === 'agendado') info.push('📅 combinado para '+fmtDate(p.dataPrevista));
+        if(sit === 'recebido' && p.data) info.push('✓ recebido em '+fmtDate(p.data));
+        if(p.forma) info.push(escapeHtml(p.forma));
+        if(p.valorPrevisto != null && Math.abs((p.valorPrevisto||0) - (p.valor||0)) > 0.004) info.push('previsto '+formatarMoeda(p.valorPrevisto));
+        if(p.obs) info.push(escapeHtml(p.obs));
         linha.innerHTML =
           '<div>'+escapeHtml(p.nome)+'</div>'+
           '<input type="number" step="0.01" class="fp-valor" value="'+(p.valor||0)+'" placeholder="Valor">'+
-          '<input type="date" class="fp-data" value="'+(p.data||'')+'">'+
-          '<select class="fp-status fp-status-'+p.status.toLowerCase()+'">'+statusOpts+'</select>'+
-          '<label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;white-space:nowrap;"><input type="checkbox" class="fp-cobranca-enviada" '+(p.cobrancaEnviada?'checked':'')+'> Cobrança enviada</label>'+
-          (p.status === 'Recebido' ? '' :
-            '<label class="fp-prevista-wrap" style="grid-column:1/-1; display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--ink-soft); font-weight:500;">📅 Cliente informou que paga em: <input type="date" class="fp-prevista" value="'+(p.dataPrevista||'')+'" style="width:150px;"> <span style="font-size:10.5px;">(aparece no calendário)</span></label>');
-        var campoPrev = linha.querySelector('.fp-prevista');
-        if(campoPrev) campoPrev.addEventListener('change', function(e){ p.dataPrevista = e.target.value; saveFinanceiro(); renderFinCalendario(); renderFinanceiroLista(); });
+          '<input type="date" class="fp-data" title="'+(sit === 'recebido' ? 'Data do recebimento' : 'Vencimento')+'" value="'+(p.data||'')+'">'+
+          '<select class="fp-status fp-status-'+String(p.status||'aguardar').toLowerCase()+' fp-sit-'+sit+'">'+opts+'</select>'+
+          '<div class="fp-info" style="font-size:11.5px;color:var(--ink-soft);">'+info.join(' · ')+'</div>';
         linha.querySelector('.fp-valor').addEventListener('change', function(e){
-          p.valor = parseFloat(e.target.value)||0;
-          saveFinanceiro(); renderFinanceiroResumo();
-          var faltaP = (rec.valorTotal||0)-recebidoDoCliente(rec);
-          var quitadoP = !!rec.quitadoManual || faltaP<=0.01;
-          header.querySelector('.valores').innerHTML = '<span>Total: '+formatarMoeda(rec.valorTotal||0)+'</span><span class="'+(quitadoP?'ok':'falta')+'">'+(quitadoP?'✓ Quitado':'Falta '+formatarMoeda(faltaP))+'</span>';
+          var v = parseFloat(e.target.value);
+          if(!(v >= 0)){ e.target.value = p.valor||0; return; }
+          p.valor = v;
+          saveFinanceiro(); renderFinanceiroResumo(); renderFinanceiroLista();
         });
-        linha.querySelector('.fp-data').addEventListener('change', function(e){ p.data = e.target.value; saveFinanceiro(); });
+        linha.querySelector('.fp-data').addEventListener('change', function(e){
+          if(sit === 'recebido' && e.target.value > todayISO()){ alert('A data do recebimento não pode ser futura.'); e.target.value = p.data||''; return; }
+          p.data = e.target.value; if(sit === 'recebido') p.pagoEm = p.data;
+          saveFinanceiro(); renderFinanceiroLista();
+        });
         linha.querySelector('.fp-status').addEventListener('change', function(e){
-          p.status = e.target.value;
-          if(p.status === 'Cobrar' && !p.dataCobranca){ p.dataCobranca = todayISO(); }
-          saveFinanceiro(); renderFinanceiroLista();
-        });
-        linha.querySelector('.fp-cobranca-enviada').addEventListener('change', function(e){
-          p.cobrancaEnviada = e.target.checked;
-          if(p.cobrancaEnviada && !p.dataCobrancaEnviada){ p.dataCobrancaEnviada = todayISO(); }
-          if(!p.cobrancaEnviada){ p.dataCobrancaEnviada = ''; }
-          saveFinanceiro(); renderFinanceiroLista();
+          var novo = e.target.value; e.target.value = sit;            // o seletor volta ao que era; a mudança é confirmada abaixo
+          erpMudarSit(rec, p, novo);
         });
         secParcelas.appendChild(linha);
       });
@@ -8609,7 +8747,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     var chave = finRecAno + '-' + pad2(finRecMes+1);
 
     var porCliente = {};
-    var totalSinal = 0, totalSegunda = 0, totalSaldo = 0;
+    var totalSinal = 0, totalSegunda = 0, totalSaldo = 0, totalOutras = 0;
     state.financeiro.forEach(function(rec){
       (rec.parcelas||[]).forEach(function(p){
         if(p.status === 'Recebido' && p.data && p.data.slice(0,7) === chave){
@@ -8619,14 +8757,15 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
           if(p.nome === 'Sinal') totalSinal += (p.valor||0);
           else if(p.nome === '2ª parcela') totalSegunda += (p.valor||0);
           else if(p.nome === 'Saldo') totalSaldo += (p.valor||0);
+          else totalOutras += (p.valor||0);   /* ERP: parcela "Restante" e outras */
         }
       });
     });
 
     var nomes = Object.keys(porCliente).sort(function(a,b){ return a.localeCompare(b,'pt-BR',{sensitivity:'base'}); });
-    var totalGeral = totalSinal + totalSegunda + totalSaldo;
+    var totalGeral = totalSinal + totalSegunda + totalSaldo + totalOutras;
     var html = '<div class="resumo-total">TOTAL LÍQUIDO DO MÊS: '+formatarMoeda(totalGeral)+
-      '<div style="font-weight:400;font-size:11px;margin-top:4px;color:var(--ink-soft);">Sinal: '+formatarMoeda(totalSinal)+' · 2ª parcela: '+formatarMoeda(totalSegunda)+' · Saldo: '+formatarMoeda(totalSaldo)+'</div></div>';
+      '<div style="font-weight:400;font-size:11px;margin-top:4px;color:var(--ink-soft);">Sinal: '+formatarMoeda(totalSinal)+' · 2ª parcela: '+formatarMoeda(totalSegunda)+' · Saldo: '+formatarMoeda(totalSaldo)+(totalOutras ? ' · Outras: '+formatarMoeda(totalOutras) : '')+'</div></div>';
     if(nomes.length === 0){
       html += '<div class="empty-hint">Nenhum pagamento recebido neste mês.</div>';
     } else {

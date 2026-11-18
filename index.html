@@ -6175,12 +6175,30 @@ async function formBoleto(x, depois){
       ${comCliente ? `<td><b>${esc(nomeCli(x))}</b>${x.obra && x.obra !== nomeCli(x) ? '<br><span class="muted" style="font-size:12px">' + esc(x.obra) + '</span>' : ''}</td>` : ''}
       <td>${comCliente ? esc(x.descricao) + ' <span class="tag">' + (ORIG[x.origem] || x.origem) + '</span>' : esc(['projeto', 'pedido'].includes(x.origem) && x.parcela ? x.parcela : x.descricao)}${typeof tagsNotas === 'function' ? tagsNotas(RU.nfs[x.origem === 'pedido' ? x.ref_id : x.id]) : ''}</td>
       <td>${x.empresa || (x.app === 'projetos' ? '<span class="muted">—</span>' : '<span style="color:var(--amar)">definir</span>')}</td><td style="text-align:right;white-space:nowrap">${R$(x.valor)}</td><td>${tagSit(x.situacao)}</td>
-      <td style="white-space:nowrap">${x.app ? `<span class="tag" title="Este título é do ${FONTE[x.app]}: as alterações são feitas no financeiro do aplicativo">${FONTE[x.app]}</span>` : nivelTela('fn_receber') >= 3 ? acoesReceber(x) + (typeof emitirDoReceber === 'function' && x.situacao !== 'nao_liberado' ? `<button class="btn peq" data-emnf="${x.id}" title="Emitir nota fiscal">🧾 Nota</button>` : '') : ''}</td></tr>`; }
+      <td style="white-space:nowrap">${x.app === 'projetos' && nivelTela('fn_receber') >= 3 ? acoesProjApp(x) : ''}${x.app ? `<span class="tag" title="${x.app === 'projetos' ? 'Parcela do app de Projetos: o que for alterado aqui aparece lá, e o que for alterado lá aparece aqui' : 'Este título é do ' + FONTE[x.app] + ': as alterações são feitas no financeiro do aplicativo'}">${FONTE[x.app]}</span>` : nivelTela('fn_receber') >= 3 ? acoesReceber(x) + (typeof emitirDoReceber === 'function' && x.situacao !== 'nao_liberado' ? `<button class="btn peq" data-emnf="${x.id}" title="Emitir nota fiscal">🧾 Nota</button>` : '') : ''}</td></tr>`; }
+  // script 71: a parcela do app de Projetos é alterada daqui, no mesmo lugar que o aplicativo usa (ele recarrega sozinho).
+  // Os efeitos são os mesmos da tela do aplicativo; o que muda à mão não é desfeito pela regra das disciplinas.
+  function acoesProjApp(x){ if(x.situacao === 'recebido') return '';
+    const b = (a, r) => `<button class="btn peq" data-recapp="${esc(x.id)}" data-acao="${a}">${r}</button>`;
+    return (x.situacao === 'nao_liberado' ? b('cobrar', 'Liberar') : '') + (x.situacao === 'a_cobrar' ? b('enviar', 'Cobrança enviada') : '') + (['a_cobrar', 'enviado', 'agendado'].includes(x.situacao) ? b('agendar', 'Data combinada') : '') + b('receber', 'Recebido') + ' '; }
+  function pedeData(titulo, x){ return new Promise(ok => { $('#mTit').textContent = titulo;
+    $('#mTxt').innerHTML = `${esc(nomeCli(x))} · ${esc(x.descricao)} · <b>${R$(x.valor)}</b><input id="mData" type="date" value="${hoje()}" style="margin-top:10px">`;
+    const bt = $('#mBtns'); bt.innerHTML = ''; [['Cancelar', null, ''], ['Confirmar', 1, 'pri']].forEach(([r, v, c]) => { const e = document.createElement('button'); e.className = 'btn ' + c; e.textContent = r;
+      e.onclick = () => { const d = $('#mData').value; $('#modal').classList.add('hidden'); ok(v ? d : null); }; bt.appendChild(e); });
+    $('#modal').classList.remove('hidden'); }); }
+  async function mudarProjApp(x, acao){ let data = null;
+    if(acao === 'receber' || acao === 'agendar'){ data = await pedeData(acao === 'receber' ? 'Recebido em' : 'Pagamento combinado para', x); if(!data) return; }
+    const r = await sb.rpc('receber_app_projeto_mudar', { p_id: x.id, p_acao: acao, p_data: data });
+    if(r.error) return aviso('Não foi possível alterar', esc(erroBanco(r.error)));
+    // o aplicativo de Projetos aberto neste navegador recarrega já (os outros aparelhos recebem pelo tempo real)
+    document.querySelectorAll('#appWrap iframe').forEach(f => { try{ if(f.dataset.app === 'app_projetos' && f.contentWindow.__ponteRecarregar) f.contentWindow.__ponteRecarregar('storage/clm-financeiro'); }catch(e){} });
+    toast('Atualizado no Financeiro de Projetos.'); window.telaReceber(); }
   const tabela = (l, comCliente) => `<div style="overflow:auto"><table class="reg"><thead><tr><th>Data</th>${comCliente ? '<th>Cliente · obra</th>' : ''}<th>Descrição</th><th>Empresa</th><th style="text-align:right">Valor</th><th>Situação</th><th></th></tr></thead><tbody>
       ${l.map(x => linha(x, comCliente)).join('') || `<tr><td colspan="${comCliente ? 7 : 6}" class="vazio">Nada aqui.</td></tr>`}</tbody>
       ${l.length > 1 ? `<tfoot><tr><td colspan="${comCliente ? 4 : 3}" style="text-align:right"><b>Total</b></td><td style="text-align:right"><b>${R$(soma(l))}</b></td><td colspan="2"></td></tr></tfoot>` : ''}</table></div>`;
   function ligaAcoes(){
     document.querySelectorAll('#conteudo [data-rec]').forEach(b => b.onclick = ev => { ev.stopPropagation(); mudarReceber(RU.dados.find(x => x.id === b.dataset.rec), b.dataset.acao); });
+    document.querySelectorAll('#conteudo [data-recapp]').forEach(b => b.onclick = ev => { ev.stopPropagation(); mudarProjApp(RU.dados.find(x => x.id === b.dataset.recapp), b.dataset.acao); });
     document.querySelectorAll('#conteudo [data-emnf]').forEach(b => b.onclick = ev => { ev.stopPropagation(); emitirDoReceber(RU.dados.find(x => x.id === b.dataset.emnf)); });
   }
   const ordData = (a, b) => String(dataDe(a) || '9999').localeCompare(String(dataDe(b) || '9999'));
@@ -6212,7 +6230,8 @@ async function formBoleto(x, depois){
     const tot = { c: soma(cs.map(c => ({ valor: c.contratado }))), r: soma(cs.map(c => ({ valor: c.recebido }))), s: soma(cs.map(c => ({ valor: c.saldo }))) };
     const det = c => { const g = new Map(); for(const x of c.ts){ const k = x.origem + '|' + (x.ref_id || x.id); if(!g.has(k)) g.set(k, []); g.get(k).push(x); }
       return [...g.values()].map(ts => { const x = ts[0], tit = (ORIG[x.origem] || x.origem) + (x.numero ? ' ' + x.numero : '') + (x.obra && x.obra !== c.nome ? ' · ' + x.obra : '');
-        return `<div class="ruGrp">${esc(tit)} <span class="muted" style="font-weight:400">· ${R$(soma(ts))} · recebido ${R$(soma(ts.filter(y => !aberto(y))))}</span></div>${tabela(ts.slice().sort(ordCli), false)}`; }).join(''); };
+        const art = x.art ? (x.art === 'pendente' ? ' <span class="tag" style="background:#b453091a;color:#b45309">ART pendente</span>' : ` <span class="tag" style="background:#1f8a4c1a;color:#1f8a4c">ART ${x.art === 'emitida' ? 'emitida' : esc(x.art)}</span>`) : '';
+        return `<div class="ruGrp">${esc(tit)}${art} <span class="muted" style="font-weight:400">· ${R$(soma(ts))} · recebido ${R$(soma(ts.filter(y => !aberto(y))))}</span></div>${tabela(ts.slice().sort(ordCli), false)}`; }).join(''); };
     return `<div class="kpis ruK" style="margin-bottom:14px"><div class="kpi"><span class="muted">Contratado (${cs.length} cliente${cs.length === 1 ? '' : 's'})</span><b>${R$(tot.c)}</b></div>
         <div class="kpi"><span class="muted">Recebido</span><b style="color:var(--verde)">${R$(tot.r)}</b></div><div class="kpi v"><span class="muted">Saldo a receber</span><b>${R$(tot.s)}</b></div></div>
       <div class="card"><h2>Por cliente <span class="muted" style="font-weight:400">· projetos, pedidos, OS e preventivas de cada um</span></h2>
