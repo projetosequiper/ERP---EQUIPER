@@ -1,4 +1,12 @@
 <meta charset="UTF-8">
+<style id="pjSubAbas">
+.fin-subabas{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 12px}
+.fin-subabas button{border:1px solid var(--border,#d9d9de);background:var(--sheet,#fff);color:inherit;border-radius:999px;padding:8px 16px;font:inherit;font-weight:600;font-size:13px;cursor:pointer}
+.fin-subabas button.ativo{background:#d0151b;border-color:#d0151b;color:#fff}
+.fin-subabas button .n{display:inline-block;min-width:20px;margin-left:7px;padding:0 6px;border-radius:10px;background:rgba(0,0,0,.08);font-size:11px;line-height:18px;text-align:center}
+.fin-subabas button.ativo .n{background:rgba(255,255,255,.25)}
+.tema-escuro .fin-subabas button .n,[data-theme="dark"] .fin-subabas button .n{background:rgba(255,255,255,.14)}
+</style>
 <style id="pjIcones">
 .pj-ico{width:1.15em;height:1.15em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.2em;flex-shrink:0}
 .barra-item .barra-icone .pj-ico{width:24px;height:24px;vertical-align:0}
@@ -1455,11 +1463,13 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
       </div>
       <div class="toolbar" data-topico-fin="clientes">
         <input type="text" id="finBusca" placeholder="Buscar cliente ou localidade" style="min-width:220px" />
-        <select id="finFiltroSel" style="font-size:13px; padding:7px 9px; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--sheet); font-family:inherit;"><option value="">Todos os clientes</option><option value="cobrar">A cobrar (vencidas ou "Cobrar")</option><option value="art">ART pendente</option><option value="aberto">Com valor em aberto</option><option value="quitado">Quitados</option></select>
+        <select id="finFiltroSel" style="font-size:13px; padding:7px 9px; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--sheet); font-family:inherit;"><option value="">Todos os clientes</option><option value="cobrar">A cobrar (vencidas ou "Cobrar")</option><option value="art">ART pendente</option></select>
         <button class="btn small secondary" id="btnIrParaFinal">⬇ Ir para o final</button>
         <button class="btn small" id="btnNovoClienteFin">+ Novo cliente fechado</button>
       </div>
       <div id="finFormPanel" data-topico-fin="clientes"></div>
+      <!-- ERP (18/11, Júlio): subabas do Financeiro — Em aberto × Concluídos (só vai para Concluídos o cliente totalmente quitado) -->
+      <div class="fin-subabas" id="finSubAbas" data-topico-fin="clientes"></div>
       <div class="letra-header" id="lblFinLista" style="cursor:pointer; user-select:none; margin-bottom:8px;" data-topico-fin="clientes">▸ Clientes</div>
       <div id="finLista" style="display:none;" data-topico-fin="clientes"></div>
 
@@ -8140,6 +8150,16 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     if(!el) return;
     el.innerHTML = '';
     var lista = state.financeiro;
+    /* ERP (18/11): subabas. Concluído = totalmente quitado (falta zero, ou marcado "quitado manualmente"), igual à etiqueta "quitado" da lista */
+    var finQuitado = function(r){ return !!r.quitadoManual || ((r.valorTotal||0) - recebidoDoCliente(r)) <= 0.01; };
+    var nConc = lista.filter(finQuitado).length, nAb = lista.length - nConc, sub = document.getElementById('finSubAbas');
+    if(sub){
+      sub.innerHTML = '<button type="button" data-finsub="aberto" class="' + (finSubAba === 'aberto' ? 'ativo' : '') + '">Projetos em aberto<span class="n">' + nAb + '</span></button>' +
+                      '<button type="button" data-finsub="concluidos" class="' + (finSubAba === 'concluidos' ? 'ativo' : '') + '">Concluídos<span class="n">' + nConc + '</span></button>';
+      Array.prototype.forEach.call(sub.querySelectorAll('[data-finsub]'), function(b){ b.onclick = function(){ finSubAba = b.getAttribute('data-finsub'); colapsadoFinListaGeral = false; renderFinanceiroLista(); }; });
+    }
+    lista = lista.filter(function(r){ return finSubAba === 'concluidos' ? finQuitado(r) : !finQuitado(r); });
+    if(finFiltro === 'aberto' || finFiltro === 'quitado') finFiltro = '';
     if(finFiltro){
       lista = lista.filter(function(r){
         var rec2 = recebidoDoCliente(r), quit = !!r.quitadoManual || ((r.valorTotal||0) - rec2) <= 0.01;
@@ -8158,7 +8178,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     var lbl = document.getElementById('lblFinLista');
     var expandidoAgora = buscaFinanceiroTexto ? true : !colapsadoFinListaGeral;
     el.style.display = expandidoAgora ? 'block' : 'none';
-    if(lbl) lbl.textContent = (expandidoAgora ? '▾ ' : '▸ ') + 'Clientes (' + lista.length + ')';
+    if(lbl) lbl.textContent = (expandidoAgora ? '▾ ' : '▸ ') + (finSubAba === 'concluidos' ? 'Concluídos' : 'Em aberto') + ' (' + lista.length + ')';
     if(!expandidoAgora) return;
     if(lista.length){
       var cab = document.createElement('div'); cab.className = 'fin-cab-colunas';
@@ -8183,7 +8203,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     el.appendChild(btnInicio);
   }
 
-  var finAbaCliente = {}, finFiltro = '';
+  var finAbaCliente = {}, finFiltro = '', finSubAba = 'aberto';
   function renderClienteFinanceiroCard(rec){
     var card = document.createElement('div');
     card.className = 'fin-cliente';
