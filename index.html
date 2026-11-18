@@ -1225,7 +1225,7 @@ async function telaVinculos(){
   ]);
   if(c.error || v.error) return aviso('Erro ao carregar', esc(erroBanco(c.error || v.error)));
   const vincs = v.data || [];
-  const alvo = x => x.obra_id ? '🏠 ' + (obra(x.obra_id)?.nome || 'obra') : '👤 ' + (pessoa(x.pessoa_id)?.nome || 'pessoa');
+  const alvo = x => { if(x.obra_id) return '🏠 ' + (obra(x.obra_id)?.nome || 'obra'); const p = pessoa(x.pessoa_id); return '👤 ' + (p ? (p.apelido ? p.apelido + ' — ' : '') + p.nome : 'empresa'); };   // script 72: nome fantasia primeiro
   const linhas = (c.data || []).map(cl => {
     const vs = vincs.filter(x => x.id_app === cl.id_app);
     return { cl, conf: vs.find(x => x.situacao === 'confirmado'), sug: vs.filter(x => x.situacao === 'sugerido') };
@@ -1242,14 +1242,14 @@ async function telaVinculos(){
       <button class="btn pri" id="bTrazerTudo">⤵ Trazer tudo</button><div id="trazerRel" style="margin-top:10px;font-size:13px"></div></div>` : ''}
     <div class="card"><h2>Migração dos apps antigos</h2>
     <div class="chips" style="margin-bottom:10px">${Object.entries(VINC).map(([k,x]) => `<button class="chip ${ST.vincApp===k?'on':''}" data-vapp="${k}">App ${x.nome}</button>`).join('')}</div>
-    <p class="muted" style="margin-top:-4px">Cada cliente do app ${esc(K.nome)} deve apontar para uma <b>obra</b> do cadastro único. O ERP sugere pelo nome; você confirma.</p>
-    <div class="barra"><input type="search" id="busca" placeholder="Buscar cliente do app" value="${esc(ST.busca)}"><button class="btn pri" id="bSugerir">Buscar sugestões</button></div>
+    <p class="muted" style="margin-top:-4px">Cada cliente do app ${esc(K.nome)} aponta para uma <b>empresa do cadastro</b> (vindo do CIGAM) ou para uma <b>obra</b>. O ERP liga sozinho o que é seguro (nº do pedido, nome ou nome fantasia igual) e deixa o resto como sugestão para você confirmar.</p>
+    <div class="barra"><input type="search" id="busca" placeholder="Buscar cliente do app" value="${esc(ST.busca)}"><button class="btn pri" id="bSugerir">Ligar ao cadastro automaticamente</button></div>
     <div class="muted" style="font-size:12px">${linhas.length} cliente(s) no app · ${linhas.filter(l=>l.conf).length} ligado(s) · ${linhas.filter(l=>!l.conf).length} sem ligação</div></div>
     <div class="card"><h2>Sem ligação <span class="tag rasc">${pend.length}</span></h2><div class="lista">${pend.length ? pend.map(l => `<div class="item"><div style="flex:1">
       <div class="nome">${esc(l.cl.cliente)}</div><div class="sub">${K.sub(l.cl).filter(Boolean).map(esc).join(' · ')}</div>
       ${l.sug.map(s => `<div class="sub" style="margin-top:6px">Sugestão: <b>${esc(alvo(s))}</b> <span class="tag">${Math.round((s.confianca||0)*100)}% parecido</span>
         <button class="btn peq pri" data-conf="${s.id}">Confirmar</button> <button class="btn peq" data-rej="${s.id}">Não é</button></div>`).join('')}
-      <div class="barra" style="margin:8px 0 0"><select data-ob="${esc(l.cl.id_app)}" style="max-width:340px"><option value="">Ligar a uma obra…</option>${opObras}</select>
+      <div class="barra" style="margin:8px 0 0"><button class="btn peq pri" data-emp="${esc(l.cl.id_app)}">Ligar a uma empresa do cadastro…</button><select data-ob="${esc(l.cl.id_app)}" style="max-width:340px"><option value="">Ligar a uma obra…</option>${opObras}</select>
         <button class="btn peq" data-nova="${esc(l.cl.id_app)}">Criar obra com este cliente</button></div>
       </div></div>`).join('') : '<div class="vazio">Todos os clientes do app estão ligados. ✔</div>'}</div></div>
     <div class="card"><h2>Ligados <span class="tag ok">${feitos.length}</span></h2><div class="lista">${feitos.length ? feitos.map(l => `<div class="item"><div>
@@ -1269,10 +1269,20 @@ async function telaVinculos(){
   };
   document.querySelectorAll('[data-vapp]').forEach(x => x.onclick = () => { ST.vincApp = x.dataset.vapp; ST.busca = ''; telaVinculos(); });
   const b = $('#busca'); b.oninput = () => { ST.busca = b.value; clearTimeout(b._t); b._t = setTimeout(async () => { await telaVinculos(); const n=$('#busca'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); }, 300); };
-  $('#bSugerir').onclick = async () => { const r = await sb.rpc(K.rpc, { p_minimo: 0.45 }); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); toast(r.data + ' sugestão(ões) nova(s).'); telaVinculos(); };
-  document.querySelectorAll('[data-conf]').forEach(x => x.onclick = async () => { try{ await exec(sb.from('vinculos_apps').update({ situacao:'confirmado' }).eq('id', x.dataset.conf), 'Ligado.'); telaVinculos(); }catch(e){} });
-  document.querySelectorAll('[data-rej]').forEach(x => x.onclick = async () => { try{ await exec(sb.from('vinculos_apps').update({ situacao:'rejeitado' }).eq('id', x.dataset.rej), 'Sugestão descartada.'); telaVinculos(); }catch(e){} });
-  document.querySelectorAll('[data-desf]').forEach(x => x.onclick = async () => { if(!await modal('Desfazer ligação?', 'O cliente volta para "sem ligação". Nada é apagado do app nem do cadastro.', [['Cancelar',false],['Desfazer',true,'verm']])) return; try{ await exec(sb.from('vinculos_apps').update({ situacao:'rejeitado' }).eq('id', x.dataset.desf), 'Ligação desfeita.'); telaVinculos(); }catch(e){} });
+  // script 72: liga ao cadastro do CIGAM (nº do pedido, nome, nome fantasia); sem o script, as sugestões antigas por nome
+  $('#bSugerir').onclick = async () => { toast('Ligando… pode levar um minuto.'); let r = await sb.rpc('vincular_clientes_apps');
+    if(r.error && /vincular_clientes_apps/.test(r.error.message || '')){ r = await sb.rpc(K.rpc, { p_minimo: 0.45 }); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); toast(r.data + ' sugestão(ões) nova(s).'); return telaVinculos(); }
+    if(r.error) return aviso('Erro', esc(erroBanco(r.error)));
+    const a = (r.data.por_app || {})[ST.vincApp] || {}; await aviso('Ligação com o cadastro', `App ${esc(K.nome)}: <b>${a.confirmados || 0}</b> ligado(s), <b>${a.sugeridos || 0}</b> com sugestão para conferir, <b>${a.sem_ligacao || 0}</b> sem correspondência.`); telaVinculos(); };
+  document.querySelectorAll('[data-emp]').forEach(bt => bt.onclick = () => { const cl = (c.data||[]).find(x => x.id_app === bt.dataset.emp); let pid = '';
+    $('#mTit').textContent = 'Ligar "' + (cl?.cliente || '') + '" a uma empresa'; $('#mTxt').innerHTML = '<p class="muted" style="margin:0 0 8px">Procure pela razão social, pelo nome fantasia ou pelo código do CIGAM.</p><div id="vincPk"></div>';
+    const bs = $('#mBtns'); bs.innerHTML = ''; [['Cancelar', 0, ''], ['Ligar', 1, 'pri']].forEach(([r, v, k]) => { const e = document.createElement('button'); e.className = 'btn ' + k; e.textContent = r;
+      e.onclick = async () => { if(v && !pid) return toast('Escolha a empresa.'); $('#modal').classList.add('hidden'); if(!v) return;
+        try{ await exec(sb.from('vinculos_apps').insert({ app: ST.vincApp, colecao: K.colecao, id_app: cl.id_app, nome_no_app: cl.cliente, pessoa_id: pid, situacao: 'confirmado', motivo: 'ligado manualmente', conferido_por: ST.eu.id }), 'Ligado.'); telaVinculos(); }catch(e){} }; bs.appendChild(e); });
+    $('#modal').classList.remove('hidden'); pickEmpresa($('#vincPk'), '', id => { pid = id; }, { papel: 'cliente', rotulo: 'cliente' }); });
+  document.querySelectorAll('[data-conf]').forEach(x => x.onclick = async () => { try{ await exec(sb.from('vinculos_apps').update({ situacao:'confirmado', conferido_por: ST.eu.id }).eq('id', x.dataset.conf), 'Ligado.'); telaVinculos(); }catch(e){} });
+  document.querySelectorAll('[data-rej]').forEach(x => x.onclick = async () => { try{ await exec(sb.from('vinculos_apps').update({ situacao:'rejeitado', conferido_por: ST.eu.id }).eq('id', x.dataset.rej), 'Sugestão descartada.'); telaVinculos(); }catch(e){} });
+  document.querySelectorAll('[data-desf]').forEach(x => x.onclick = async () => { if(!await modal('Desfazer ligação?', 'O cliente volta para "sem ligação". Nada é apagado do app nem do cadastro.', [['Cancelar',false],['Desfazer',true,'verm']])) return; try{ await exec(sb.from('vinculos_apps').update({ situacao:'rejeitado', conferido_por: ST.eu.id }).eq('id', x.dataset.desf), 'Ligação desfeita.'); telaVinculos(); }catch(e){} });
   const ligar = async (idApp, obraId) => {
     const cl = (c.data||[]).find(x => x.id_app === idApp);
     await exec(sb.from('vinculos_apps').insert({ app:ST.vincApp, colecao:K.colecao, id_app:idApp, nome_no_app:cl?.cliente, obra_id:obraId, situacao:'confirmado', motivo:'ligado manualmente' }), 'Ligado.');
