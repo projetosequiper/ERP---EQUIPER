@@ -6138,9 +6138,16 @@ async function formBoleto(x, depois){
   const cobravel = x => ['a_cobrar', 'enviado', 'agendado'].includes(x.situacao);
   const dataDe = x => x.agendado_para || x.vencimento || null;         // quando se espera receber
   const soma = l => l.reduce((s, x) => s + Number(x.valor || 0), 0);
-  const nomeCli = x => x.cliente || x.obra || 'Sem cliente';
+  /* script 72: cada título tem o seu cliente do cadastro (do ERP pelo pagador; dos aplicativos pela ligação). O cartão junta tudo
+     o que é da mesma empresa — ERP, Projetos e Serviços — e mostra o NOME FANTASIA, que é como a equipe conhece o cliente;
+     a razão social fica embaixo. Sem ligação, vale o nome que está no aplicativo. */
+  const pesDe = x => { const id = x.pessoa_id || x.pagador_id; return id ? (ST.pessoas || []).find(p => p.id === id) : null; };
+  const chaveCli = x => x.pessoa_id || x.pagador_id || ('n:' + norm(x.cliente || x.obra || 'Sem cliente'));
+  const nomeCli = x => { const p = pesDe(x); return (p && (p.apelido || '').trim()) || x.fantasia || (p && p.nome) || x.cliente_cadastro || x.cliente || x.obra || 'Sem cliente'; };
+  const razaoCli = x => { const p = pesDe(x); return (p && p.nome) || x.cliente_cadastro || ''; };
+  const nomesCli = x => [nomeCli(x), razaoCli(x), x.cliente, x.fantasia, x.cliente_cadastro, x.obra].filter(Boolean).join(' ');
   const filtrados = () => { const f = ST.rec, b = norm(ST.busca || '');
-    return RU.dados.filter(x => (!f.fonte || (f.fonte === 'erp' ? !x.app : f.fonte === 'apps' ? !!x.app : x.app === f.fonte)) && (!f.emp || (f.emp === '-' ? !x.empresa : x.empresa === f.emp)) && (!f.orig || x.origem === f.orig) && (!b || norm(nomeCli(x) + ' ' + (x.obra || '') + ' ' + x.descricao + ' ' + (x.numero || '')).includes(b))); };
+    return RU.dados.filter(x => (!f.fonte || (f.fonte === 'erp' ? !x.app : f.fonte === 'apps' ? !!x.app : x.app === f.fonte)) && (!f.emp || (f.emp === '-' ? !x.empresa : x.empresa === f.emp)) && (!f.orig || x.origem === f.orig) && (!b || norm(nomesCli(x) + ' ' + x.descricao + ' ' + (x.numero || '')).includes(b))); };
 
   const ALERTAS = [
     ['combinada', '#d0151b', 'Data combinada já passou', 'o cliente combinou pagar e a data venceu', (x, h) => x.situacao === 'agendado' && x.agendado_para && x.agendado_para < h],
@@ -6152,7 +6159,8 @@ async function formBoleto(x, depois){
     ['semana', '#1d4ed8', 'Previsto nos próximos 7 dias', 'para acompanhar', (x, h) => cobravel(x) && dataDe(x) > h && dataDe(x) <= mais(h, 7)],
     ['semdata', '#6e6e73', 'Liberados sem data', 'sem vencimento e sem data combinada: ficam fora da previsão', x => cobravel(x) && !dataDe(x)],
     ['semempresa', '#6e6e73', 'Sem empresa definida', 'falta dizer se é EQP ou Equiper', x => aberto(x) && !x.empresa && x.app !== 'projetos'],
-    ['semcliente', '#6e6e73', 'Sem cliente (quem paga)', 'a obra não tem quem paga cadastrado', x => aberto(x) && !x.cliente]
+    ['semcliente', '#6e6e73', 'Sem cliente (quem paga)', 'a obra não tem quem paga cadastrado', x => aberto(x) && !x.app && !x.cliente],
+    ['semligacao', '#6e6e73', 'Cliente do aplicativo sem ligação com o cadastro', 'ligue em Administração → Vínculos para juntar com o cadastro do CIGAM', x => aberto(x) && x.app && !x.pessoa_id]
   ];
 
   function abasHtml(){ const h = hoje(), n = filtrados().filter(x => ALERTAS.slice(0, 5).some(a => a[4](x, h))).length;
@@ -6172,7 +6180,7 @@ async function formBoleto(x, depois){
   // uma parcela/título, igual em todas as abas
   function linha(x, comCliente){ const h = hoje(), venc = cobravel(x) && dataDe(x) && dataDe(x) < h;
     return `<tr><td style="white-space:nowrap;${venc ? 'color:var(--verm);font-weight:600' : ''}">${x.situacao === 'recebido' ? '✓ ' + dataBR(x.recebido_em) : x.agendado_para ? '📅 ' + dataBR(x.agendado_para) : dataBR(x.vencimento) || '<span class="muted">sem data</span>'}</td>
-      ${comCliente ? `<td><b>${esc(nomeCli(x))}</b>${x.obra && x.obra !== nomeCli(x) ? '<br><span class="muted" style="font-size:12px">' + esc(x.obra) + '</span>' : ''}</td>` : ''}
+      ${comCliente ? `<td><b>${esc(nomeCli(x))}</b>${[razaoCli(x), x.obra].filter(v => v && norm(v) !== norm(nomeCli(x))).slice(0, 1).map(v => '<br><span class="muted" style="font-size:12px">' + esc(v) + '</span>').join('')}</td>` : ''}
       <td>${comCliente ? esc(x.descricao) + ' <span class="tag">' + (ORIG[x.origem] || x.origem) + '</span>' : esc(['projeto', 'pedido'].includes(x.origem) && x.parcela ? x.parcela : x.descricao)}${typeof tagsNotas === 'function' ? tagsNotas(RU.nfs[x.origem === 'pedido' ? x.ref_id : x.id]) : ''}</td>
       <td>${x.empresa || (x.app === 'projetos' ? '<span class="muted">—</span>' : '<span style="color:var(--amar)">definir</span>')}</td><td style="text-align:right;white-space:nowrap">${R$(x.valor)}</td><td>${tagSit(x.situacao)}</td>
       <td style="white-space:nowrap">${x.app === 'projetos' && nivelTela('fn_receber') >= 3 ? acoesProjApp(x) : ''}${x.app ? `<span class="tag" title="${x.app === 'projetos' ? 'Parcela do app de Projetos: o que for alterado aqui aparece lá, e o que for alterado lá aparece aqui' : 'Este título é do ' + FONTE[x.app] + ': as alterações são feitas no financeiro do aplicativo'}">${FONTE[x.app]}</span>` : nivelTela('fn_receber') >= 3 ? acoesReceber(x) + (typeof emitirDoReceber === 'function' && x.situacao !== 'nao_liberado' ? `<button class="btn peq" data-emnf="${x.id}" title="Emitir nota fiscal">🧾 Nota</button>` : '') : ''}</td></tr>`; }
@@ -6222,9 +6230,10 @@ async function formBoleto(x, depois){
 
   /* ---------- Por cliente ---------- */
   function abaClientes(){ const l = filtrados(), f = ST.rec, h = hoje(), mapa = new Map();
-    for(const x of l){ const k = nomeCli(x); if(!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(x); }
-    let cs = [...mapa.entries()].map(([nome, ts]) => { const ab = ts.filter(aberto), prox = ab.filter(x => dataDe(x)).sort(ordData)[0];
-      return { nome, ts, contratado: soma(ts), recebido: soma(ts.filter(x => !aberto(x))), saldo: soma(ab), cobrar: ab.filter(x => x.situacao === 'a_cobrar').length, venc: ab.some(x => cobravel(x) && dataDe(x) && dataDe(x) < h), prox, emps: [...new Set(ts.map(x => x.empresa).filter(Boolean))] }; });
+    for(const x of l){ const k = chaveCli(x); if(!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(x); }
+    let cs = [...mapa.entries()].map(([chave, ts]) => { const ab = ts.filter(aberto), prox = ab.filter(x => dataDe(x)).sort(ordData)[0], nome = nomeCli(ts[0]), razao = razaoCli(ts[0]);
+      const nosApps = [...new Set(ts.filter(x => x.app && x.cliente && norm(x.cliente) !== norm(nome)).map(x => x.cliente))];
+      return { chave, nome, razao, nosApps, semLig: ts.some(x => x.app && !x.pessoa_id), ts, contratado: soma(ts), recebido: soma(ts.filter(x => !aberto(x))), saldo: soma(ab), cobrar: ab.filter(x => x.situacao === 'a_cobrar').length, venc: ab.some(x => cobravel(x) && dataDe(x) && dataDe(x) < h), prox, emps: [...new Set(ts.map(x => x.empresa).filter(Boolean))] }; });
     const fs = { saldo: c => c.saldo > 0.004, cobrar: c => c.cobrar > 0, vencidos: c => c.venc, quitados: c => c.saldo <= 0.004, todos: () => true };
     cs = cs.filter(fs[f.cliSit] || fs.saldo).sort((a, b) => (b.venc - a.venc) || (b.cobrar > 0) - (a.cobrar > 0) || a.nome.localeCompare(b.nome, 'pt'));
     const tot = { c: soma(cs.map(c => ({ valor: c.contratado }))), r: soma(cs.map(c => ({ valor: c.recebido }))), s: soma(cs.map(c => ({ valor: c.saldo }))) };
@@ -6236,9 +6245,11 @@ async function formBoleto(x, depois){
         <div class="kpi"><span class="muted">Recebido</span><b style="color:var(--verde)">${R$(tot.r)}</b></div><div class="kpi v"><span class="muted">Saldo a receber</span><b>${R$(tot.s)}</b></div></div>
       <div class="card"><h2>Por cliente <span class="muted" style="font-weight:400">· projetos, pedidos, OS e preventivas de cada um</span></h2>
       ${filtrosHtml(`<select id="ruCliSit" style="max-width:200px">${[['saldo', 'Com saldo a receber'], ['cobrar', 'Com parcela a cobrar'], ['vencidos', 'Com atraso'], ['quitados', 'Quitados'], ['todos', 'Todos']].map(([k, r]) => `<option value="${k}" ${f.cliSit === k ? 'selected' : ''}>${r}</option>`).join('')}</select>`)}
-      ${cs.slice(0, 200).map(c => { const pct = c.contratado > 0 ? Math.round(c.recebido / c.contratado * 100) : 0, ab = f.cliAberto === c.nome;
-        return `<div class="ruCli"><div class="ruCliCab" data-rucli="${esc(c.nome)}">
-          <div class="nm">${esc(c.nome)} ${c.emps.map(e => `<span class="tag">${e}</span>`).join('')}${c.cobrar ? `<span class="tag" style="background:#d0151b1a;color:#d0151b">${c.cobrar} a cobrar</span>` : ''}${c.venc ? '<span class="tag" style="background:#d0151b;color:#fff">atraso</span>' : ''}
+      ${cs.slice(0, 200).map(c => { const pct = c.contratado > 0 ? Math.round(c.recebido / c.contratado * 100) : 0, ab = f.cliAberto === c.chave;
+        const sub = [c.razao && norm(c.razao) !== norm(c.nome) ? c.razao : '', c.nosApps.length ? 'nos aplicativos: ' + c.nosApps.slice(0, 3).join(' · ') : ''].filter(Boolean).join(' — ');
+        return `<div class="ruCli"><div class="ruCliCab" data-rucli="${esc(c.chave)}">
+          <div class="nm">${esc(c.nome)} ${c.semLig ? '<span class="tag" title="Cliente do aplicativo ainda sem ligação com o cadastro (Administração → Vínculos)">sem ligação</span>' : ''}${c.emps.map(e => `<span class="tag">${e}</span>`).join('')}${c.cobrar ? `<span class="tag" style="background:#d0151b1a;color:#d0151b">${c.cobrar} a cobrar</span>` : ''}${c.venc ? '<span class="tag" style="background:#d0151b;color:#fff">atraso</span>' : ''}
+            ${sub ? `<div class="muted" style="font-weight:400;font-size:12px;white-space:normal">${esc(sub)}</div>` : ''}
             <div class="ruBarra"><i style="width:${pct}%"></i></div></div>
           <div class="v"><small>Contratado</small>${R$(c.contratado)}</div><div class="v"><small>Recebido · ${pct}%</small><span style="color:var(--verde)">${R$(c.recebido)}</span></div>
           <div class="v"><small>Saldo</small><b>${c.saldo > 0.004 ? R$(c.saldo) : '<span class="tag" style="background:#1f8a4c1a;color:#1f8a4c">quitado</span>'}</b></div>
