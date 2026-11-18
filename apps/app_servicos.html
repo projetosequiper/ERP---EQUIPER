@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <script>/* PONTE-ERP */
-window.__ponteCfg={tabela:'app_servicos_nos',prefixo:'ERPTESTE-SERV::',nome:'app Equiper Serviços',profundidade:function(ps){ var dois={services:1,servicesMedia:1,clients:1,manuaisArquivos:1,orcamentosAnexos:1,obraInstalacao:1,authUsers:1,usersPrivado:1,preventivoUnidades:1,preventivoRascunhos:1,preventivoFotos:1,preventivoRelatorios:1,galleryPhotos:1,estoqueMovimentacoes:1,maintenanceContracts:1,oficina:1,oficinaEquipamentos:1,extraContacts:1,financeiro:1}; return dois[ps[0]] ? 2 : 1; }};
+window.__ponteCfg={sobDemanda:true,tabela:'app_servicos_nos',prefixo:'ERPTESTE-SERV::',nome:'app Equiper Serviços',profundidade:function(ps){ var dois={services:1,servicesMedia:1,clients:1,manuaisArquivos:1,orcamentosAnexos:1,obraInstalacao:1,authUsers:1,usersPrivado:1,preventivoUnidades:1,preventivoRascunhos:1,preventivoFotos:1,preventivoRelatorios:1,galleryPhotos:1,estoqueMovimentacoes:1,maintenanceContracts:1,oficina:1,oficinaEquipamentos:1,extraContacts:1,financeiro:1}; return dois[ps[0]] ? 2 : 1; }};
 /* =====================================================================
    PONTE ERP — cópia do app de Projetos rodando dentro do ERP Equiper
    · O "Firebase" do app é substituído por uma ponte para o banco do ERP
@@ -53,6 +53,57 @@ window.__ponteCfg={tabela:'app_servicos_nos',prefixo:'ERPTESTE-SERV::',nome:'app
   /* ---------- 4. Árvore em memória + gravação no ERP ---------- */
   var raiz = {}, ouvintes = [], pronto, prontoOk;
   pronto = new Promise(function(ok){ prontoOk = ok; });
+  /* (18/11) Desempenho — leitura SOB DEMANDA (CFG.sobDemanda): o app não baixa mais o banco inteiro ao abrir.
+     Cada parte ("nó": services, clients, estoque…) é buscada na primeira vez que uma tela pede; nos nós grandes guardados
+     em 2 níveis (fotos de um serviço, relatório de uma preventiva…) dá para buscar só a linha pedida. Pedidos feitos no
+     mesmo instante vão juntos numa consulta só. Gravar numa parte também espera ela chegar. Depois de carregada, a parte
+     fica na memória e segue atualizada pelo tempo real. */
+  var SOB = !!CFG.sobDemanda, noCarga = {}, noOk = {}, linCarga = {}, linOk = {}, tudoCarga = null, filaNo = [], filaLin = [], filaT = null, frescos = {};
+  function noDe(p){ return String(p||'').split('/').filter(Boolean)[0] || ''; }
+  function asp(v){ return '"' + String(v).split('"').join('').split(String.fromCharCode(92)).join('') + '"'; }
+  function aplicarLinha(l){ if(!pendentes[l.caminho] && !frescos[l.caminho]) porNaArvore(l.caminho, l.valor); }
+  function erroLer(e){ console.error(e); faixa('ERP TESTE · erro ao ler o banco do ERP: '+((e&&e.message)||e), '#d0151b'); }
+  // lê um grupo de linhas: a primeira página sozinha; se vier cheia, as seguintes de 3 em 3 ao mesmo tempo
+  async function grupo(filtro, aplicar){
+    var passo=1000;
+    function pag(de){ return filtro(sb.from(TABELA).select('caminho,valor').order('caminho')).range(de, de+passo-1); }
+    var r = await pag(0); if(r.error) throw r.error; (r.data||[]).forEach(aplicar);
+    if(!r.data || r.data.length<passo) return;
+    for(var de=passo;;de+=passo*3){
+      var rs = await Promise.all([pag(de), pag(de+passo), pag(de+passo*2)]), fim=false;
+      rs.forEach(function(x){ if(x.error) throw x.error; (x.data||[]).forEach(aplicar); if(!x.data || x.data.length<passo) fim=true; });
+      if(fim) break;
+    }
+  }
+  function despacha(){
+    filaT = null; var nos = filaNo, lins = filaLin; filaNo = []; filaLin = []; frescos = {};
+    if(!sb){ nos.concat(lins).forEach(function(x){ x.ok(); }); return; }
+    var conds = [];
+    nos.forEach(function(x){ conds.push('caminho.eq.'+asp(x.k)); conds.push('caminho.like.'+asp(x.k+'/*')); });
+    lins.forEach(function(x){ conds.push('caminho.eq.'+asp(x.k)); });
+    // consultas com muitos pedidos são divididas (endereço não pode ficar enorme)
+    var lotes = []; for(var i=0;i<conds.length;i+=40) lotes.push(conds.slice(i,i+40));
+    Promise.all(lotes.map(function(c){ return grupo(function(q){ return q.or(c.join(',')); }, aplicarLinha); })).catch(erroLer).then(function(){
+      nos.forEach(function(x){ noOk[x.k] = true; x.ok(); }); lins.forEach(function(x){ linOk[x.k] = true; x.ok(); });
+    });
+  }
+  function pede(fila, mapa, k){ if(!mapa[k]) mapa[k] = new Promise(function(ok){ fila.push({k:k, ok:ok}); if(!filaT) filaT = setTimeout(despacha, 0); }); return mapa[k]; }
+  function carregaTudoMesmo(){ if(!tudoCarga) tudoCarga = (sb ? grupo(function(q){ return q; }, aplicarLinha).catch(erroLer) : Promise.resolve()).then(function(){ tudoCarga.feito = true; }); return tudoCarga; }
+  function temNaMemoria(caminho){ if(!SOB || (tudoCarga && tudoCarga.feito)) return true; var k = noDe(caminho); return !!(noOk[k] || noCarga[k] || linOk[caminho] || linCarga[caminho]); }
+  function carregaCaminho(p){
+    if(!SOB) return Promise.resolve();
+    var k = noDe(p); if(!k) return carregaTudoMesmo();                       // a raiz inteira (raro)
+    if(tudoCarga) return tudoCarga; if(noCarga[k]) return noCarga[k];
+    var lin = linhaDe(p);
+    if(lin && lin !== k) return pede(filaLin, linCarga, lin);                // só a linha (ex.: servicesMedia/<serviço>)
+    return pede(filaNo, noCarga, k);                                         // o nó inteiro
+  }
+  function quando(p, chaves){
+    return pronto.then(function(){
+      if(!chaves) return carregaCaminho(p);
+      return Promise.all(chaves.map(function(k){ return carregaCaminho((p ? p + '/' : '') + k); }));
+    });
+  }
   function partes(p){ return String(p||'').split('/').filter(Boolean); }
   function clone(v){ return v===undefined||v===null ? null : JSON.parse(JSON.stringify(v)); }
   function ler(p){ var n=raiz, ps=partes(p); for(var i=0;i<ps.length;i++){ if(n==null||typeof n!=='object') return null; n=n[ps[i]]; } return n===undefined?null:n; }
@@ -162,12 +213,12 @@ window.__ponteCfg={tabela:'app_servicos_nos',prefixo:'ERPTESTE-SERV::',nome:'app
   Ref.prototype.get=function(){ return this.once('value'); };
   Ref.prototype.once=function(ev,cb){ var self=this;
     if(self.path==='.info/connected'){ var s0=new Snap(self.path,true); if(cb) cb(s0); return Promise.resolve(s0); }
-    return pronto.then(function(){ var s=snapQ(self.path,self._q); if(cb) cb(s); return s; });
+    return quando(self.path).then(function(){ var s=snapQ(self.path,self._q); if(cb) cb(s); return s; });
   };
   Ref.prototype.on=function(ev,fn){ var self=this;
     if(self.path==='.info/connected'){ setTimeout(function(){ fn(new Snap(self.path,true)); },0); return fn; }
     ouvintes.push({path:self.path, ev:ev, fn:fn, q:self._q});
-    pronto.then(function(){
+    quando(self.path).then(function(){
       if(!ouvintes.some(function(o){ return o.fn===fn && o.path===self.path; })) return;
       if(ev==='value') fn(snapQ(self.path,self._q));
       if(ev==='child_added') snapQ(self.path,self._q).forEach(function(c){ fn(c); });
@@ -175,8 +226,8 @@ window.__ponteCfg={tabela:'app_servicos_nos',prefixo:'ERPTESTE-SERV::',nome:'app
     return fn;
   };
   Ref.prototype.off=function(ev,fn){ var self=this; ouvintes=ouvintes.filter(function(o){ return !(o.path===self.path && (!ev||o.ev===ev) && (!fn||o.fn===fn)); }); };
-  Ref.prototype.set=function(v){ var p=this.path; return pronto.then(function(){ mudar(p,function(){ porNaArvore(p, resolveSV(clone(v))); }); }); };
-  Ref.prototype.update=function(obj){ var p=this.path; return pronto.then(function(){
+  Ref.prototype.set=function(v){ var p=this.path; return quando(p).then(function(){ mudar(p,function(){ porNaArvore(p, resolveSV(clone(v))); }); }); };
+  Ref.prototype.update=function(obj){ var p=this.path; return quando(p, p ? null : Object.keys(obj||{})).then(function(){
     var ks=Object.keys(obj||{});
     var antes={}; ouvintes.forEach(function(o){ if(o.ev!=='value') antes[o.path]=clone(ler(o.path)); });
     var linhas=[];
@@ -186,9 +237,9 @@ window.__ponteCfg={tabela:'app_servicos_nos',prefixo:'ERPTESTE-SERV::',nome:'app
     linhas.forEach(marcar);
     if(ks.length===1) notificar((p?p+'/':'')+ks[0], antes); else notificar(p, antes);
   }); };
-  Ref.prototype.remove=function(){ var p=this.path; return pronto.then(function(){ mudar(p,function(){ porNaArvore(p,null); }); }); };
+  Ref.prototype.remove=function(){ var p=this.path; return quando(p).then(function(){ mudar(p,function(){ porNaArvore(p,null); }); }); };
   Ref.prototype.push=function(v){ var r=this.child(novaChave()); var pr = v===undefined ? Promise.resolve(r) : r.set(v).then(function(){ return r; }); r.then=pr.then.bind(pr); r.catch=pr.catch.bind(pr); return r; };
-  Ref.prototype.transaction=function(fn){ var p=this.path; return pronto.then(function(){
+  Ref.prototype.transaction=function(fn){ var p=this.path; return quando(p).then(function(){
     var atual=clone(ler(p)), novo=fn(atual);
     if(novo===undefined) return { committed:false, snapshot:new Snap(p,atual) };
     mudar(p,function(){ porNaArvore(p, resolveSV(clone(novo))); });
@@ -201,17 +252,13 @@ window.__ponteCfg={tabela:'app_servicos_nos',prefixo:'ERPTESTE-SERV::',nome:'app
   /* ---------- 6. Carga inicial + tempo real ---------- */
   async function carregarTudo(){
     if(!sb){ faixa('ERP TESTE · sem conexão com o banco do ERP', '#d0151b'); prontoOk(); return; }
-    var de=0, passo=1000;
-    for(;;){
-      var r = await sb.from(TABELA).select('caminho,valor').order('caminho').range(de, de+passo-1);
-      if(r.error){ console.error(r.error); faixa('ERP TESTE · erro ao ler o banco do ERP: '+r.error.message, '#d0151b'); break; }
-      (r.data||[]).forEach(function(l){ porNaArvore(l.caminho, l.valor); });
-      if(!r.data || r.data.length<passo) break; de+=passo;
-    }
+    if(!SOB){ try{ await grupo(function(q){ return q; }, function(l){ porNaArvore(l.caminho, l.valor); }); }catch(e){ erroLer(e); } }
     prontoOk();
     try{
       sb.channel('ch-'+TABELA).on('postgres_changes', { event:'*', schema:'public', table:TABELA }, function(m){
         var k = (m.new && m.new.caminho) || (m.old && m.old.caminho); if(!k || pendentes[k]) return;
+        if(!temNaMemoria(k)) return;          // parte que este aparelho ainda não pediu: quando pedir, já vem atualizada
+        frescos[k] = true;                    // mudou enquanto uma busca estava a caminho: vale o tempo real
         var novo = m.eventType==='DELETE' ? null : m.new.valor;
         if(JSON.stringify(ler(k))===JSON.stringify(novo)) return;
         var antes = {}; ouvintes.forEach(function(o){ if(o.ev!=='value') antes[o.path]=clone(ler(o.path)); });

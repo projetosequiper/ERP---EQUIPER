@@ -668,7 +668,7 @@ $('#fLogin').onsubmit = async e => {
 };
 $('#btnMenu').onclick = () => $('#menu').classList.toggle('aberto');
 $('#btnVoltar').onclick = voltar;
-$('#btnInicio').onclick = async () => { fecharPainel(); if(ST.aba === 'inicio') return; ST.aba = 'inicio'; ST.busca = ''; await carregar(); desenhar(); };
+$('#btnInicio').onclick = async () => { fecharPainel(); if(ST.aba === 'inicio') return; ST.aba = 'inicio'; ST.busca = ''; await carregarSeVelho(); desenhar(); };
 document.addEventListener('keydown', e => { if(e.altKey && e.key === 'ArrowLeft' && ST.eu){ e.preventDefault(); voltar(); } });
 document.addEventListener('mouseup', e => { if(e.button === 3 && ST.eu){ e.preventDefault(); voltar(); } });
 
@@ -685,20 +685,30 @@ async function iniciar(){
   // primeiro acesso: entra pelo pré-cadastro ou fica aguardando a diretoria (script 35)
   const ent = await sb.rpc('acesso_entrar', { p_nome: (user.user_metadata || {}).nome || null });
   const sit = ent.error ? null : (ent.data || {}).situacao;
-  const { data:u } = await sb.from('usuarios').select('*').eq('id', user.id).maybeSingle();
+  // (18/11) o cadastro da pessoa e os acessos dela vêm juntos (antes era um depois do outro)
+  const [{ data:u }, ma] = await Promise.all([sb.from('usuarios').select('*').eq('id', user.id).maybeSingle(), sb.rpc('meus_acessos')]);
   const venc = u && u.ativo && u.acesso_ate && u.acesso_ate < hojeISO();   // script 60: acesso com validade
   if(!u || !u.ativo || venc){ $('#login').classList.remove('hidden'); $('#app').classList.add('hidden');
     $('#lErro').textContent = venc ? 'Seu acesso ao ERP venceu em ' + dataBR(u.acesso_ate) + '. Fale com a diretoria.' : sit === 'aguardando' ? 'Conta criada! Agora a diretoria precisa liberar o seu acesso. Tente entrar de novo depois.'
       : sit === 'desativado' ? 'Seu acesso ao ERP está desativado. Fale com a diretoria.' : 'Seu login existe, mas você ainda não foi cadastrado no ERP. Peça à diretoria.';
     await sb.auth.signOut(); return; }
   ST.eu = u;
-  const ma = await sb.rpc('meus_acessos'); ST.acessos = ma.error ? null : ma.data;
+  ST.acessos = ma.error ? null : ma.data;
   window.__erpEu = { nome: u.nome, perfil: u.perfil, email: user.email };   // login único nos apps
   montaTopo();
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
-  await Promise.all([carregar(), carregaFavoritos(), typeof carregaLayoutMenu === 'function' ? carregaLayoutMenu() : 0]);
+  await Promise.all([carregaFavoritos(), typeof carregaLayoutMenu === 'function' ? carregaLayoutMenu() : 0]);
+  /* (18/11) Desempenho: os cadastros (milhares de empresas e obras) só seguram a abertura para quem cai direto no Administrativo.
+     Na tela de escolha da base eles vêm por trás; quem não tem o Administrativo (técnicos) nem baixa — só a própria ficha, para a foto. */
+  let disp = ['adm'], alvo = 'adm';
+  try{ if(typeof setoresDisponiveis === 'function'){ disp = setoresDisponiveis(); let g = null; try{ g = sessionStorage.getItem('erp-setor'); }catch(e){}
+    alvo = g && disp.includes(g) ? g : disp.length === 1 ? disp[0] : null; } }catch(e){}
+  const vaiApp = alvo && typeof SETORES !== 'undefined' && SETORES[alvo] && SETORES[alvo].app;
+  if(alvo && !vaiApp) await carregar();
+  else if(disp.includes('adm') || !disp.length) carregar().catch(() => {});
+  else if(u.pessoa_id) sb.from('pessoas_leve').select('*').eq('id', u.pessoa_id).then(r => { if(r.data && r.data.length && !ST.pessoas.length){ ST.pessoas = r.data; if(typeof avatarEu === 'function') avatarEu(); } });
   lembrarTelaLiga(); const volta = lembrarTelaLe();
-  desenhar(); atualizaSino(); lembrarTelaVolta(volta);
+  desenhar(); setTimeout(atualizaSino, 1500); lembrarTelaVolta(volta);
 }
 
 /* ================== F5 volta para o mesmo lugar ==================
@@ -727,8 +737,31 @@ async function lembrarTelaVolta(volta){
 
 /* ================== Dados ================== */
 // o Supabase entrega no máximo 1.000 linhas por vez: busca em páginas
-async function tudo(f){ const out = []; for(let i = 0; ; i += 1000){ const r = await f().range(i, i + 999); if(r.error) return r; out.push(...(r.data || [])); if(!r.data || r.data.length < 1000) break; } return { data: out, error: null }; }
+// (18/11) a primeira página vai sozinha; se vier cheia, as seguintes vão de 4 em 4 ao mesmo tempo (antes era uma por vez)
+async function tudo(f){
+  const r0 = await f().range(0, 999); if(r0.error) return r0; const out = [...(r0.data || [])]; if(out.length < 1000) return { data: out, error: null };
+  for(let i = 1000; ; i += 4000){
+    const rs = await Promise.all([0, 1, 2, 3].map(k => f().range(i + k * 1000, i + k * 1000 + 999)));
+    for(const r of rs){ if(r.error) return r; out.push(...(r.data || [])); }
+    if(rs.some(r => !r.data || r.data.length < 1000)) break;
+  }
+  return { data: out, error: null };
+}
+/* (18/11) Desempenho: os cadastros (empresas, obras, contatos) ficam na memória. Navegar pelo menu NÃO baixa tudo de novo:
+   usa o que já tem e, se estiver com mais de 2 minutos, atualiza por trás sem travar a tela (carregarSeVelho).
+   Depois de salvar, as telas continuam chamando carregar(), que sempre busca de novo. */
+let _cargaP = null, _cargaEm = 0;
 async function carregar(){
+  if(_cargaP){ try{ await _cargaP; }catch(e){} }
+  _cargaP = _carregar0().finally(() => { _cargaP = null; _cargaEm = Date.now(); });
+  return _cargaP;
+}
+function carregarSeVelho(ms = 120000){
+  if(!_cargaEm) return _cargaP || carregar();                 // primeira vez: espera
+  if(!_cargaP && Date.now() - _cargaEm > ms) carregar().catch(() => {});   // velho: atualiza por trás
+  return Promise.resolve();
+}
+async function _carregar0(){
   const [p,o,c,pg,f] = await Promise.all([
     tudo(() => sb.from(ST._pesTab || 'pessoas_leve').select('*').order('nome').order('id')).then(r => r.error && !ST._pesTab ? (ST._pesTab = 'pessoas', tudo(() => sb.from('pessoas').select('*').order('nome').order('id'))) : r),   // lista leve (sem foto/observações); a ficha completa vem ao abrir
     tudo(() => sb.from('obras').select('*').order('nome').order('id')),
@@ -779,7 +812,7 @@ function desenhar(){
     `<button data-aba="${k}" class="${ST.aba===k?'ativo':''}${fch && ST.aba!==k?' hidden':''}">${IC[k] ? ico(k) : `<span class="ic">${ic}</span>`}<span>${r}</span>${k==='fila'&&ST.fila.length?`<span class="cont">${ST.fila.length}</span>`:''}${fase&&!TELAS[k]?'<span class="breve">em breve</span>':''}</button>`).join(''); }).join('');
   $('#menu').querySelectorAll('[data-grupo]').forEach(a => a.onclick = () => { const g = a.dataset.grupo, l = menuAbertos(); const i = l.indexOf(g); if(i >= 0) l.splice(i, 1); else l.push(g);
     try{ localStorage.setItem('erp-menu-abertos', JSON.stringify(l)); }catch(e){} desenhaSoMenu(); });
-  $('#menu').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ ST.aba=b.dataset.aba; ST.busca=''; $('#menu').classList.remove('aberto'); if(!ehTelaApp(ST.aba)) await carregar(); desenhar(); });
+  $('#menu').querySelectorAll('button').forEach(b=>b.onclick=async()=>{ ST.aba=b.dataset.aba; ST.busca=''; $('#menu').classList.remove('aberto'); if(!ehTelaApp(ST.aba)) await carregarSeVelho(); desenhar(); });
   document.documentElement.style.setProperty('--topo', document.querySelector('header').getBoundingClientRect().height + 'px');
   const item = todos.find(i => i[0] === ST.aba);
   if(item && item[4] && !TELAS[item[0]]){ $('#conteudo').classList.remove('hidden'); $('#appWrap').classList.add('hidden'); document.querySelector('footer').classList.remove('hidden'); return telaConstrucao(item); }
@@ -1121,8 +1154,11 @@ async function telaApp(arquivo, titulo, modo, abas){
   const w = $('#appWrap');
   if(modo === undefined) modo = arquivo === 'app_servicos' ? (window.__erpPerfilApp || 'manager') : 'projetos';
   const chave = arquivo + '|' + modo, acha = () => [...w.querySelectorAll('iframe')].find(f => f.dataset.chave === chave);
-  // o mesmo aplicativo em outra parte (ex.: saiu do Gestor e abriu o Financeiro): abre de novo
-  w.querySelectorAll('iframe').forEach(f => { if(f.dataset.app === arquivo && f.dataset.chave !== chave) f.remove(); });
+  // (18/11) o mesmo aplicativo em outra parte (ex.: Gestor ↔ Técnico ↔ Oficina): as duas usadas por último ficam abertas por trás
+  // (voltar é na hora, sem carregar tudo de novo); a mais antiga além disso é fechada para não pesar no aparelho
+  { const outras = [...w.querySelectorAll('iframe')].filter(f => f.dataset.app === arquivo && f.dataset.chave !== chave).sort((a, b) => (+b.dataset.uso || 0) - (+a.dataset.uso || 0));
+    outras.slice(1).forEach(f => f.remove()); }
+  if(acha()) acha().dataset.uso = Date.now();
   w.querySelectorAll('iframe').forEach(f => f.classList.toggle('hidden', f.dataset.chave !== chave));
   appAbas(abas || null, chave, arquivo);
   if(abas && !abas.length){ appCapa(false); return; }
@@ -1130,8 +1166,8 @@ async function telaApp(arquivo, titulo, modo, abas){
   if(!acha()){
     // script 61: o ERP liga a pessoa ao usuário do app sozinho (sem cadastro nem login dentro do app)
     const liga = { app_servicos: 'app_servicos_entrar', app_projetos: 'app_projetos_entrar' }[arquivo];
-    if(liga){ try{ await sb.rpc(liga); }catch(e){} }
-    let html = await window.__erpArquivo(arquivo);
+    const [, html0] = await Promise.all([liga ? Promise.resolve(sb.rpc(liga)).catch(() => {}) : 0, window.__erpArquivo(arquivo)]);   // (18/11) os dois ao mesmo tempo
+    let html = html0;
     if(!html){ appCapa(false); toast(titulo + ': não foi possível carregar (confira a internet).'); return; }
     if(acha()) return;
     // um script logo no começo do <head> diz ao aplicativo em que parte abrir e põe o visual do ERP (mod/07_setores.js)
@@ -1142,7 +1178,7 @@ async function telaApp(arquivo, titulo, modo, abas){
           'document.documentElement.style.setProperty("--erpSafeB","' + appSafeB() + 'px");(' + String(window.__erpAppBoot || function(){}) + ')();' +
           'var s=document.createElement("style");s.id="erpTema";s.textContent=' + css + ';document.head.appendChild(s);});<\/script>';
       html = html.slice(0, m.index + m[0].length) + sc + html.slice(m.index + m[0].length); }
-    const f = document.createElement('iframe'); f.title = titulo; f.dataset.app = arquivo; f.dataset.perfil = modo; f.dataset.chave = chave; f.srcdoc = html; w.appendChild(f);
+    const f = document.createElement('iframe'); f.title = titulo; f.dataset.app = arquivo; f.dataset.perfil = modo; f.dataset.chave = chave; f.dataset.uso = Date.now(); f.srcdoc = html; w.appendChild(f);
     appEspera(f, arquivo, chave);
   }
   if(abas) appAbaVai(arquivo, chave);
@@ -1896,7 +1932,7 @@ function montaTopo(){
   $('#btnChat').innerHTML = ico('chat') + '<span class="badge hidden" id="chatN"></span>';
   $('#btnChat').classList.toggle('hidden', nivelTela('chat') < 1);
   ajustaFundoTopo(); setTimeout(ajustaFundoTopo, 300);
-  $('#btnChat').onclick = async () => { fecharPainel(); if(ST.aba === 'chat') return; ST.aba = 'chat'; ST.busca = ''; await carregar(); desenhar(); };
+  $('#btnChat').onclick = async () => { fecharPainel(); if(ST.aba === 'chat') return; ST.aba = 'chat'; ST.busca = ''; await carregarSeVelho(); desenhar(); };
   if(typeof montaCalc === 'function') montaCalc();
   if(typeof montaBusca === 'function') montaBusca();
   $('#uNome').textContent = 'Olá, ' + (ST.eu.nome || '');
@@ -1991,7 +2027,7 @@ function abrirDrop(btn, html){
     if(k === 'sair'){ await sb.auth.signOut(); location.reload(); return; }
     if(k === 'foto') return trocarMinhaFoto();
     if(k === 'instalar') return instalarApp();
-    ST.aba = k; ST.busca = ''; await carregar(); desenhar(); if(b.dataset.orc && typeof abrirPropostaOnline === 'function') abrirPropostaOnline(b.dataset.orc); });
+    ST.aba = k; ST.busca = ''; await carregarSeVelho(); desenhar(); if(b.dataset.orc && typeof abrirPropostaOnline === 'function') abrirPropostaOnline(b.dataset.orc); });
 }
 /* ---- avisos já vistos: o número do sino conta só os novos (script 45; sem ele, guarda neste aparelho) ---- */
 const chaveAviso = a => (a.aba + '|' + String(a.txt || '').replace(/<[^>]+>/g, '')).slice(0, 400);
@@ -2025,6 +2061,8 @@ function marcaChatN(n){ const e = $('#chatN'); if(!e) return; e.textContent = n 
 async function atualizaChatBtn(){ if(ST.eu && nivelTela('chat') >= 1) marcaChatN(await contaChatNaoLidas()); }
 async function atualizaSino(){
   if(!ST.eu) return;
+  // (18/11) dentro de um aplicativo (Serviços, Projetos, Técnico, Oficina) ou na escolha da base o sino não aparece: não gasta ~25 consultas ao banco
+  if(typeof setorEmApp === 'function' && (setorEmApp() || ST._escolhendo)) return;
   const p = ST.eu.perfil, l = LETRA[p], hoje = hojeISO(), itens = [], jobs = [];
   if(ST.fila.length && l !== 'T') itens.push({ ord:1, aba:'fila', ic:'fila', txt:`<b>${ST.fila.length}</b> cadastro(s) esperando aprovação` });
   if(nivelTela('chat') >= 1) jobs.push(contaChatNaoLidas().then(n => { marcaChatN(n); if(n) itens.push({ ord:2, aba:'chat', ic:'chat', txt:`<b>${n}</b> mensagem(ns) não lida(s) no chat` }); }));
@@ -2850,7 +2888,7 @@ function abreBusca(){
 function fechaBusca(){ const o = $('#buscaG'); if(o) o.classList.add('hidden'); }
 function marcaSel(){ document.querySelectorAll('#bgRes [data-bi]').forEach(e => e.classList.toggle('sel', +e.dataset.bi === BUSCA.sel)); const s = document.querySelector('#bgRes .sel'); if(s) s.scrollIntoView({ block: 'nearest' }); }
 async function escolheBusca(i){ const it = BUSCA.itens[i]; if(!it) return; fechaBusca(); try{ await it.abrir(); }catch(e){ console.error(e); } }
-async function vaiParaTela(aba, busca){ fecharPainel(); ST.aba = aba; ST.busca = busca || ''; if(aba !== 'projetos' && aba !== 'servicos') await carregar(); desenhar(); }
+async function vaiParaTela(aba, busca){ fecharPainel(); ST.aba = aba; ST.busca = busca || ''; if(aba !== 'projetos' && aba !== 'servicos') await carregarSeVelho(); desenhar(); }
 
 async function pesquisaGeral(texto){
   const q = texto.trim(), seq = ++BUSCA.seq, alvo = $('#bgRes');
@@ -3353,8 +3391,10 @@ function setorUnico(){ const l = setoresDisponiveis(); return l.length === 1 ? l
 
 function mudaSetor(k, semDesenhar){
   ST.setor = k; ST._escolhendo = false; try{ sessionStorage.setItem('erp-setor', k); }catch(e){}
-  if(typeof atualizaSino === 'function') setTimeout(atualizaSino, 0);      // os avisos seguem a área
-  perfilAppDoSetor(k); marcaSetorTopo(); if(!semDesenhar){ fecharPainel(); ST.aba = abaDoSetor(k); ST.busca = ''; desenhar(); }
+  if(typeof atualizaSino === 'function') setTimeout(atualizaSino, 1200);   // os avisos seguem a área (depois que a tela abriu; dentro dos aplicativos nem roda)
+  perfilAppDoSetor(k); marcaSetorTopo();
+  if(!semDesenhar){ fecharPainel(); ST.aba = abaDoSetor(k); ST.busca = '';
+    if(ehTelaApp(ST.aba)) desenhar(); else carregarSeVelho().then(() => desenhar()); }   // os cadastros só são baixados para quem entra no Administrativo
 }
 function marcaSetorTopo(){
   let b = $('#btnSetor'); const disp = setoresDisponiveis();
@@ -11036,7 +11076,7 @@ function atualizaVoltar(){ const b = $('#btnVoltar'); if(b) b.disabled = !((ST.h
 async function voltar(){
   if(!$('#painel').classList.contains('hidden')){ pedirFecharPainel(); return; }
   const h = ST.hist || []; if(!h.length) return;
-  ST._voltando = true; ST.aba = h.pop(); ST.busca = ''; if(!ehTelaApp(ST.aba)) await carregar(); desenhar();
+  ST._voltando = true; ST.aba = h.pop(); ST.busca = ''; if(!ehTelaApp(ST.aba)) await carregarSeVelho(); desenhar();
 }
 /* Painel lateral (formulários). Se a pessoa já digitou/mudou algo e ainda não salvou, clicar fora, Esc, "Fechar" ou Voltar
    perguntam antes de fechar — nada se perde por um clique sem querer. Salvar continua fechando direto. */

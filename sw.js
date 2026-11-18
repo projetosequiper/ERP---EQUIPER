@@ -2,7 +2,7 @@
    A tela abre com a versão já guardada no aparelho e, ao mesmo tempo, baixa a versão nova por trás;
    se mudou, avisa a tela ("versão nova — aperte F5"). As cópias dos apps (apps/…) só são baixadas quando alguém abre.
    Os dados (Supabase) NUNCA ficam guardados: sempre vêm do servidor, com o login de quem está usando. */
-const VERSAO = 'erp-2026-11-18-2';
+const VERSAO = 'erp-2026-11-18-3';
 const APP = ['./', './index.html', './manifest.webmanifest', './icones/icon-192.png', './icones/icon-512.png', './icones/apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSAO).then(c => c.addAll(APP)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSAO).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -27,6 +27,16 @@ self.addEventListener('fetch', e => {
       if(guardada){ e.waitUntil(rede.catch(() => {})); return guardada; }
       return rede.catch(() => caches.match('./index.html'));
     }));
+    return;
+  }
+  // (18/11) os aplicativos (apps/…, 1 a 3,5 MB cada) abrem do guardado na hora; a versão nova vem por trás e vale na próxima abertura.
+  // Ao publicar aplicativo novo, trocar a VERSAO acima: a guardada antiga é apagada e todos pegam a nova.
+  if(/\/apps\/[^/]+\.html$/.test(u.pathname)){
+    e.respondWith(caches.open(VERSAO).then(c => c.match(e.request).then(guardado => {
+      const rede = fetch(e.request).then(r => { if(r.ok) c.put(e.request, r.clone()); return r; });
+      if(guardado){ e.waitUntil(rede.catch(() => {})); return guardado; }
+      return rede;
+    })));
     return;
   }
   // demais arquivos do app (apps/…, ícones, proposta): da internet primeiro; sem internet, o guardado
