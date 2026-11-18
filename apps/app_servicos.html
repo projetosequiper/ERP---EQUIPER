@@ -17297,8 +17297,9 @@ function erpAplicarAbas(){
   if(!(window.__erpSSO && window.__erpSSO())) return;
   const mostra = (id, ok) => { const b = document.getElementById(id); if(b) b.style.display = ok ? '' : 'none'; };
   for(const [k, t] of Object.entries(ERP_SV_ABAS)){ const ok = erpVe(t, true); mostra('sidebarBtn' + k, ok); mostra('bottomNavBtn' + k, ok); }
+  const ag = erpVe('app_sv_g_agenda', true); mostra('openLembreteBtn', ag); mostra('openAddBtn', ag);   /* agendar e lembrete são da Agenda do gerenciador */
   for(const [k, t] of Object.entries(ERP_SV_FIN)){ const ok = erpVe(t, true); mostra('finNav' + k, ok); mostra('finBn' + k, ok); }
-  ['appSidebar', 'finSidebar'].forEach(id => { const a = document.getElementById(id); if(!a || a.offsetParent === null) return;
+  ['appSidebar', 'finSidebar'].forEach(id => { const a = document.getElementById(id), v = a && a.closest('#managerView,#financeiroView'); if(!a || !v || getComputedStyle(v).display === 'none') return;   /* no celular o menu lateral fica escondido: vale a tela (gerenciador/financeiro) aberta */
     const at = a.querySelector('.sidebar-nav-btn.active'); if(at && at.style.display === 'none'){ const p = [...a.querySelectorAll('.sidebar-nav-btn')].find(b => b.style.display !== 'none'); if(p) p.click(); } });
 }
 setInterval(erpAplicarAbas, 1000);
