@@ -3368,8 +3368,9 @@ function escolherSetor(inicial){
     ${logo ? `<img class="stLogo" src="${logo.src}" alt="Equiper">` : ''}
     <div class="stCab"><h2>Olá, ${esc(primeiroNome(ST.eu.nome))}!</h2><p>${inicial ? 'Escolha onde você vai trabalhar agora' : 'Trocar de área'}</p></div>
     <div class="stGrade">${disp.map(k => `<button class="stCartao${ST.setor === k && !inicial ? ' ativo' : ''}" data-st="${k}">${ico(SETORES[k].ic)}<b>${SETORES[k].nome}</b><small>${SETORES[k].txt}</small></button>`).join('')}</div>
-    <div class="stRodape">${inicial ? '' : '<button class="btn" id="stFechar">Continuar onde estava</button>'}<button class="btn" id="stSair">Sair do sistema</button></div>
-    <div class="stTema" role="group" aria-label="Tema">${[['claro', '☀️ Claro'], ['escuro', '🌙 Escuro']].map(([k, r]) => `<button type="button" class="${temaErp() === k ? 'ativo' : ''}" data-tema="${k}">${r}</button>`).join('')}</div></div>`;
+    ${inicial ? '' : '<div class="stRodape"><button class="btn" id="stFechar">Continuar onde estava</button></div>'}</div>
+    <div class="stTopo"><div class="stTema" role="group" aria-label="Tema">${[['claro', '☀️', 'Tema claro'], ['escuro', '🌙', 'Tema escuro']].map(([k, r, t]) => `<button type="button" class="${temaErp() === k ? 'ativo' : ''}" data-tema="${k}" title="${t}" aria-label="${t}">${r}</button>`).join('')}</div>
+      <button type="button" class="stSair" id="stSair" title="Sair do sistema" aria-label="Sair do sistema"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg>Sair</button></div>`;
   d.classList.remove('hidden'); corFundoTela();
   d.querySelectorAll('[data-st]').forEach(c => c.onclick = () => { d.classList.add('hidden'); mudaSetor(c.dataset.st); });
   if($('#stFechar')) $('#stFechar').onclick = () => { d.classList.add('hidden'); corFundoTela(); };
@@ -3396,14 +3397,19 @@ function escolherSetor(inicial){
   // altura do aplicativo = altura real da tela (--appH, medida em appAltura): no iPhone com o ERP instalado, "encostar embaixo" para antes do fim
   '#appWrap{bottom:auto!important;height:calc(var(--appH,100vh) - var(--topo,64px))}' +
   // tela das bases: cheia e opaca (nada do ERP aparece por trás)
-  '#setorTela{background:#ececf0!important;align-items:flex-start!important;bottom:auto!important;height:var(--appH,100vh)}' +
+  '#setorTela{background:#ececf0!important;align-items:flex-start!important;bottom:auto!important;height:var(--appH,100vh);padding-top:calc(env(safe-area-inset-top,0px) + 70px)!important}' +
+  // barra do topo da tela das áreas: tema (só os ícones) à esquerda, Sair (vermelho) à direita, abaixo do notch do iPhone
+  '.stTopo{position:absolute;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 12px) calc(env(safe-area-inset-right,0px) + 16px) 0 calc(env(safe-area-inset-left,0px) + 16px);display:flex;align-items:center;justify-content:space-between;pointer-events:none}' +
+  '.stTopo>*{pointer-events:auto}' +
+  '.stSair{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:12px;padding:9px 14px;font:inherit;font-weight:700;font-size:14px;color:#fff;cursor:pointer;background:linear-gradient(180deg,#ff2828,#c8000c);box-shadow:0 4px 12px rgba(220,0,0,.25)}' +
+  '.stSair svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}' +
   '#setorTela .stCaixa{margin:auto}.stLogo{height:44px;margin-bottom:22px}#setorTela .stCab h2{color:#111;font-size:24px;margin:0 0 6px}#setorTela .stCab p{color:#6e6e73;margin:0 0 22px}' +
   '.stRodape{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}' +
   // tema claro / escuro (escolhido nesta tela; vale aqui e nos aplicativos de Serviços e Projetos)
-  '.stTema{display:inline-flex;gap:2px;background:#dcdce2;border-radius:12px;padding:3px;margin-top:18px}.stTema button{border:0;background:transparent;border-radius:9px;padding:8px 16px;font:inherit;font-weight:600;color:#3a3a3c;cursor:pointer}' +
-  '.stTema button.ativo{background:#fff;color:#d0151b;box-shadow:0 1px 3px rgba(0,0,0,.14)}' +
+  '.stTema{display:inline-flex;gap:2px;background:#fff;border:1px solid #e3e3e8;border-radius:12px;padding:3px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.stTema button{border:0;background:transparent;border-radius:9px;width:40px;height:34px;font-size:17px;line-height:1;cursor:pointer;opacity:.55}' +
+  '.stTema button.ativo{background:#ececf0;opacity:1;box-shadow:inset 0 0 0 1px #dcdce2}' +
   'body.temaEscuro #setorTela{background:linear-gradient(180deg,#232326 0,#131315 60%,#0c0c0d 100%)!important}body.temaEscuro #setorTela .stCab h2{color:#fff}body.temaEscuro #setorTela .stCab p{color:#bdbdc3}' +
-  'body.temaEscuro .stRodape .btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:#fff}body.temaEscuro .stTema{background:rgba(255,255,255,.12)}body.temaEscuro .stTema button{color:#d6d6dc}body.temaEscuro .stTema button.ativo{background:#fff;color:#d0151b}' +
+  'body.temaEscuro .stRodape .btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:#fff}body.temaEscuro .stTema{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16)}body.temaEscuro .stTema button.ativo{background:rgba(255,255,255,.18);box-shadow:none}' +
   // tela de espera do aplicativo
   '#appWrap{position:fixed}#appCapa{position:absolute;inset:0;z-index:3;background:var(--fundo);display:flex;align-items:center;justify-content:center}' +
   '.appCapaCx{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--texto2)}.appCapaCx b{color:var(--preto);font-size:17px}' +
