@@ -3367,11 +3367,14 @@ function escolherSetor(inicial){
     ${logo ? `<img class="stLogo" src="${logo.src}" alt="Equiper">` : ''}
     <div class="stCab"><h2>Olá, ${esc(primeiroNome(ST.eu.nome))}!</h2><p>${inicial ? 'Escolha onde você vai trabalhar agora' : 'Trocar de área'}</p></div>
     <div class="stGrade">${disp.map(k => `<button class="stCartao${ST.setor === k && !inicial ? ' ativo' : ''}" data-st="${k}">${ico(SETORES[k].ic)}<b>${SETORES[k].nome}</b><small>${SETORES[k].txt}</small></button>`).join('')}</div>
-    <div class="stRodape">${inicial ? '' : '<button class="btn" id="stFechar">Continuar onde estava</button>'}<button class="btn" id="stSair">Sair do sistema</button></div></div>`;
+    <div class="stRodape">${inicial ? '' : '<button class="btn" id="stFechar">Continuar onde estava</button>'}<button class="btn" id="stSair">Sair do sistema</button></div>
+    <div class="stTema" role="group" aria-label="Tema">${[['claro', '☀️ Claro'], ['escuro', '🌙 Escuro']].map(([k, r]) => `<button type="button" class="${temaErp() === k ? 'ativo' : ''}" data-tema="${k}">${r}</button>`).join('')}</div></div>`;
   d.classList.remove('hidden');
   d.querySelectorAll('[data-st]').forEach(c => c.onclick = () => { d.classList.add('hidden'); mudaSetor(c.dataset.st); });
   if($('#stFechar')) $('#stFechar').onclick = () => d.classList.add('hidden');
   $('#stSair').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+  d.querySelectorAll('[data-tema]').forEach(b => b.onclick = () => { try{ localStorage.setItem('erp-tema', b.dataset.tema); }catch(e){} aplicaTema();
+    d.querySelectorAll('[data-tema]').forEach(x => x.classList.toggle('ativo', x === b)); });
 }
 // ao sair do ERP o setor é esquecido (o próximo login escolhe de novo)
 (function(){ const s0 = sb.auth.signOut.bind(sb.auth); sb.auth.signOut = (...a) => { try{ sessionStorage.removeItem('erp-setor'); }catch(e){} ST.setor = undefined; const d = $('#setorTela'); if(d) d.classList.add('hidden'); return s0(...a); }; })();
@@ -3392,9 +3395,14 @@ function escolherSetor(inicial){
   // altura do aplicativo = altura real da tela (--appH, medida em appAltura): no iPhone com o ERP instalado, "encostar embaixo" para antes do fim
   '#appWrap{bottom:auto!important;height:calc(var(--appH,100vh) - var(--topo,64px))}' +
   // tela das bases: cheia e opaca (nada do ERP aparece por trás)
-  '#setorTela{background:linear-gradient(180deg,#232326 0,#131315 60%,#0c0c0d 100%)!important;align-items:flex-start!important}' +
-  '#setorTela .stCaixa{margin:auto}.stLogo{height:44px;margin-bottom:22px}#setorTela .stCab h2{color:#fff;font-size:24px;margin:0 0 6px}#setorTela .stCab p{color:#bdbdc3;margin:0 0 22px}' +
-  '.stRodape{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}.stRodape .btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:#fff}.stRodape .btn:hover{background:rgba(255,255,255,.16)}' +
+  '#setorTela{background:#ececf0!important;align-items:flex-start!important;bottom:auto!important;height:var(--appH,100vh)}' +
+  '#setorTela .stCaixa{margin:auto}.stLogo{height:44px;margin-bottom:22px}#setorTela .stCab h2{color:#111;font-size:24px;margin:0 0 6px}#setorTela .stCab p{color:#6e6e73;margin:0 0 22px}' +
+  '.stRodape{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}' +
+  // tema claro / escuro (escolhido nesta tela; vale aqui e nos aplicativos de Serviços e Projetos)
+  '.stTema{display:inline-flex;gap:2px;background:#dcdce2;border-radius:12px;padding:3px;margin-top:18px}.stTema button{border:0;background:transparent;border-radius:9px;padding:8px 16px;font:inherit;font-weight:600;color:#3a3a3c;cursor:pointer}' +
+  '.stTema button.ativo{background:#fff;color:#d0151b;box-shadow:0 1px 3px rgba(0,0,0,.14)}' +
+  'body.temaEscuro #setorTela{background:linear-gradient(180deg,#232326 0,#131315 60%,#0c0c0d 100%)!important}body.temaEscuro #setorTela .stCab h2{color:#fff}body.temaEscuro #setorTela .stCab p{color:#bdbdc3}' +
+  'body.temaEscuro .stRodape .btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:#fff}body.temaEscuro .stTema{background:rgba(255,255,255,.12)}body.temaEscuro .stTema button{color:#d6d6dc}body.temaEscuro .stTema button.ativo{background:#fff;color:#d0151b}' +
   // tela de espera do aplicativo
   '#appWrap{position:fixed}#appCapa{position:absolute;inset:0;z-index:3;background:var(--fundo);display:flex;align-items:center;justify-content:center}' +
   '.appCapaCx{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--texto2)}.appCapaCx b{color:var(--preto);font-size:17px}' +
@@ -3439,6 +3447,8 @@ html,body{overscroll-behavior:none!important}
 header{border-bottom-color:#e3e3e8!important}
 /* quem sai é o ERP: sem "Sair" dentro do aplicativo; a marca do Técnico e da Oficina com respiro nas laterais */
 #managerLogoutBtn{display:none!important}
+/* no tema escuro o botão principal continua vermelho, como no claro */
+html[data-theme="dark"] body .btn-primary{background:var(--erpPri)!important;border-color:#c0000b!important;color:#fff!important}
 .portal-header-slim{padding:12px 16px!important}
 @media (max-width:860px){.hoje-kpis{grid-template-columns:1fr 1fr!important}}
 /* login único: quem sai é o ERP — some o Bloquear/Face ID do app de Projetos */
@@ -3513,6 +3523,22 @@ function appAltura(){
   document.documentElement.style.setProperty('--appH', h + 'px');
 }
 appAltura(); addEventListener('resize', appAltura); addEventListener('orientationchange', () => setTimeout(appAltura, 300));
+
+/* tema claro/escuro: escolhido na tela das áreas, guardado no aparelho. Vale para a tela das áreas e para os aplicativos de
+   Serviços e Projetos (que já tinham os dois modos). O Administrativo (base do ERP) só tem o claro, por enquanto. */
+function temaErp(){ try{ return localStorage.getItem('erp-tema') === 'escuro' ? 'escuro' : 'claro'; }catch(e){ return 'claro'; } }
+function aplicaTema(){
+  const esc = temaErp() === 'escuro'; window.__erpTema = temaErp(); document.body.classList.toggle('temaEscuro', esc);
+  document.querySelectorAll('#appWrap iframe').forEach(f => { try{ const d = f.contentDocument; d.documentElement.setAttribute('data-theme', esc ? 'dark' : 'light'); d.body.classList.toggle('tema-escuro', esc); }catch(e){} });
+}
+aplicaTema();
+
+/* roda DENTRO do aplicativo, logo que ele abre (telaApp injeta o texto desta função): aplica o tema escolhido no ERP
+   (de novo depois de 1 e 3 segundos, porque o aplicativo aplica o tema guardado dele ao iniciar) */
+window.__erpAppBoot = function(){
+  function ap(){ try{ var e = window.top.__erpTema === 'escuro'; document.documentElement.setAttribute('data-theme', e ? 'dark' : 'light'); if(document.body) document.body.classList.toggle('tema-escuro', e); }catch(x){} }
+  ap(); setTimeout(ap, 1000); setTimeout(ap, 3000);
+};
 
 /* ================== Projetos · complementos (script 10) ==================
    Visitas e considerações · ART · Calendário · Comissões · Dimensionamento · Chat */
