@@ -6523,7 +6523,9 @@ function renderClientSearch(query){
     return;
   }
   const q = query.toLowerCase();
-  const matches = groupPaired(services.filter(s => s.status === 'concluido' && s.client.toLowerCase().includes(q)))
+  const qf = erpCadFold(q);   /* ERP: também pelo nome fantasia, razão social e código do cadastro */
+  const casa = s => s.client.toLowerCase().includes(q) || (ERP_CAD.carregado && (() => { const c = erpClientePorNome(String(s.client).replace(/^\s*preventiva\s*[–-]\s*/i, '')); return c && erpCadFold(erpCadTexto(c)).includes(qf); })());
+  const matches = groupPaired(services.filter(s => s.status === 'concluido' && casa(s)))
     .sort((a,b) => b.id - a.id);
 
   box.style.display = 'block';
@@ -6534,7 +6536,7 @@ function renderClientSearch(query){
   box.innerHTML = matches.map(s => `
     <div class="search-result" data-id="${s.id}">
       <div>
-        <div class="search-result-client">${escapeHtml(s.client)}</div>
+        <div class="search-result-client">${erpCliHtml(s.client)}</div>
         ${s.description ? `<div class="search-result-meta">${escapeHtml(s.description)}</div>` : ''}
       </div>
       <div class="search-result-meta mono">${shortLabel(s.date)}${(() => { const lbl = s.isPair ? s.technicianLabel : getServiceTechnicians(s).join(' e '); return lbl ? ' · ' + escapeHtml(lbl) : ''; })()}</div>
@@ -7097,7 +7099,7 @@ async function openServiceDetails(id){
   const body = document.getElementById('detailsModalBody');
   body.innerHTML = `
     ${voltarPara != null ? '<div class="det-voltar"><button type="button" class="btn-ghost oe-mini" data-detvoltar="' + escapeHtml(String(voltarPara)) + '">← Voltar para o retorno</button></div>' : ''}
-    ${seloManutHtml(s)}<h3>${escapeHtml(s.client)}</h3>
+    ${seloManutHtml(s)}<h3>${erpCliHtml(s.client)}</h3>
     <p class="sub" id="det70Sub">${shortLabel(s.date)} · ${technicianLine}</p>
     <div class="status-tag ${s.status}" id="det70Status" style="display:inline-block; margin-bottom:14px;">${statusLabelOf(s.status)}</div>
     <div id="det70Tec" data-det70tipo="${det70Tipo(s)}">${det70Html(s)}</div>
@@ -7649,7 +7651,7 @@ function buildMiniCardElement(s, opt){
   el.innerHTML = `
     <div class="mini-card-top">
       <div>
-        ${seloManutHtml(s)}<div class="mini-client">${escapeHtml(s.client)}</div>
+        ${seloManutHtml(s)}<div class="mini-client">${erpCliHtml(s.client)}</div>
         <div class="mini-desc">${escapeHtml(s.description)}</div>
       </div>
       <div class="mini-tag ${s.status}">${statusLabelOf(s.status)}</div>
@@ -8011,7 +8013,7 @@ function renderDayPanel(){
     card.innerHTML = `
       <div class="service-top">
         <div>
-          ${seloManutHtml(s)}<div class="service-client">${escapeHtml(s.client)}</div>
+          ${seloManutHtml(s)}<div class="service-client">${erpCliHtml(s.client)}</div>
           <div class="service-desc">${escapeHtml(s.description)}</div>
           ${s.address ? `<div class="service-addr">${escapeHtml(s.address)}</div>` : ''}
         </div>
@@ -9009,7 +9011,7 @@ function renderPendingStyleList(containerId, pending){
     return `
     <div class="pending-row">
       ${seloManutHtml(s)}<div class="pending-row-top">
-        <div class="pending-client">${escapeHtml(s.client)}${s.isRetorno ? ' <span class="os-retorno-tag">↩ RETORNO</span>' : ''}</div>
+        <div class="pending-client">${escapeHtml(erpNomeCliente(s.client))}${s.isRetorno ? ' <span class="os-retorno-tag">↩ RETORNO</span>' : ''}</div>
         <div class="pending-meta mono">${shortLabel(s.date)}${techLabel ? ' · ' + escapeHtml(techLabel) : ' · sem técnico'} · ${statusLabelOf(s.status)}</div>
       </div>
       ${s.lembrete && !s.date ? `<div class="pending-origem pending-lembrete">📝 Lembrete${s.lembretePor ? ' de ' + escapeHtml(s.lembretePor) : ''}${s.lembreteEm ? ' em ' + escapeHtml(new Date(s.lembreteEm).toLocaleDateString('pt-BR')) : ''} — ainda sem data: use Reagendar para marcar o dia</div>` : ''}
@@ -9174,7 +9176,7 @@ function renderWeekSummary(){
     if(dayServices.length > 0){
       dayServices.forEach(s => {
         const pairClass = s.isPair ? ' is-pair' : '';
-        const label = s.isPair ? `${escapeHtml(s.client)} · 👥 ${escapeHtml(s.technicianLabel)}` : escapeHtml(s.client);
+        const label = s.isPair ? `${escapeHtml(erpNomeCliente(s.client))} · 👥 ${escapeHtml(s.technicianLabel)}` : escapeHtml(erpNomeCliente(s.client));
         barsHtml += `<div class="week-client-bar status-${s.status}${pairClass}" data-id="${s.id}" data-partnerid="${(s.isPair && s.isLegacyPair) ? s.pairMembers[1].id : ''}" onclick="openServiceDetails(${s.id})">${label}</div>`;
       });
     }
@@ -11803,11 +11805,140 @@ document.getElementById('addMaintenanceBtn').addEventListener('click', async () 
   renderManutencoes();
 });
 
+/* ===== ERP (18/11, Júlio): clientes integrados ao cadastro de empresas do ERP (vindo do CIGAM) =====
+   Cada cliente do app ligado a uma empresa do cadastro (Administração → Vínculos) mostra a razão social e o código do CIGAM;
+   a busca acha pelo nome do app, pelo nome fantasia, pela razão social ou pelo código. A tela Clientes agrupa os locais de cada
+   empresa ("Paulo Fernando – Rio", "– Angra"…). "+ Adicionar cliente" procura primeiro no cadastro do ERP e já deixa ligado. */
+const ERP_CAD = { porCli: {}, pes: {}, carregado: false, carregando: null };
+function erpSb(){ try{ return window.top !== window && window.top.__erpSupabase ? window.top.__erpSupabase : null; }catch(e){ return null; } }
+function erpCadFold(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+async function erpCadCarregar(forcar){
+  const sb = erpSb(); if(!sb) return;
+  if(ERP_CAD.carregando && !forcar) return ERP_CAD.carregando;
+  ERP_CAD.carregando = (async () => {
+    try{
+      const v = await sb.from('vinculos_apps').select('id_app,pessoa_id,obra_id').eq('app', 'servicos').eq('colecao', 'clients').eq('situacao', 'confirmado');
+      if(v.error) return;
+      const por = {}, ids = [];
+      (v.data || []).forEach(x => { if(x.pessoa_id){ por[String(x.id_app)] = x; if(!ids.includes(x.pessoa_id)) ids.push(x.pessoa_id); } });
+      const pes = {};
+      for(let i = 0; i < ids.length; i += 150){ const r = await sb.from('pessoas_leve').select('id,nome,apelido,codigos_cigam').in('id', ids.slice(i, i + 150)); (r.data || []).forEach(p => { pes[p.id] = p; }); }
+      const obIds = [...new Set(Object.values(por).map(x => x.obra_id).filter(Boolean))], obras = {};
+      for(let i = 0; i < obIds.length; i += 150){ const r = await sb.from('obras').select('id,nome').in('id', obIds.slice(i, i + 150)); (r.data || []).forEach(o => { obras[o.id] = o; }); }
+      ERP_CAD.porCli = por; ERP_CAD.pes = pes; ERP_CAD.obras = obras; ERP_CAD.nomeCache = {}; ERP_CAD.carregado = true;
+      try{ if(typeof renderAll === 'function' && typeof currentRole !== 'undefined' && currentRole) renderAll(); }catch(e){}   /* os cartões passam a mostrar o nome do cadastro */
+      try{ if(typeof renderClientes === 'function' && document.getElementById('clientesList') && document.getElementById('clientesList').offsetParent) renderClientes(); }catch(e){}
+    }catch(e){ console.warn('[ERP] cadastro de clientes', e); }
+  })();
+  return ERP_CAD.carregando;
+}
+function erpCadDe(c){ const v = c && ERP_CAD.porCli[String(c.id)]; return v ? Object.assign({ pessoaId: v.pessoa_id, obraId: v.obra_id }, ERP_CAD.pes[v.pessoa_id] || {}) : null; }
+function erpTitulo(t){ const peq = { de: 1, da: 1, do: 1, das: 1, dos: 1, e: 1 };
+  return String(t || '').toLowerCase().split(/\s+/).filter(Boolean).map((w, i) => i && peq[w] ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(' '); }
+// clientes do app ligados à mesma empresa do cadastro
+function erpLocaisDe(pessoaId){ return (typeof clients !== 'undefined' ? clients : []).filter(c => { const v = ERP_CAD.porCli[String(c.id)]; return v && v.pessoa_id === pessoaId; }); }
+// apelido do local: o nome do local no cadastro do ERP ("Paulo Fernando – Rio" → "Rio"); sem local cadastrado, o que sobra do
+// nome do app tirando o nome da empresa ("Paulo Fernando - Areal" → "Areal")
+function erpLocalDe(c){
+  const e = erpCadDe(c); if(!e) return '';
+  const o = e.obraId && ERP_CAD.obras && ERP_CAD.obras[e.obraId]; if(o && o.nome && o.nome.indexOf(' – ') > 0) return o.nome.split(' – ').slice(1).join(' – ').trim();
+  const tirar = new Set(erpCadFold((e.apelido || '') + ' ' + (e.nome || '')).split(' '));
+  return String(c.name || '').replace(/\([^)]*\)/g, ' ').split(/[\s\-–_\/,]+/).filter(w => w && !tirar.has(erpCadFold(w))).join(' ').trim();
+}
+function erpClientePorNome(nome){ const k = typeof chaveClienteLigada === 'function' ? chaveClienteLigada(nome) : erpCadFold(nome);
+  return (typeof clients !== 'undefined' ? clients : []).find(c => c && (typeof chaveClienteLigada === 'function' ? chaveClienteLigada(c.name) : erpCadFold(c.name)) === k) || null; }
+/* Nome para MOSTRAR (a atividade continua gravando o nome do cliente do app, que é a ligação com o cadastro):
+   "Fantasia — Local" quando a empresa tem mais de um local; só o fantasia com um local; sem fantasia, a razão social;
+   sem ligação com o cadastro, o nome do app. "Preventiva – " na frente é mantido. */
+function erpNomeCliente(nome){
+  if(!nome || !ERP_CAD.carregado) return nome || '';
+  if(ERP_CAD.nomeCache && nome in ERP_CAD.nomeCache) return ERP_CAD.nomeCache[nome];
+  const m = /^\s*(preventiva\s*[–-]\s*)/i.exec(nome), pre = m ? m[1] : '', base0 = pre ? nome.slice(pre.length) : nome;
+  const c = erpClientePorNome(base0), e = c && erpCadDe(c); let out = nome;
+  if(e && (e.apelido || e.nome)){
+    const base = erpTitulo(e.apelido || e.nome);
+    // "— Local" só quando a empresa tem 2 ou mais LOCAIS cadastrados (endereços diferentes); clientes repetidos do mesmo lugar mostram só o fantasia
+    const locs = new Set(erpLocaisDe(e.pessoaId).map(x => (ERP_CAD.porCli[String(x.id)] || {}).obra_id).filter(Boolean));
+    const loc = locs.size > 1 ? erpLocalDe(c) : '';
+    out = pre + base + (loc ? ' — ' + loc : '');
+  }
+  (ERP_CAD.nomeCache = ERP_CAD.nomeCache || {})[nome] = out; return out;
+}
+// complemento: razão social (quando é diferente do nome mostrado) e o nome antigo do app (para quem procura por ele)
+// técnico e oficina: só o nome fácil (fantasia — local); razão social e código ficam para o escritório
+function erpMostraRazao(){ return !(typeof currentRole !== 'undefined' && (currentRole === 'tech' || currentRole === 'oficina')); }
+function erpNomeSub(nome){
+  if(!nome || !ERP_CAD.carregado || !erpMostraRazao()) return '';
+  const base0 = String(nome).replace(/^\s*preventiva\s*[–-]\s*/i, ''), c = erpClientePorNome(base0), e = c && erpCadDe(c); if(!e) return '';
+  const mostra = erpNomeCliente(nome), partes = [];
+  if(e.nome && erpCadFold(e.nome) !== erpCadFold(mostra)) partes.push(e.nome);
+  if(erpCadFold(base0) !== erpCadFold(mostra) && !erpCadFold(mostra).includes(erpCadFold(base0))) partes.push('no app: ' + base0);
+  return partes.join(' · ');
+}
+function erpCliHtml(nome){ const sub = erpNomeSub(nome); return escapeHtml(erpNomeCliente(nome)) + (sub ? `<small class="erp-cli-sub" style="display:block;font-weight:400;font-size:11px;opacity:.65;margin-top:1px">${escapeHtml(sub)}</small>` : ''); }
+/* Cadastra um LOCAL novo de uma empresa do cadastro, sem criar outra empresa: um cliente do app "Fantasia – Apelido" ligado à
+   mesma empresa (e, quando o perfil pode, o local também no cadastro do ERP, com o endereço). */
+function erpJanelaLocal(titulo, corpo, okTxt, aoOk){
+  const ov = document.createElement('div'); ov.className = 'overlay open'; ov.id = 'erpLocalOv'; ov.style.zIndex = 100000;
+  ov.innerHTML = `<div class="modal" style="max-width:460px"><h3>${titulo}</h3>${corpo}<div class="field-error" id="erpLocErr"></div>
+    <div class="modal-actions" style="justify-content:flex-end"><button type="button" class="btn-ghost" id="erpLocCancel">Cancelar</button>${okTxt ? `<button type="button" class="btn-primary" id="erpLocOk">${okTxt}</button>` : ''}</div></div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e => { if(e.target === ov || e.target.id === 'erpLocCancel') ov.remove(); });
+  if(okTxt) document.getElementById('erpLocOk').onclick = async () => { const r = await aoOk(); if(typeof r === 'string'){ document.getElementById('erpLocErr').textContent = r; return; } ov.remove(); };
+  return ov;
+}
+function erpNovoLocal(pessoaId, depois){
+  const e = ERP_CAD.pes[pessoaId] || {}, base = erpTitulo(e.apelido || e.nome || ''), ja = erpLocaisDe(pessoaId);
+  erpJanelaLocal('Novo local de ' + escapeHtml(base), `<p class="sub" style="margin:0 0 8px">${escapeHtml(e.nome || '')}${ja.length ? ' · locais já cadastrados: ' + escapeHtml(ja.map(c => erpLocalDe(c) || c.name).join(', ')) : ''}</p>
+    <div class="field"><label>Apelido do local *</label><input type="text" id="erpLocApelido" placeholder="Ex.: Rio, Angra, Itaipava" maxlength="30"></div>
+    <div class="field"><label>Endereço</label><input type="text" id="erpLocEnd" placeholder="Rua, número, bairro, cidade"></div>`, 'Cadastrar local', async () => {
+      const ap = document.getElementById('erpLocApelido').value.trim(), end = document.getElementById('erpLocEnd').value.trim();
+      if(!ap) return 'Dê um apelido curto para o local.';
+      if(ja.some(c => erpCadFold(erpLocalDe(c)) === erpCadFold(ap))) return 'Esta empresa já tem um local chamado "' + ap + '".';
+      const nome = base + ' – ' + ap;
+      if(clients.some(c => erpCadFold(c.name) === erpCadFold(nome))) return 'Já existe o cliente "' + nome + '" no app.';
+      const ok = await createNewClient(nome, end); if(!ok) return 'Não foi possível criar o local.';
+      const novo = clients.find(c => c.name === nome), sb = erpSb();
+      if(novo && sb){
+        let obraId = null;
+        try{ const o = await sb.from('obras').insert({ nome, status: 'ativo', observacoes: 'Local criado no app de Serviços' }).select('id').single();
+          if(!o.error && o.data){ obraId = o.data.id; await sb.from('obra_pagadores').insert({ obra_id: obraId, pessoa_id: pessoaId, padrao: true });
+            if(end){ try{ await sb.schema('privado').from('obras_endereco').insert({ obra_id: obraId, logradouro: end }); }catch(x){} } } }catch(x){}
+        const v = await sb.from('vinculos_apps').insert({ app: 'servicos', colecao: 'clients', id_app: String(novo.id), nome_no_app: nome, pessoa_id: pessoaId, obra_id: obraId, situacao: 'confirmado', confianca: 1, motivo: 'local criado no app de Serviços' });
+        if(v.error) console.warn('[ERP] ligação do local novo', v.error);
+        await erpCadCarregar(true);
+      }
+      if(depois) depois(nome);
+    });
+  setTimeout(() => { const i = document.getElementById('erpLocApelido'); if(i) i.focus(); }, 40);
+}
+// Escolha do local de uma empresa (quando o nome digitado é o da empresa, e não de um local)
+function erpEscolherLocal(pessoaId, depois){
+  const e = ERP_CAD.pes[pessoaId] || {}, ls = erpLocaisDe(pessoaId);
+  const ov = erpJanelaLocal('Qual local de ' + escapeHtml(erpTitulo(e.apelido || e.nome || '')) + '?', `<p class="sub" style="margin:0 0 8px">${escapeHtml(e.nome || '')}</p>
+    <div style="display:flex;flex-direction:column;gap:8px">${ls.map((c, i) => `<button type="button" class="btn-ghost" data-erploc="${i}" style="text-align:left">${escapeHtml(erpNomeCliente(c.name))}<small style="display:block;opacity:.65">${escapeHtml([erpCadFold(c.name) !== erpCadFold(erpNomeCliente(c.name)) ? 'no app: ' + c.name : '', c.address || 'sem endereço'].filter(Boolean).join(' · '))}</small></button>`).join('')}
+    <button type="button" class="btn-ghost" data-erplocnovo style="text-align:left;color:var(--accent,#d0151b)">+ Novo local</button></div>`, '', () => {});
+  ov.querySelectorAll('[data-erploc]').forEach(b => b.onclick = () => { ov.remove(); depois(ls[+b.dataset.erploc].name); });
+  ov.querySelector('[data-erplocnovo]').onclick = () => { ov.remove(); erpNovoLocal(pessoaId, depois); };
+}
+// o nome digitado é de uma empresa do cadastro (fantasia ou razão social) e não de um cliente do app: devolve a empresa
+function erpEmpresaDigitada(nome){
+  if(!ERP_CAD.carregado || erpClientePorNome(nome)) return null; const k = erpCadFold(nome); if(k.length < 3) return null;
+  const ids = [...new Set(Object.values(ERP_CAD.porCli).map(v => v.pessoa_id))];
+  const hits = ids.filter(id => { const p = ERP_CAD.pes[id]; return p && (erpCadFold(p.apelido) === k || erpCadFold(p.nome) === k || erpCadFold(erpTitulo(p.apelido || p.nome)) === k); });
+  return hits.length === 1 ? hits[0] : null;
+}
+function erpCadTexto(c){ const e = erpCadDe(c); return [c && c.name, e && e.nome, e && e.apelido, e && (e.codigos_cigam || []).join(' '), c && ERP_CAD.carregado ? erpNomeCliente(c.name) : ''].filter(Boolean).join(' '); }
+if(erpSb()) setTimeout(() => erpCadCarregar(), 1500);
+window.__erpCad = { get clients(){ return clients; }, get services(){ return services; }, tiraServicos(f){ services = services.filter(x => !f(x)); }, ERP_CAD };   // leitura para os testes do ERP
+
 function getClientSuggestions(query){
   const q = (query || '').trim().toLowerCase();
   if(!q) return [];
+  if(erpSb() && !ERP_CAD.carregado) erpCadCarregar();
+  const qf = erpCadFold(q);
   return clients
-    .filter(c => c.name.toLowerCase().includes(q))
+    .filter(c => c.name.toLowerCase().includes(q) || (ERP_CAD.carregado && erpCadFold(erpCadTexto(c)).includes(qf)))
     .sort((a,b) => a.name.localeCompare(b.name))
     .slice(0, 8);
 }
@@ -11820,9 +11951,17 @@ function attachClientAutocomplete(inputEl, listEl, onSelect){
       listEl.innerHTML = '';
       return;
     }
-    listEl.innerHTML = matches.map(c => `<div class="autocomplete-item" data-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div>`).join('');
+    /* ERP: cada local aparece separado ("Paulo Fernando — Rio", "— Angra"); o valor escolhido é o nome do cliente do app, que é a
+       ligação com a empresa do cadastro. Para empresa do cadastro na lista, "+ Novo local" cadastra outro endereço dela. */
+    const empresas = [];
+    listEl.innerHTML = matches.map(c => { const e = erpCadDe(c); if(e && !empresas.some(x => x.pessoaId === e.pessoaId)) empresas.push(e);
+      const sub = !erpMostraRazao() ? '' : [e && e.nome && erpCadFold(e.nome) !== erpCadFold(erpNomeCliente(c.name)) ? e.nome : '', e && e.codigos_cigam && e.codigos_cigam.length ? 'CIGAM ' + e.codigos_cigam[0] : '', e && erpCadFold(c.name) !== erpCadFold(erpNomeCliente(c.name)) ? 'no app: ' + c.name : ''].filter(Boolean).join(' · ');
+      return `<div class="autocomplete-item" data-name="${escapeHtml(c.name)}">${escapeHtml(erpNomeCliente(c.name))}${sub ? `<small style="display:block;opacity:.65;font-size:11px;margin-top:1px">${escapeHtml(sub)}</small>` : ''}</div>`; }).join('')
+      + (inputEl.id === 'f-client' ? empresas.slice(0, 2).map(e => `<div class="autocomplete-item" data-novolocal="${escapeHtml(e.pessoaId)}" style="color:var(--accent,#d0151b);font-weight:600">+ Novo local de ${escapeHtml(erpTitulo(e.apelido || e.nome))}</div>`).join('') : '');
+    listEl.querySelectorAll('[data-novolocal]').forEach(it => it.addEventListener('mousedown', ev => { ev.preventDefault(); listEl.style.display = 'none';
+      erpNovoLocal(it.dataset.novolocal, nome => { inputEl.value = nome; if(onSelect) onSelect(nome); }); }));
     listEl.style.display = 'block';
-    listEl.querySelectorAll('.autocomplete-item').forEach(item => {
+    listEl.querySelectorAll('.autocomplete-item[data-name]').forEach(item => {
       item.addEventListener('mousedown', (e) => {
         e.preventDefault(); // evita que o input perca o foco antes do clique registrar
         const name = item.dataset.name;
@@ -14290,7 +14429,7 @@ function openAddressConfirm(t){
       const pad = janelaDeChegada(tasks.length, i);   // Fase 52: padrão da posição; a da atividade, se já foi mudada
       return `
         <div class="addr-conf-item">
-          <div class="addr-conf-cli">${i + 1}. ${escapeHtml(s.client)}</div>
+          <div class="addr-conf-cli">${i + 1}. ${escapeHtml(erpNomeCliente(s.client))}</div>
           <div class="field"><label>Endereço</label><input type="text" data-addrconfirm="${s.id}" value="${escapeHtml(addr)}" placeholder="Endereço (opcional)"></div>
           <div class="field"><label>Chegada prevista</label><div class="addr-conf-cheg">${chegadaEscolhaHtml(s.id, chegadaDaTarefa(s, tasks.length, i), pad)}</div></div>
         </div>
@@ -14508,7 +14647,7 @@ function renderTecnicosAmanha(){
             <div class="tecnico-task-drag" title="Arraste para reordenar">⋮⋮</div>
             <div class="tecnico-task-index mono">${i + 1}.</div>
             <div class="tecnico-task-body">
-              ${seloManutHtml(s)}<div class="tecnico-task-client">${escapeHtml(s.client)}</div>
+              ${seloManutHtml(s)}<div class="tecnico-task-client">${erpCliHtml(s.client)}</div>
               ${s.description ? `<div class="tecnico-task-desc">${escapeHtml(s.description)}</div>` : ''}
               <div class="tecnico-task-est">${chegadaDaTarefa(s, tasks.length, i) ? '🕒 Chegada prevista ' + escapeHtml(chegadaDaTarefa(s, tasks.length, i)) : ''}</div>
             </div>
@@ -14782,7 +14921,7 @@ function renderOS(){
         <div class="os-row">
           <div class="os-row-top">
             <div>
-              ${seloManutHtml(s, true)}<div class="os-client">${escapeHtml(s.client)}</div>
+              ${seloManutHtml(s, true)}<div class="os-client">${erpCliHtml(s.client)}</div>
               <div class="os-meta">${shortLabel(s.date)} · Técnico: ${techLabelDisplay}</div>
             </div>
             ${s.isRetorno ? `<span class="os-retorno-tag">↩ RETORNO${original ? ' de ' + shortLabel(original.date) : ''}</span>` : ''}
@@ -14887,7 +15026,7 @@ function renderOS(){
     } else {
       processedBox.innerHTML = processed.map(s => {
         const when = s.processedForOSAt ? new Date(s.processedForOSAt).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
-        return `<div class="os-processed-row"><b>${escapeHtml(s.client)}</b> · OS nº ${escapeHtml(s.numeroOS || '—')} · processado por ${escapeHtml(s.processedForOSBy || 'desconhecido')} em ${when}</div>`;
+        return `<div class="os-processed-row"><b>${escapeHtml(erpNomeCliente(s.client))}</b> · OS nº ${escapeHtml(s.numeroOS || '—')} · processado por ${escapeHtml(s.processedForOSBy || 'desconhecido')} em ${when}</div>`;
       }).join('');
     }
   }
@@ -15195,16 +15334,24 @@ function renderClientes(){
   const box = document.getElementById('clientesList');
   if(!box) return;
   const term = (document.getElementById('clienteSearchInput').value || '').trim().toLowerCase();
+  if(erpSb() && !ERP_CAD.carregado) erpCadCarregar();
   const list = clients
-    .filter(c => !term || c.name.toLowerCase().includes(term))
-    .sort((a,b) => a.name.localeCompare(b.name));
+    .filter(c => !term || c.name.toLowerCase().includes(term) || (ERP_CAD.carregado && erpCadFold(erpCadTexto(c)).includes(erpCadFold(term))))
+    .sort((a,b) => { const ea = erpCadDe(a), eb = erpCadDe(b); const ka = (ea ? (ea.apelido || ea.nome) : a.name), kb = (eb ? (eb.apelido || eb.nome) : b.name);
+      return erpCadFold(ka).localeCompare(erpCadFold(kb), 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'); });
 
   if(list.length === 0){
     box.innerHTML = `<p class="os-empty">${clients.length === 0 ? 'Nenhum cliente cadastrado ainda.' : 'Nenhum cliente encontrado com esse nome.'}</p>`;
     return;
   }
 
-  box.innerHTML = list.map((c, idx) => `
+  let empAnt = null;
+  box.innerHTML = list.map((c, idx) => { const e = erpCadDe(c), emp = e ? e.pessoaId : null, n = emp ? list.filter(x => { const y = erpCadDe(x); return y && y.pessoaId === emp; }).length : 0;
+    // ERP: cabeçalho da empresa do cadastro (razão social + código do CIGAM) acima dos locais dela; sem ligação, um aviso
+    const cab = emp && emp !== empAnt ? `<div class="erp-cli-cab" style="margin:14px 2px 4px;font-size:12.5px;color:var(--text-secondary,#6e6e73)"><b style="color:var(--text-primary,#1c1c1e);font-size:13.5px">${escapeHtml(e.apelido || e.nome || '')}</b> · ${escapeHtml(e.nome || '')}${e.codigos_cigam && e.codigos_cigam.length ? ' · CIGAM ' + escapeHtml(e.codigos_cigam.join(', ')) : ''}${n > 1 ? ' · ' + n + ' locais' : ''}</div>` : '';
+    empAnt = emp || null;
+    const sem = erpSb() && ERP_CAD.carregado && !e ? `<div style="margin:12px 2px 4px;font-size:12px;color:#b45309">Sem ligação com o cadastro do ERP — ligue em Administração → Vínculos</div>` : '';
+    return cab + sem + `
     <div class="cliente-row" data-clienterow="${c.id}">
       <div class="field">
         <label>Cliente</label>
@@ -15221,7 +15368,7 @@ function renderClientes(){
         <span class="cliente-saved-tag" data-clientesavedtag style="display:none;">Salvo ✓</span>
       </div>
     </div>
-  `).join('');
+  `; }).join('');
 
   box.querySelectorAll('[data-clientesave]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -15240,12 +15387,43 @@ function renderClientes(){
   });
 }
 document.getElementById('clienteSearchInput').addEventListener('input', renderClientes);
+/* ERP: ao digitar o nome do cliente novo, procura no cadastro do ERP (razão social, fantasia, código do CIGAM).
+   Escolhendo a empresa, o nome vira o fantasia (com " – " para escrever o local, se a empresa já tem cliente aqui) e,
+   ao adicionar, o cliente já fica ligado à empresa. */
+let erpNovoPessoa = null;
+(function(){
+  const inp = document.getElementById('newClienteNameInput'); const sb = erpSb(); if(!inp || !sb) return;
+  const campo = inp.parentElement; campo.style.position = 'relative';
+  const box = document.createElement('div'); box.className = 'autocomplete-list'; campo.appendChild(box);
+  let t = null, seq = 0;
+  inp.addEventListener('input', () => { erpNovoPessoa = null; clearTimeout(t); const q = inp.value.trim(); if(q.length < 3){ box.style.display = 'none'; return; }
+    t = setTimeout(async () => { const my = ++seq; const ws = erpCadFold(q).split(' ').filter(Boolean).slice(0, 3);
+      let r = sb.from('pessoas_leve').select('id,nome,apelido,codigos_cigam').neq('status', 'inativo').limit(8);
+      ws.forEach(w => { r = r.or('nome.ilike.*' + w + '*,apelido.ilike.*' + w + '*,busca.ilike.*' + w + '*'); });
+      let res = await r; if(res.error && /busca/.test(res.error.message || '')){ r = sb.from('pessoas_leve').select('id,nome,apelido,codigos_cigam').limit(8); ws.forEach(w => { r = r.or('nome.ilike.*' + w + '*,apelido.ilike.*' + w + '*'); }); res = await r; }
+      if(my !== seq) return; const l = res.data || [];
+      if(!l.length){ box.style.display = 'none'; return; }
+      box.innerHTML = '<div style="padding:6px 10px;font-size:11px;opacity:.6">Do cadastro do ERP</div>' + l.map((p, i) => `<div class="autocomplete-item" data-erpp="${i}">${escapeHtml(p.apelido || p.nome)}<small style="display:block;opacity:.65;font-size:11px">${escapeHtml(p.nome)}${p.codigos_cigam && p.codigos_cigam.length ? ' · ' + escapeHtml(p.codigos_cigam[0]) : ''}</small></div>`).join('');
+      box.style.display = 'block';
+      box.querySelectorAll('[data-erpp]').forEach(it => it.addEventListener('mousedown', ev => { ev.preventDefault(); const p = l[+it.dataset.erpp]; erpNovoPessoa = p;
+        const base = (p.apelido || p.nome || '').toLowerCase().replace(/(^|\s)\S/g, m => m.toUpperCase());
+        const jaTem = Object.values(ERP_CAD.porCli).some(v => v.pessoa_id === p.id);
+        inp.value = jaTem ? base + ' – ' : base; box.style.display = 'none'; inp.focus();
+        if(jaTem) alert('Esta empresa já tem cliente(s) aqui. Escreva depois do " – " o nome do local (ex.: Rio, Angra, Itaipava).'); }));
+    }, 300); });
+  inp.addEventListener('blur', () => setTimeout(() => { box.style.display = 'none'; }, 150));
+})();
 document.getElementById('addClienteBtn').addEventListener('click', async () => {
   const nameInput = document.getElementById('newClienteNameInput');
   const addrInput = document.getElementById('newClienteAddressInput');
+  if(/\s–\s*$/.test(nameInput.value)){ alert('Escreva o nome do local depois do " – " (ex.: Rio, Angra).'); return; }
   const ok = await createNewClient(nameInput.value, addrInput.value);
   if(ok){
     const novoCli = clients.find(c => c.name.toLowerCase() === nameInput.value.trim().toLowerCase());
+    if(novoCli && erpNovoPessoa && erpSb()){   // ERP: já fica ligado à empresa escolhida do cadastro
+      try{ const r = await erpSb().from('vinculos_apps').insert({ app: 'servicos', colecao: 'clients', id_app: String(novoCli.id), nome_no_app: novoCli.name, pessoa_id: erpNovoPessoa.id, situacao: 'confirmado', confianca: 1, motivo: 'escolhido do cadastro ao criar o cliente no app' });
+        if(r.error) console.warn('[ERP] ligação do cliente novo', r.error); else await erpCadCarregar(true); }catch(e){ console.warn('[ERP] ligação do cliente novo', e); }
+      erpNovoPessoa = null; }
     const ct = document.getElementById('newClienteContatoInput').value.trim(), fo = document.getElementById('newClienteFoneInput').value.trim();
     if(novoCli && (ct || fo)){ novoCli.contato = ct; novoCli.fone = fo; await saveClients(true); try{ await ligarContatoCliente(novoCli.name, ct, fo, 'clientes'); }catch(err){ console.error('Fase 26', err); } }
     document.getElementById('newClienteContatoInput').value = ''; document.getElementById('newClienteFoneInput').value = '';
@@ -15468,9 +15646,13 @@ document.getElementById('submitAddBtn').addEventListener('click', (e) => {
   e.preventDefault();
   try{
     const date = modalLembrete ? '' : document.getElementById('f-date').value;
-    const client = document.getElementById('f-client').value.trim();
+    let client = document.getElementById('f-client').value.trim();
     const description = document.getElementById('f-desc').value.trim();
-    const address = document.getElementById('f-addr').value.trim();
+    let address = document.getElementById('f-addr').value.trim();
+    { const emp = erpEmpresaDigitada(client);   /* ERP: digitou o nome da empresa do cadastro → escolher o local (ou cadastrar um), sem criar outro cliente */
+      if(emp){ const ls = erpLocaisDe(emp);
+        const usa = nome => { client = nome; document.getElementById('f-client').value = nome; const a = document.getElementById('f-addr'); if(a && !a.value.trim()){ const f = findClientAddress(nome); if(f){ a.value = f; address = f; } } };
+        if(ls.length === 1){ usa(ls[0].name); } else { erpEscolherLocal(emp, usa); return; } } }
     if((!date && !modalLembrete) || !client || !description){
       alert(modalLembrete ? 'Preencha o cliente e o que precisa ser feito.' : (window.__obraAtiv && date && client ? 'Escreva o que o técnico vai fazer nesta visita (os pedidos da obra já vão junto, no selo).' : 'Preencha data, cliente e o que precisa ser feito.'));   // Fase 50
       if(window.__obraAtiv && !description){ const fd = document.getElementById('f-desc'); if(fd) fd.focus(); }
@@ -15929,7 +16111,7 @@ function renderFinanceiroOS(){
         const sentFmt = new Date(info.sentAt).toLocaleDateString('pt-BR');
         return `<div class="painel-stat-row" style="align-items:flex-start; flex-direction:column; gap:2px; border-left:4px solid var(--red); padding-left:10px;">
           <div class="painel-stat-label">⚠ Enviada há ${info.daysSinceSent} dias</div>
-          <div style="font-size:13px;">Cliente: ${escapeHtml(s.client)}</div>
+          <div style="font-size:13px;">Cliente: ${escapeHtml(erpNomeCliente(s.client))}</div>
           <div style="font-size:13px;">Número da OS: ${escapeHtml(s.numeroOS || '—')}</div>
           <div style="font-size:13px;">Data do envio: ${sentFmt}</div>
           <div style="font-size:13px;">Status: Enviado</div>
@@ -15954,7 +16136,7 @@ function renderFinanceiroOS(){
         const chargeFmt = new Date(info.chargeAt).toLocaleDateString('pt-BR');
         return `<div class="painel-stat-row" style="align-items:flex-start; flex-direction:column; gap:2px; border-left:4px solid var(--red); padding-left:10px;">
           <div class="painel-stat-label">⚠ Para cobrar há ${info.daysSinceCharge} dias</div>
-          <div style="font-size:13px;">Cliente: ${escapeHtml(s.client)}</div>
+          <div style="font-size:13px;">Cliente: ${escapeHtml(erpNomeCliente(s.client))}</div>
           <div style="font-size:13px;">Número da OS: ${escapeHtml(s.numeroOS || '—')}</div>
           <div style="font-size:13px;">Desde: ${chargeFmt}</div>
           <div style="font-size:13px;">Status: Cobrar</div>
@@ -15970,7 +16152,7 @@ function renderFinanceiroOS(){
     const opts = FIN_STATUS_OPTIONS.map(o => `<option value="${o}" ${o === st ? 'selected' : ''}>${o}</option>`).join('');
     return `<div class="fin-os-row" data-finrow="${s.id}">
       <div class="fin-os-main">
-        <div class="fin-os-client">${escapeHtml(s.client)}</div>
+        <div class="fin-os-client">${escapeHtml(erpNomeCliente(s.client))}</div>
         <div class="fin-os-date">${dataFmt}</div>
       </div>
       <div class="fin-os-actions">
@@ -17631,7 +17813,7 @@ function renderTechView(){
     card.innerHTML = `
       <div class="service-top">
         <div>
-          ${seloManutHtml(s)}<div class="service-client">${i + 1}. ${escapeHtml(s.client)}</div>
+          ${seloManutHtml(s)}<div class="service-client">${i + 1}. ${erpCliHtml(s.client)}</div>
           ${s.description ? `<div class="service-desc">${escapeHtml(s.description)}</div>` : ''}
           ${s.address ? `<div class="service-addr">${escapeHtml(s.address)}</div>` : ''}
           ${duplaLabelHtml}
@@ -18958,7 +19140,7 @@ function offerInstructionAttachments(techName){
     const parts = [];
     if(ins.photos) parts.push(`${ins.photos} foto${ins.photos > 1 ? 's' : ''}`);
     if(ins.audios) parts.push(`${ins.audios} áudio${ins.audios > 1 ? 's' : ''}`);
-    return `<button type="button" class="btn-primary" data-instrshare="${s.id}">${supportsFiles ? 'Enviar anexos' : 'Baixar anexos'}: ${escapeHtml(s.client)} (${parts.join(', ')})</button>`;
+    return `<button type="button" class="btn-primary" data-instrshare="${s.id}">${supportsFiles ? 'Enviar anexos' : 'Baixar anexos'}: ${escapeHtml(erpNomeCliente(s.client))} (${parts.join(', ')})</button>`;
   }).join('');
   list.querySelectorAll('[data-instrshare]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -26394,6 +26576,7 @@ const MAX = 8;
 // fontes de nomes
 const FONTES = {
   clientes: () => (typeof clients !== 'undefined' && Array.isArray(clients) ? clients : []).map(c => c && c.name).filter(Boolean),
+  clientesTexto: (n) => { const c = (typeof clients !== 'undefined' && Array.isArray(clients) ? clients : []).find(x => x && x.name === n); return typeof erpCadTexto === 'function' && c ? erpCadTexto(c) : n; },
   equipamentos: () => (typeof equipNomesAtivos === 'function' ? equipNomesAtivos() : []).map(e => e && e.name).filter(Boolean),
 };
 function ligar(input, fonte){
@@ -26414,7 +26597,7 @@ function ligar(input, fonte){
   const procurar = () => {
     const q = fold(input.value); const todos = FONTES[fonte]();
     const vistos = new Set();
-    itens = todos.filter(n => { const k = fold(n); if(vistos.has(k)) return false; vistos.add(k); return !q || k.includes(q); })
+    itens = todos.filter(n => { const k = fold(n); if(vistos.has(k)) return false; vistos.add(k); return !q || k.includes(q) || (fonte === 'clientes' && fold(FONTES.clientesTexto(n)).includes(q)); })
       .sort((a, b) => { const fa = fold(a).startsWith(q) ? 0 : 1, fb = fold(b).startsWith(q) ? 0 : 1; return fa - fb || a.localeCompare(b, 'pt-BR'); })
       .slice(0, MAX);
     if(itens.length === 1 && fold(itens[0]) === q) itens = [];     // já está exatamente igual: nada a sugerir
