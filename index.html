@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#141416">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="ERP Equiper">
 <link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icones/favicon-32.png">
@@ -1148,7 +1148,7 @@ async function telaApp(arquivo, titulo, modo, abas){
   if(abas) appAbaVai(arquivo, chave);
 }
 // altura da faixa de baixo do aparelho (barra de gestos do iPhone): o aplicativo, dentro do quadro, não enxerga esse valor sozinho
-function appSafeB(){ const p = document.createElement('div'); p.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom,0px);visibility:hidden'; document.body.appendChild(p); const h = p.offsetHeight; p.remove(); return h; }
+function appSafeB(){ if(window.__erpFaixaIphone) return 0; const p = document.createElement('div'); p.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom,0px);visibility:hidden'; document.body.appendChild(p); const h = p.offsetHeight; p.remove(); return h; }
 // tela de espera por cima do aplicativo enquanto ele carrega e entra sozinho com o login do ERP
 function appCapa(mostra, titulo){
   let c = $('#appCapa'); if(!c){ c = document.createElement('div'); c.id = 'appCapa'; $('#appWrap').appendChild(c); }
@@ -3344,6 +3344,7 @@ function setorUnico(){ const l = setoresDisponiveis(); return l.length === 1 ? l
       }
     }
     document.body.classList.toggle('modoApp', setorEmApp());
+    setTimeout(corFundoTela, 0); setTimeout(corFundoTela, 1500);
     return desenhar0.apply(this, a);
   };
 })();
@@ -3369,9 +3370,9 @@ function escolherSetor(inicial){
     <div class="stGrade">${disp.map(k => `<button class="stCartao${ST.setor === k && !inicial ? ' ativo' : ''}" data-st="${k}">${ico(SETORES[k].ic)}<b>${SETORES[k].nome}</b><small>${SETORES[k].txt}</small></button>`).join('')}</div>
     <div class="stRodape">${inicial ? '' : '<button class="btn" id="stFechar">Continuar onde estava</button>'}<button class="btn" id="stSair">Sair do sistema</button></div>
     <div class="stTema" role="group" aria-label="Tema">${[['claro', '☀️ Claro'], ['escuro', '🌙 Escuro']].map(([k, r]) => `<button type="button" class="${temaErp() === k ? 'ativo' : ''}" data-tema="${k}">${r}</button>`).join('')}</div></div>`;
-  d.classList.remove('hidden');
+  d.classList.remove('hidden'); corFundoTela();
   d.querySelectorAll('[data-st]').forEach(c => c.onclick = () => { d.classList.add('hidden'); mudaSetor(c.dataset.st); });
-  if($('#stFechar')) $('#stFechar').onclick = () => d.classList.add('hidden');
+  if($('#stFechar')) $('#stFechar').onclick = () => { d.classList.add('hidden'); corFundoTela(); };
   $('#stSair').onclick = async () => { await sb.auth.signOut(); location.reload(); };
   d.querySelectorAll('[data-tema]').forEach(b => b.onclick = () => { try{ localStorage.setItem('erp-tema', b.dataset.tema); }catch(e){} aplicaTema();
     d.querySelectorAll('[data-tema]').forEach(x => x.classList.toggle('ativo', x === b)); });
@@ -3515,12 +3516,23 @@ const FIN_APP = {
 /* altura real da tela para o aplicativo aberto dentro do ERP. No iPhone, com o ERP instalado na tela de início, a área que o
    navegador informa termina antes do fim da tela (sobra uma faixa da altura da barra do relógio): aí vale a altura do aparelho. */
 function appAltura(){
-  let h = window.innerHeight;
+  // a altura é a que o navegador informa (esticar além dela corta a barra de baixo: o iPhone não desenha fora dessa área)
+  const h = window.innerHeight;
+  // iPhone com o ERP instalado: sobra uma faixa embaixo, fora da área do ERP, que o aparelho pinta com a cor de fundo da página
   try{
     const instalado = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
-    if(instalado && window.screen){ const tela = innerWidth < innerHeight ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height); if(tela > h && tela - h < 140) h = tela; }
-  }catch(e){}
+    const tela = window.screen ? (innerWidth < innerHeight ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height)) : h;
+    window.__erpFaixaIphone = !!(instalado && tela - h > 20 && tela - h < 140);
+  }catch(e){ window.__erpFaixaIphone = false; }
   document.documentElement.style.setProperty('--appH', h + 'px');
+  corFundoTela();
+}
+// cor de fundo da página inteira = cor do que está encostado embaixo (barra escura dos aplicativos ou tela das áreas no tema escuro):
+// assim a faixa que o iPhone deixa sobrar embaixo fica da mesma cor e a barra parece ir até o fim da tela
+function corFundoTela(){
+  const st = document.getElementById('setorTela'), areas = st && !st.classList.contains('hidden');
+  const escuro = areas ? (typeof temaErp === 'function' && temaErp() === 'escuro') : document.body.classList.contains('modoApp') && !!document.querySelector('#appWrap iframe:not(.hidden)') && innerWidth <= 860;
+  document.documentElement.style.background = escuro ? '#0c0c0d' : '';
 }
 appAltura(); addEventListener('resize', appAltura); addEventListener('orientationchange', () => setTimeout(appAltura, 300));
 
@@ -3528,7 +3540,7 @@ appAltura(); addEventListener('resize', appAltura); addEventListener('orientatio
    Serviços e Projetos (que já tinham os dois modos). O Administrativo (base do ERP) só tem o claro, por enquanto. */
 function temaErp(){ try{ return localStorage.getItem('erp-tema') === 'escuro' ? 'escuro' : 'claro'; }catch(e){ return 'claro'; } }
 function aplicaTema(){
-  const esc = temaErp() === 'escuro'; window.__erpTema = temaErp(); document.body.classList.toggle('temaEscuro', esc);
+  const esc = temaErp() === 'escuro'; window.__erpTema = temaErp(); document.body.classList.toggle('temaEscuro', esc); corFundoTela();
   document.querySelectorAll('#appWrap iframe').forEach(f => { try{ const d = f.contentDocument; d.documentElement.setAttribute('data-theme', esc ? 'dark' : 'light'); d.body.classList.toggle('tema-escuro', esc); }catch(e){} });
 }
 aplicaTema();
