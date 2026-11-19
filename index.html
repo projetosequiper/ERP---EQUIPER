@@ -780,7 +780,7 @@ const obra = id => ST.obras.find(x=>x.id===id);
    perfis: D diretoria · A administrativo · P projetos · S serviços · T técnico · G agente */
 const MENU = [
   { area:'', itens:[ ['inicio','🏠','Início','DAPSG'], ['chat','💬','Chat','DAPS'] ] },
-  { area:'Cadastros', itens:[ ['pessoas','🏢','Empresas','DAPSG'], ['obras','🏠','Obras','DAPSG'], ['contatos','📇','Contatos','DAPSG'], ['fila','✅','Aprovação','DAPSG'] ] },
+  { area:'Cadastros', itens:[ ['pessoas','🏢','Telemarketing CRM','DAPSG'], ['obras','🏠','Obras (locais)','DAPSG'], ['contatos','📇','Contatos','DAPSG'], ['fila','✅','Aprovação','DAPSG'] ] },
   { area:'Orçamentos', itens:[ ['orc','📑','Orçamentos','DAPSG'], ['produtos','🏷️','Produtos e preços','DAPSG'], ['ped_cigam','🗂️','Pedidos do CIGAM','DAPSG'] ] },
   { area:'Projetos', itens:[ ['pj_propostas','📄','Propostas e parcelas','DAPG'], ['pj_projetos','📋','Projetos e tarefas','DAPG'], ['pj_cal','📅','Calendário','DAPG'], ['pj_visitas','📝','Visitas e considerações','DAPG'], ['pj_art','📐','ART','DAPG'], ['pj_com','💵','Comissões','DAPG'], ['pj_dim','🧮','Dimensionamento','DAPG'] ] },
   { area:'Serviços', itens:[ ['sv_agenda','📅','Agenda e atividades','DSAT'], ['sv_os','🧾','Ordens de serviço','DSA'], ['sv_orc','📥','Solicitações de orçamento','DSA'], ['sv_pedidos','🏗️','Obras e pedidos','DSA'], ['sv_manut','🔧','Manutenções e contratos','DSA'], ['sv_oficina','🛠️','Oficina','DSAT'], ['sv_estoque','📦','Estoque','DSAT'], ['sv_comissoes','💵','Comissões dos técnicos','DA'] ] },
@@ -4268,7 +4268,8 @@ function opcoesEmpresasComEndereco(sel){
    com o próximo contato marcado na agenda de quem é responsável. Cliente potencial = relação "Cliente potencial". */
 PAPEIS.splice(1, 0, ['potencial', 'Cliente potencial']);
 IC.crm = '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/><path d="M15 3a6 6 0 0 1 6 6M15 7a2 2 0 0 1 2 2"/>';
-MENU.find(g => g.area === 'Orçamentos').itens.splice(1, 0, ['crm', '📞', 'Telemarketing CRM', 'DAPS']);
+/* 19/11 (Júlio): saiu do menu de Orçamentos — o item "Empresas" de Cadastros passou a se chamar "Telemarketing CRM".
+   A tela 'crm' (agenda de retornos) continua existindo: abre pelo sino; o histórico de cada empresa continua na ficha dela. */
 const CRM_CANAIS = ['Telefone','WhatsApp','E-mail','Visita','Reunião','Outro'], CRM_ASSUNTOS = ['Prospecção','Orçamento','Pós-venda','Manutenção','Cobrança','Outro'];
 ST.crm = { ver: 'agenda', resp: 'eu' };
 (window.AVISOS_EXTRA = window.AVISOS_EXTRA || []).push(async () => {
