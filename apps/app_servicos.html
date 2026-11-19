@@ -11930,6 +11930,32 @@ function erpEmpresaDigitada(nome){
 }
 function erpCadTexto(c){ const e = erpCadDe(c); return [c && c.name, e && e.nome, e && e.apelido, e && (e.codigos_cigam || []).join(' '), c && ERP_CAD.carregado ? erpNomeCliente(c.name) : ''].filter(Boolean).join(' '); }
 if(erpSb()) setTimeout(() => erpCadCarregar(), 1500);
+/* ERP (19/11): empresas do cadastro (CRM) que ainda não têm cliente no app, para as sugestões de cliente */
+const _erpCrmCache = {};
+async function erpBuscaCRM(q){
+  const sb = erpSb(); const k = erpCadFold(q); if(!sb || k.length < 3) return [];
+  if(_erpCrmCache[k]) return _erpCrmCache[k];
+  const ws = k.split(' ').filter(Boolean).slice(0, 3);
+  let r = sb.from('pessoas_leve').select('id,nome,apelido,codigos_cigam').neq('status', 'inativo').limit(12);
+  ws.forEach(w => { r = r.or('nome.ilike.*' + w + '*,apelido.ilike.*' + w + '*'); });
+  const res = await r;
+  const ligadas = new Set(Object.values(ERP_CAD.porCli || {}).map(v => v.pessoa_id));
+  const l = (res.data || []).filter(p => !ligadas.has(p.id)).slice(0, 5);
+  _erpCrmCache[k] = l; setTimeout(() => { delete _erpCrmCache[k]; }, 20000); return l;
+}
+function erpCrmItemHtml(p, i){ const sub = [erpMostraRazao() && p.apelido && erpCadFold(p.apelido) !== erpCadFold(p.nome) ? p.nome : '', p.codigos_cigam && p.codigos_cigam.length ? p.codigos_cigam[0] : ''].filter(Boolean).join(' · ');
+  return `<div class="autocomplete-item app-sug-item" data-crm="${i}">${escapeHtml(erpTitulo(p.apelido || p.nome))}${sub ? `<small style="display:block;opacity:.65;font-size:11px;margin-top:1px">${escapeHtml(sub)}</small>` : ''}</div>`; }
+const ERP_CRM_TITULO = '<div style="padding:6px 10px;font-size:11px;opacity:.6;border-top:1px solid var(--line,#ddd)">Do cadastro (CRM) — cria o cliente aqui já ligado</div>';
+async function erpClienteDoCRM(p){
+  const nome = erpTitulo(p.apelido || p.nome).trim();
+  let c = clients.find(x => x.name.toLowerCase() === nome.toLowerCase());
+  if(!c){ clients.push({ id: Date.now() + Math.floor(Math.random() * 1000000) + (nextClientIdCounter++), name: nome, address: '' }); await saveClients(); c = clients.find(x => x.name === nome); }
+  if(c && !ERP_CAD.porCli[String(c.id)] && erpSb()){
+    try{ const r = await erpSb().from('vinculos_apps').insert({ app: 'servicos', colecao: 'clients', id_app: String(c.id), nome_no_app: c.name, pessoa_id: p.id, situacao: 'confirmado', confianca: 1, motivo: 'escolhido do cadastro (CRM) na busca de cliente' });
+      if(r.error) console.warn('[ERP] ligação do cliente do CRM', r.error); else await erpCadCarregar(true); }catch(e){ console.warn('[ERP] ligação do cliente do CRM', e); }
+  }
+  return nome;
+}
 window.__erpCad = { get clients(){ return clients; }, get services(){ return services; }, tiraServicos(f){ services = services.filter(x => !f(x)); }, ERP_CAD };   // leitura para os testes do ERP
 
 function getClientSuggestions(query){
@@ -11946,6 +11972,11 @@ function getClientSuggestions(query){
 function attachClientAutocomplete(inputEl, listEl, onSelect){
   function renderList(){
     const matches = getClientSuggestions(inputEl.value);
+    const q0 = inputEl.value, mySeq = inputEl._crmSeq = (inputEl._crmSeq || 0) + 1;
+    erpBuscaCRM(q0).then(l => { if(inputEl._crmSeq !== mySeq || !l.length || document.activeElement !== inputEl) return;
+      listEl.insertAdjacentHTML('beforeend', ERP_CRM_TITULO + l.map(erpCrmItemHtml).join('')); listEl.style.display = 'block';
+      listEl.querySelectorAll('[data-crm]').forEach(it => it.addEventListener('mousedown', async ev => { ev.preventDefault(); listEl.style.display = 'none';
+        const nome = await erpClienteDoCRM(l[+it.dataset.crm]); inputEl.value = nome; if(onSelect) onSelect(nome); })); }).catch(() => {});
     if(matches.length === 0){
       listEl.style.display = 'none';
       listEl.innerHTML = '';
@@ -26602,6 +26633,11 @@ function ligar(input, fonte){
       .slice(0, MAX);
     if(itens.length === 1 && fold(itens[0]) === q) itens = [];     // já está exatamente igual: nada a sugerir
     ativo = -1; desenhar();
+    if(fonte === 'clientes' && typeof erpBuscaCRM === 'function'){ const q0 = input.value, my = input._crmSeq = (input._crmSeq || 0) + 1;
+      erpBuscaCRM(q0).then(l => { if(input._crmSeq !== my || !l.length || document.activeElement !== input) return;
+        box.insertAdjacentHTML('beforeend', ERP_CRM_TITULO + l.map(erpCrmItemHtml).join('')); box.style.display = '';
+        box.querySelectorAll('[data-crm]').forEach(it => it.addEventListener('mousedown', async ev => { ev.preventDefault(); ev.stopPropagation(); fechar();
+          escolher(await erpClienteDoCRM(l[+it.dataset.crm])); })); }).catch(() => {}); }
   };
   input.addEventListener('input', procurar);
   input.addEventListener('focus', () => { if(input.value.trim()) procurar(); });
@@ -26612,7 +26648,7 @@ function ligar(input, fonte){
     else if(e.key === 'Enter'){ if(ativo >= 0){ escolher(itens[ativo]); e.preventDefault(); } else fechar(); }
     else if(e.key === 'Escape'){ fechar(); }
   });
-  box.addEventListener('mousedown', (e) => { const it = e.target.closest('.app-sug-item'); if(it){ e.preventDefault(); escolher(itens[Number(it.dataset.i)]); } });
+  box.addEventListener('mousedown', (e) => { const it = e.target.closest('.app-sug-item'); if(it && !it.dataset.crm){ e.preventDefault(); escolher(itens[Number(it.dataset.i)]); } });
   input.addEventListener('blur', () => setTimeout(fechar, 150));
 }
 function iniciar(){

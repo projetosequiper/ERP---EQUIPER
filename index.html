@@ -784,10 +784,10 @@ const obra = id => ST.obras.find(x=>x.id===id);
 const MENU = [
   { area:'', itens:[ ['inicio','🏠','Início','DAPSG'], ['chat','💬','Chat','DAPS'] ] },
   { area:'Cadastros', itens:[ ['pessoas','🏢','Telemarketing CRM','DAPSG'], ['obras','🏠','Obras (locais)','DAPSG'], ['contatos','📇','Contatos','DAPSG'], ['fila','✅','Aprovação','DAPSG'] ] },
-  { area:'Orçamentos', itens:[ ['orc','📑','Orçamentos','DAPSG'], ['produtos','🏷️','Produtos e preços','DAPSG'], ['ped_cigam','🗂️','Pedidos do CIGAM','DAPSG'] ] },
+  { area:'Orçamentos', itens:[ ['orc','📑','Orçamentos','DAPSG'], ['ped_cigam','🗂️','Pedidos do CIGAM','DAPSG'] ] },
   { area:'Projetos', itens:[ ['pj_propostas','📄','Propostas e parcelas','DAPG'], ['pj_projetos','📋','Projetos e tarefas','DAPG'], ['pj_cal','📅','Calendário','DAPG'], ['pj_visitas','📝','Visitas e considerações','DAPG'], ['pj_art','📐','ART','DAPG'], ['pj_com','💵','Comissões','DAPG'], ['pj_dim','🧮','Dimensionamento','DAPG'] ] },
-  { area:'Serviços', itens:[ ['sv_agenda','📅','Agenda e atividades','DSAT'], ['sv_os','🧾','Ordens de serviço','DSA'], ['sv_orc','📥','Solicitações de orçamento','DSA'], ['sv_pedidos','🏗️','Obras e pedidos','DSA'], ['sv_manut','🔧','Manutenções e contratos','DSA'], ['sv_oficina','🛠️','Oficina','DSAT'], ['sv_estoque','📦','Estoque','DSAT'], ['sv_comissoes','💵','Comissões dos técnicos','DA'] ] },
-  { area:'Suprimentos', itens:[ ['cp_compras','🛒','Compras','DAS'], ['cp_precos','🏷️','Preços de compra','DA'] ] },
+  { area:'Serviços', itens:[ ['sv_agenda','📅','Agenda e atividades','DSAT'], ['sv_os','🧾','Ordens de serviço','DSA'], ['sv_orc','📥','Solicitações de orçamento','DSA'], ['sv_pedidos','🏗️','Obras e pedidos','DSA'], ['sv_manut','🔧','Manutenções e contratos','DSA'], ['sv_oficina','🛠️','Oficina','DSAT'], ['sv_comissoes','💵','Comissões dos técnicos','DA'] ] },
+  { area:'Suprimentos', itens:[ ['produtos','📦','Materiais','DAPSG'], ['cp_precos','🏷️','Tabelas de preços','DA'], ['cp_compras','🛒','Ordens de compra','DAS'], ['cp_status','🚦','Status das ordens de compra','DAS'], ['sv_estoque','📦','Estoque','DSAT'] ] },
   { area:'Financeiro', itens:[ ['fn_painel','📊','Painel de resultados','DA'], ['fn_cobranca','📞','Cobrança','DA'], ['fn_fluxo','🗓️','Fluxo diário','DA'], ['fn_caixa','🏦','Caixa e bancos','DA'], ['fn_receber','💰','A receber','DA'], ['fn_pagar','💸','Lançamentos','DA'], ['fn_posicao','👤','Posição do cliente','DA'], ['fn_recibos','🧾','Recibos','DA'], ['fn_notas','🧾','Notas fiscais','DA'], ['fn_plano','📒','Plano de contas','DA'], ['fn_recebidas','📥','Notas recebidas','DA'], ['fn_gerencial','📈','Relatório gerencial','DA'], ['fn_contabil','📚','Relatórios para a contabilidade','DA'], ['fn_cnpj','📊','Faturamento por CNPJ','DA'], ['fn_pendencias','⚠️','Pendências de clientes','DAPS'] ] },
   { area:'Administração', itens:[ ['adm_usuarios','👥','Acessos','D'], ['adm_fiscal','⚙️','Configuração fiscal','DA'], ['adm_cert','🔐','Certificados digitais','DA'], ['adm_regras','⚖️','Regras fiscais (CFOP)','DA'], ['registro','🗂️','Registro de ações','D'], ['adm_backup','💾','Backup','D'], ['vinculos','🔗','Migração dos apps','DAPS'], ['projetos','🗄️','App Projetos (antigo)','DAP'], ['servicos','🗄️','App Serviços (antigo)','DAST'] ] }
 ];
@@ -6924,7 +6924,7 @@ async function telaProdutos(){
   const [r, c] = await Promise.all([ consultaProdutos({ q: ST.busca, tipo: ST.prod.tipo || null, ativos: !ST.mostrarInativos, lim: 200 }), sb.from('produtos').select('id', { count:'exact', head:true }) ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const pode = ['diretoria','administrativo','projetos','servicos'].includes(ST.eu.perfil);
-  $('#conteudo').innerHTML = `<div class="card"><h2>Produtos e preços <span class="muted" style="font-weight:400">· ${c.count ?? (r.data||[]).length} cadastrados · o orçamento só usa o que está aqui</span></h2>
+  $('#conteudo').innerHTML = `<div class="card"><h2>Materiais <span class="muted" style="font-weight:400">· ${c.count ?? (r.data||[]).length} cadastrados · o orçamento só usa o que está aqui</span></h2>
     <div class="barra"><input type="search" id="busca" placeholder="Buscar por código, descrição, referência ou fabricante (qualquer ordem, sem acento)…" value="${esc(ST.busca)}">
       <select id="pTipo" style="max-width:190px"><option value="">Todos os tipos</option>${Object.entries(TIPOS_PROD).map(([k,r]) => `<option value="${k}" ${ST.prod.tipo===k?'selected':''}>${r}</option>`).join('')}</select>
       <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" id="vInat" style="width:auto" ${ST.mostrarInativos?'checked':''}> inativos</label>
@@ -6935,8 +6935,8 @@ async function telaProdutos(){
   ligaBarra(() => formProduto(null));
   $('#pTipo').onchange = e => { ST.prod.tipo = e.target.value; telaProdutos(); };
   expRegistra(async () => { const t = await consultaProdutos({ q: ST.busca, tipo: ST.prod.tipo || null, ativos: !ST.mostrarInativos, lim: Math.max(r.total || 0, (r.data || []).length, 1) + 10 });
-    return [expCols('Produtos e preços', [['Código', p => p.codigo], ['Descrição', p => p.descricao], ['Tipo', p => TIPOS_PROD[p.tipo] || p.tipo], ['Grupo', p => p.grupo], ['Subgrupo', p => p.subgrupo], ['Disciplina', p => p.disciplina],
-      ['Unidade', p => p.unidade], ['Referência', p => p.referencia], ['Marca', p => p.marca], ['NCM', p => p.ncm], ['Preço de venda', p => p.preco != null ? R$(p.preco) : ''], ['Ativo', p => p.ativo === false ? 'não' : 'sim'], ['Kit', p => p.estrutura ? 'sim' : '']], t.data || t)]; });
+    return [expCols('Materiais', [['Código', p => p.codigo], ['Descrição', p => p.descricao], ['Tipo', p => TIPOS_PROD[p.tipo] || p.tipo], ['Grupo', p => p.grupo], ['Subgrupo', p => p.subgrupo], ['Disciplina', p => p.disciplina],
+      ['Unidade', p => p.unidade], ['Referência', p => p.referencia], ['Marca', p => p.marca], ['NCM', p => p.ncm], ['IPI %', p => p.ipi], ['Origem', p => ({ nacional: 'Nacional', importacao_direta: 'Importação direta', importacao_indireta: 'Importação indireta' })[p.origem] || ''], ['Nº de série', p => p.controla_serie ? 'sim' : ''], ['Fornecedor no CIGAM', p => p.fornecedor_cigam], ['Preço de venda', p => p.preco != null ? R$(p.preco) : ''], ['Ativo', p => p.ativo === false ? 'não' : 'sim'], ['Kit', p => p.estrutura ? 'sim' : '']], t.data || t)]; });
   document.querySelectorAll('[data-pr]').forEach(t => t.onclick = () => pode && formProduto(t.dataset.pr));
   if($('#pImp')) $('#pImp').onclick = importarProdutos;
 }
@@ -6956,6 +6956,11 @@ async function formProduto(id){
       <label class="campo">Fabricante / marca<input id="prMarca" value="${esc(P.marca)}"></label>
       <label class="campo">Referência do fabricante<input id="prRef" value="${esc(P.referencia)}"></label>
       <label class="campo">NCM<input id="prNcm" value="${esc(P.ncm)}" inputmode="numeric"></label>
+      <label class="campo">IPI (%)<input id="prIpi" inputmode="decimal" value="${P.ipi != null ? String(P.ipi).replace('.', ',') : ''}"></label>
+      <label class="campo">Peso (kg)<input id="prPeso" inputmode="decimal" value="${P.peso != null ? String(P.peso).replace('.', ',') : ''}"></label>
+      <label class="campo">Origem da mercadoria<select id="prOrigem"><option value="">—</option>${[['nacional','Nacional'],['importacao_direta','Importação direta'],['importacao_indireta','Importação indireta']].map(([k, r]) => `<option value="${k}" ${P.origem === k ? 'selected' : ''}>${r}</option>`).join('')}</select></label>
+      <label class="campo">Fornecedor no CIGAM<input id="prFornC" value="${esc(P.fornecedor_cigam)}"></label>
+      <label class="campo" style="justify-content:flex-end"><span style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="prSerie" style="width:auto" ${P.controla_serie ? 'checked' : ''}> controla nº de série</span></label>
       <label class="campo" id="prDiscW">Disciplina (projetos)<select id="prDisc"><option value="">—</option>${DISC_ORC.map(d => `<option ${P.disciplina===d?'selected':''}>${d}</option>`).join('')}</select></label>
       <label class="campo largo" id="prEscW">Escopo que vai na proposta (um item por linha)<textarea id="prEsc" rows="5">${esc(P.escopo)}</textarea></label>
       <label class="campo" style="justify-content:flex-end"><span style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="prKit" style="width:auto" ${P.estrutura?'checked':''}> é um kit (vira vários itens no orçamento)</span></label>
@@ -6964,7 +6969,7 @@ async function formProduto(id){
     <div class="secao-sens" id="prKitW"><h3>Itens do kit</h3><p class="muted" style="font-size:12px;margin-top:-4px">"× kit" = a quantidade acompanha a do kit (ex.: área em m²). Sem marcar, entra a quantidade fixa.</p>
       <div id="prComp"></div><div style="position:relative;margin-top:8px"><input id="prCompBusca" placeholder="🔎 adicionar item ao kit (código ou descrição)…" autocomplete="off"><div id="prCompSug" class="sugestoes"></div></div></div>
     <div class="grade" style="margin-top:8px"><label class="campo largo">Conta gerencial (área — centro de custo do CIGAM)<select id="prGer"><option value="">—</option></select></label></div>
-    ${P.tipo_cigam || P.conta_gerencial ? `<p class="muted" style="font-size:12px">CIGAM: tipo ${esc(P.tipo_cigam||'—')} · conta ${esc(P.conta_gerencial||'—')}${P.ipi?` · IPI ${String(P.ipi).replace('.',',')}%`:''}${P.peso?` · peso ${P.peso}`:''}</p>` : ''}
+    ${P.tipo_cigam || P.conta_gerencial ? `<p class="muted" style="font-size:12px">CIGAM: tipo ${esc(P.tipo_cigam||'—')} · conta ${esc(P.conta_gerencial||'—')}</p>` : ''}
     </div><div class="rodape"><button class="btn pri" id="bSalvar">Salvar</button></div>`);
   const vis = () => { const t = $('#prTipo').value, pj = ['projeto','consultoria','visita'].includes(t); $('#prDiscW').style.display = pj ? '' : 'none'; $('#prEscW').style.display = pj ? '' : 'none'; $('#prKitW').style.display = $('#prKit').checked ? '' : 'none'; };
   $('#prTipo').onchange = vis; $('#prKit').onchange = vis; vis();
@@ -6987,7 +6992,8 @@ async function formProduto(id){
   $('#bSalvar').onclick = async () => { const [g1, g2] = $('#prGrupo').value.split('/').map(x => x.trim());
     const d = { codigo: $('#prCod').value.trim(), descricao: $('#prDesc').value.trim(), tipo: $('#prTipo').value, grupo: g1 || null, subgrupo: g2 || null, marca: $('#prMarca').value.trim() || null,
       referencia: $('#prRef').value.trim() || null, ncm: $('#prNcm').value.replace(/\D/g,'') || null, unidade: $('#prUn').value.trim().toUpperCase() || 'UN', preco: num($('#prPreco').value),
-      disciplina: $('#prDisc').value || null, escopo: $('#prEsc').value.trim() || null, estrutura: $('#prKit').checked, ativo: $('#prAtivo').checked, atualizado_em: new Date().toISOString() };
+      disciplina: $('#prDisc').value || null, escopo: $('#prEsc').value.trim() || null, estrutura: $('#prKit').checked, ativo: $('#prAtivo').checked, ipi: $('#prIpi').value.trim() ? num($('#prIpi').value) : null, peso: $('#prPeso').value.trim() ? num($('#prPeso').value) : null,
+      origem: $('#prOrigem').value || null, controla_serie: $('#prSerie').checked, fornecedor_cigam: $('#prFornC').value.trim() || null, atualizado_em: new Date().toISOString() };
     if($('#prGer') && $('#prGer').dataset.ok) d.conta_gerencial = $('#prGer').value || null;
     if(!d.codigo || !d.descricao) return aviso('Faltam dados', 'Preencha código e descrição.');
     if(!['projeto','consultoria','visita'].includes(d.tipo)) d.disciplina = null;
@@ -9699,7 +9705,7 @@ async function telaCompras(){
       <div class="kpi" data-ka="atrasadas"><span class="muted">OCs atrasadas</span><b style="color:var(--verm)">${ocs.filter(o => o.atrasada).length}</b><span class="muted" style="font-size:12px">${abertas.length} OC(s) em aberto</span></div>
       <div class="kpi" data-ka="chegou"><span class="muted">Material chegou · entregar</span><b style="color:var(--verde)">${peds.filter(p => p.andamento_interno === 'liberado_entrega').length}</b></div>
       <div class="kpi"><span class="muted">Economia nas negociações (${mes.slice(0, 4)})</span><b style="color:var(--verde)">${R$(econ)}</b></div></div>
-    <div class="card"><h2>Compras</h2>
+    <div class="card"><h2>Ordens de compra</h2>
       <div class="barra"><button class="btn ${f.aba === 'pedidos' ? 'pri' : ''}" data-ab="pedidos">Pedidos</button><button class="btn ${f.aba === 'ocs' ? 'pri' : ''}" data-ab="ocs">Ordens de compra</button>
         <span style="flex:1"></span><button class="btn" id="cpEstoque">Compra para o estoque</button><button class="btn" id="cpInv">Inventário</button></div>
       ${f.aba === 'pedidos' ? `<table class="reg"><thead><tr><th>Pedido</th><th>Obra</th><th>Empresa</th><th>Etapa</th><th>OCs</th><th></th></tr></thead><tbody>
@@ -9933,7 +9939,7 @@ async function telaPrecosCompra(){
   if(vis === 'forn'){
     if(!ST.pcForn || !forns[ST.pcForn]) ST.pcForn = (lf.slice().sort((a, b) => b.ult.localeCompare(a.ult))[0] || {}).k;
     const f = forns[ST.pcForn], l = rows.filter(x => x.forn_chave === ST.pcForn && (!busca || norm(pTxt(x) + ' ' + (x.descricao || '') + ' ' + (x.codigo_fornecedor || '')).includes(busca))).sort((a, b) => pTxt(a).localeCompare(pTxt(b), 'pt'));
-    $('#conteudo').innerHTML = `<div class="card"><h2>Preços de compra <span class="muted" style="font-weight:400">· tabela de cada fornecedor</span></h2>${topo}
+    $('#conteudo').innerHTML = `<div class="card"><h2>Tabelas de preços <span class="muted" style="font-weight:400">· tabela de cada fornecedor</span></h2>${topo}
       <div class="barra"><select id="pcForn" style="max-width:100%;flex:1 1 280px">${lf.map(x => `<option value="${esc(x.k)}"${x.k === ST.pcForn ? ' selected' : ''}>${esc(x.nome)} · ${x.n} ${x.n === 1 ? 'item' : 'itens'}${x.id ? '' : ' (sem ligação no cadastro)'}</option>`).join('')}</select>
         <input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}" style="flex:1 1 180px"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
       ${f ? `<p class="muted" style="font-size:12px">${lf.length} fornecedores · <b>${esc(f.nome)}</b>: ${f.n} produtos, última compra ${dataBR(f.ult.slice(0, 10))}. Preço = último preço unitário (nota do CIGAM ou tabela colada); ▲▼ = mudança sobre o preço anterior. Toque na linha para ver o histórico.</p>` : ''}
@@ -9947,7 +9953,7 @@ async function telaPrecosCompra(){
   } else {
     const grupos = {}; rows.forEach(x => { const k = x.produto_id || ('d:' + x.descricao); (grupos[k] || (grupos[k] = [])).push(x); });
     const lg = Object.values(grupos).filter(g => busca ? norm(pTxt(g[0])).includes(busca) : g.length > 1).sort((a, b) => pTxt(a[0]).localeCompare(pTxt(b[0]), 'pt'));
-    $('#conteudo').innerHTML = `<div class="card"><h2>Preços de compra <span class="muted" style="font-weight:400">· comparar fornecedores do mesmo produto</span></h2>${topo}
+    $('#conteudo').innerHTML = `<div class="card"><h2>Tabelas de preços <span class="muted" style="font-weight:400">· comparar fornecedores do mesmo produto</span></h2>${topo}
       <div class="barra"><input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
       <p class="muted" style="font-size:12px">${busca ? lg.length + ' produto(s) achados.' : lg.length + ' produtos comprados de mais de um fornecedor.'} Em cada produto, o último preço de cada fornecedor, do mais barato para o mais caro. Preço antigo pode não valer mais: veja a data.</p>
       ${lg.slice(0, 120).map(g => { g.sort((a, b) => Number(a.preco) - Number(b.preco)); return `<div class="pcCmp" style="border:1px solid var(--borda);border-radius:8px;padding:8px 10px;margin:8px 0"><div style="margin-bottom:4px">${pNome(g[0])}${pm[g[0].produto_id] ? ` <span class="muted" style="font-size:12px">· venda hoje ${R$(pm[g[0].produto_id].preco)}</span>` : ''}</div>
@@ -9979,7 +9985,7 @@ async function telaPrecosCompraLista(topo, liga){
   const pm = Object.fromEntries(prods.map(p => [p.id, p]));
   const l = (r.data || []).filter(x => !ST.busca || norm([x.descricao, x.fornecedor_nome, x.codigo_fornecedor, pm[x.produto_id]?.codigo, pm[x.produto_id]?.descricao].join(' ')).includes(norm(ST.busca)));
   const custo = x => Number(x.preco) * (1 + Number(x.ipi) / 100) * (1 + Number(x.frete) / 100);
-  $('#conteudo').innerHTML = `<div class="card"><h2>Preços de compra <span class="muted" style="font-weight:400">· tabelas dos fornecedores → custo → preço de venda</span></h2>${topo}
+  $('#conteudo').innerHTML = `<div class="card"><h2>Tabelas de preços <span class="muted" style="font-weight:400">· tabelas dos fornecedores → custo → preço de venda</span></h2>${topo}
     <div class="barra"><input type="search" id="busca" placeholder="Produto, fornecedor ou código…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <button class="btn" id="pcImp">Colar tabela do fornecedor</button><button class="btn" id="pcMarg">Aplicar margem nos marcados</button></div>
     <p class="muted" style="font-size:12px">Custo = preço + IPI + frete. O ICMS (4% importado, 12% nacional) fica registrado para o caso de a empresa voltar ao sublimite — no Simples não gera crédito.</p>
@@ -10026,6 +10032,47 @@ async function avisosCompras(){
 
 Object.assign(TELAS, { cp_compras: telaCompras, cp_precos: telaPrecosCompra });
 
+/* ============ Status das ordens de compra (script 77, 19/11 — pedido do Júlio) ============
+   Um quadro com as OCs separadas pela situação: em preparação, enviadas ao fornecedor (no prazo / atrasadas),
+   recebendo (parcial), recebidas e canceladas. Tocar abre a OC (verOC). Mesmas regras de acesso de Ordens de compra. */
+IC.cp_status = '<circle cx="12" cy="5.5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="18.5" r="2"/><rect x="8" y="2" width="8" height="20" rx="3"/>';
+ST.cps = { dias: 90 };
+async function telaStatusOC(){
+  carregandoTela();
+  const seq = ST._cpsSeq = (ST._cpsSeq || 0) + 1;
+  const r = await sb.from('compras_resumo').select('*').order('numero', { ascending: false });
+  if(seq !== ST._cpsSeq) return;
+  if(r.error) return $('#conteudo').innerHTML = semScript23();
+  const f = ST.cps, desde = somaDias(hojeISO(), -f.dias);
+  const q = norm(ST.busca || ''), todas = (r.data || []).filter(o => !q || norm([o.numero, o.fornecedor, o.pedido_numero, o.obra, o.notas].join(' ')).includes(q));
+  const recente = o => String(o.recebida_em || o.atualizado_em || o.criado_em || '').slice(0, 10) >= desde;
+  const COL = [
+    ['rascunho', '✏️ Em preparação', 'var(--texto2)', o => o.situacao === 'rascunho'],
+    ['enviada', '📨 Enviada · no prazo', '#2563eb', o => o.situacao === 'enviada' && !o.atrasada],
+    ['atrasada', '⏰ Atrasada', 'var(--verm)', o => ['enviada', 'parcial'].includes(o.situacao) && o.atrasada],
+    ['parcial', '📦 Recebendo (parcial)', '#b45309', o => o.situacao === 'parcial' && !o.atrasada],
+    ['recebida', '✅ Recebida', 'var(--verde)', o => o.situacao === 'recebida' && recente(o)],
+    ['cancelada', '✕ Cancelada', '#9aa0a6', o => o.situacao === 'cancelada' && recente(o)]
+  ];
+  const cartao = o => `<div class="card" data-oc="${o.id}" style="padding:10px 12px;margin:0 0 8px;cursor:pointer">
+      <div style="display:flex;gap:6px;align-items:baseline"><b>OC ${o.numero}</b><span class="muted" style="font-size:12px">${esc(o.empresa || '')}</span><b style="margin-left:auto">${R$(o.total || 0)}</b></div>
+      <div style="font-size:13px">${esc(o.fornecedor || o.fornecedor_nome || '—')}</div>
+      <div class="muted" style="font-size:12px">${[o.pedido_numero ? 'pedido ' + o.pedido_numero : '', o.obra, o.previsao_entrega ? 'previsão ' + dataBR(o.previsao_entrega) : '', o.qtd ? `${Number(o.qtd_recebida || 0).toLocaleString('pt-BR')} de ${Number(o.qtd).toLocaleString('pt-BR')} recebidos` : ''].filter(Boolean).map(esc).join(' · ')}</div></div>`;
+  $('#conteudo').innerHTML = `<div class="card"><h2>Status das ordens de compra <span class="muted" style="font-weight:400">· onde está cada OC</span></h2>${barraBusca()}
+      <div class="chips" style="margin:-4px 0 0"><span class="muted" style="font-size:12px;align-self:center">Recebidas e canceladas dos últimos</span>${[30, 90, 365].map(d => `<button class="chip ${f.dias === d ? 'on' : ''}" data-cpd="${d}">${d} dias</button>`).join('')}</div></div>
+    <div id="cpsQuadro" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;align-items:start">
+      ${COL.map(([k, t, cor, fx]) => { const l = todas.filter(fx), tot = l.reduce((s, o) => s + Number(o.total || 0), 0);
+        return `<div data-col="${k}" style="background:var(--fundo2, rgba(0,0,0,.03));border-radius:12px;padding:10px;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px"><b style="color:${cor}">${t}</b><span class="tag">${l.length}</span><span class="muted" style="margin-left:auto;font-size:12px">${l.length ? R$(tot) : ''}</span></div>
+          ${l.map(cartao).join('') || '<div class="muted" style="font-size:12px;padding:6px">nenhuma</div>'}</div>`; }).join('')}</div>`;
+  ligaBarra(null);
+  document.querySelectorAll('[data-cpd]').forEach(b => b.onclick = () => { f.dias = +b.dataset.cpd; telaStatusOC(); });
+  document.querySelectorAll('#cpsQuadro [data-oc]').forEach(c => c.onclick = () => verOC(c.dataset.oc));
+  expRegistra(() => [expCols('Status das ordens de compra', [['OC', o => o.numero], ['Empresa', o => o.empresa], ['Situação', o => (COL.find(c => c[3](o)) || [, o.situacao])[1]], ['Fornecedor', o => o.fornecedor || o.fornecedor_nome],
+    ['Pedido', o => o.pedido_numero], ['Obra', o => o.obra], ['Previsão', o => o.previsao_entrega ? dataBR(o.previsao_entrega) : ''], ['Total', o => Number(o.total || 0)]], todas)]);
+}
+Object.assign(TELAS, { cp_status: telaStatusOC });
+
 /* =================== Compras: cotação, pedido interno de material e alçada (script 52) =================== */
 IC.cp_requisicoes = '<path d="M9 4h6l1 2h3v14H5V6h3z"/><path d="M9 11h6M9 15h4"/>';
 MENU.find(g => g.area === 'Suprimentos').itens.push(['cp_requisicoes', '📋', 'Pedidos de material', 'DASPT']);
@@ -10056,7 +10103,7 @@ async function telaCotacoes(){
   const [c, f] = await Promise.all([ sb.from('compras_cotacoes').select('*').order('numero', { ascending: false }).limit(200), sb.from('compras_cotacao_fornecedores').select('cotacao_id,fornecedor_id,ordem_id') ]);
   if(c.error) return $('#conteudo').innerHTML = '<div class="card"><h2>Cotações</h2><p>Rode o script 52_compras_cotacao.sql no Supabase.</p></div>';
   const ls = c.data || [], fs = f.data || [];
-  $('#conteudo').innerHTML = `<div class="card"><h2>Compras</h2>
+  $('#conteudo').innerHTML = `<div class="card"><h2>Ordens de compra</h2>
     <div class="barra"><button class="btn" data-ab="pedidos">Pedidos</button><button class="btn" data-ab="ocs">Ordens de compra</button><button class="btn pri" data-ab="cot">Cotações</button><span style="flex:1"></span>
       <button class="btn pri" id="cotNova">+ Nova cotação</button></div>
     <table class="reg"><thead><tr><th>Nº</th><th>O que</th><th>Fornecedores</th><th>Situação</th><th>Criada</th></tr></thead><tbody>
