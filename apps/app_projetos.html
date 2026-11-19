@@ -2583,7 +2583,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
     try{
       if(!(window.firebase && firebase.__erp)) return;
       window.__erpOuvFin = true;
-      window.__erpFin = { fantasia: erpPjFantasia, carregarCadastro: erpPjCarregar, cadastro: ERP_PJ, lista: function(){ return state.financeiro; }, salvar: function(){ return saveFinanceiro(); }, regra: function(rec){ return avaliarAutoCobranca(rec); } };   // leitura para os testes do ERP
+      window.__erpFin = { nome: erpPjNome, fantasia: erpPjFantasia, carregarCadastro: erpPjCarregar, cadastro: ERP_PJ, lista: function(){ return state.financeiro; }, salvar: function(){ return saveFinanceiro(); }, regra: function(rec){ return avaliarAutoCobranca(rec); } };   // leitura para os testes do ERP
       firebase.database().ref('storage/clm-financeiro').on('value', function(snap){
         var v = snap && snap.val();
         if(typeof v !== 'string' || !financeiroFoiCarregadoAlgumaVez || financeiroBloqueado) return;
@@ -5573,7 +5573,8 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
       var q = normalizarTexto(document.getElementById('cliListaBusca').value);
       var soAb = document.getElementById('cliSoAbertos').checked; window._cliSoAbertos = soAb;
       var vistos = {};
-      var linhas = state.projetos.slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'', 'pt-BR', {sensitivity:'base'}); }).filter(function(p){
+      var nomeMostra = function(p){ var f = dadosDoCliente(p.id); return (f && f.fin && erpPjNome(f.fin.id)) || p.nome || ''; };
+      var linhas = state.projetos.slice().sort(function(a,b){ return nomeMostra(a).localeCompare(nomeMostra(b), 'pt-BR', {sensitivity:'base'}); }).filter(function(p){
         var k = chaveNomeCliente(p.cliente || p.nome); if(vistos[k]) return false; vistos[k] = true;
         if(q && normalizarTexto((p.nome||'')+' '+(p.cliente||'')+' '+(function(){ var f = dadosDoCliente(p.id); return f && f.fin ? erpPjTexto(f.fin.id) : ''; })()).indexOf(q) === -1) return false;
         return true;
@@ -5587,7 +5588,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
           var s = d.fin.disciplinasStatus[x]; return '<span class="'+classeStatusDisciplina(s)+'" style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:10.5px;margin:2px 4px 0 0;">'+escapeHtml(x)+': '+escapeHtml(s)+'</span>';
         }).join('') : '';
         return '<div class="cli-linha" data-pid="'+escapeHtml(p.id)+'">'+
-          '<div style="min-width:0;"><b>'+escapeHtml(p.nome)+'</b>'+(d.fin && d.fin.localidade ? ' <span class="mut">· '+escapeHtml(d.fin.localidade)+'</span>' : '')+(d.fin ? erpPjHtml(d.fin.id, p.nome) : '')+(st ? '<div>'+st+'</div>' : '')+'</div>'+
+          '<div style="min-width:0;"><b>'+(d.fin && erpPjNome(d.fin.id) ? escapeHtml(erpPjNome(d.fin.id)) : escapeHtml(p.nome))+'</b>'+(d.fin && d.fin.localidade ? ' <span class="mut">· '+escapeHtml(d.fin.localidade)+'</span>' : '')+(d.fin && erpPjNome(d.fin.id) ? '<div class="erp-pj-prop" style="font-size:11.5px;color:var(--ink-soft);margin-top:2px">proposta: '+escapeHtml(p.nome)+'</div>' : '')+(st ? '<div>'+st+'</div>' : '')+'</div>'+
           '<div class="cli-num">'+
             (atras ? '<span class="cli-tag r">'+atras+' atrasada'+(atras>1?'s':'')+'</span>' : '')+
             (esp ? '<span class="cli-tag a">'+esp+' aguardando</span>' : '')+
@@ -5620,7 +5621,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
     var permRel = podeUsarRelatorios();
     var info = [];
     if(fin){
-      var fantErp = erpPjFantasia(fin.id, fin.cliente); if(fantErp) info.push('<b>'+escapeHtml(fantErp)+'</b>');   // ERP: nome fantasia do cadastro
+      if(!erpPjNome(fin.id) && ERP_PJ.carregado && erpPjSb()) info.push('<span style="color:#b45309">sem ligação com o cadastro (CRM)</span>');
       if(fin.enderecoCompleto) info.push(escapeHtml(fin.enderecoCompleto)); else if(fin.localidade) info.push(escapeHtml(fin.localidade));
       if(fin.numeroProposta) info.push('proposta '+escapeHtml(fin.numeroProposta));
       if(fin.areaM2) info.push(escapeHtml(String(fin.areaM2))+' m²');
@@ -5649,7 +5650,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
     if(!abas.some(function(a){ return a[0] === fichaAba; })) fichaAba = 'tempo';
     raiz.innerHTML =
       '<button type="button" class="btn small secondary" id="fichaVoltar" style="margin-bottom:10px;">‹ Clientes</button>'+
-      '<div class="ficha-topo"><div style="min-width:0;"><h2 style="margin:0; font-size:22px;">'+escapeHtml(d.pj.nome)+'</h2>'+
+      '<div class="ficha-topo"><div style="min-width:0;"><h2 style="margin:0; font-size:22px;">'+(fin ? erpPjNomeHtml(fin.id, d.pj.nome) : escapeHtml(d.pj.nome))+'</h2>'+
         (info.length ? '<div class="mut" style="margin-top:3px;">'+info.join(' · ')+'</div>' : '')+'</div>'+
         '<div class="ficha-bts">'+
           (permRel ? '<button type="button" class="btn small secondary" id="fichaVerif">☑️ Verificações</button>' : '')+
@@ -8320,6 +8321,12 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
   function erpPjHtml(finId, nomeProposta){ var n = erpPjFantasia(finId, nomeProposta);
     return n ? '<div class="erp-pj-fant" style="font-size:12px;font-weight:500;color:var(--ink-soft);margin-top:2px;white-space:normal">'+escapeHtml(n)+'</div>' : ''; }
   if(erpPjSb()) setTimeout(erpPjCarregar, 1200);
+  /* 19/11: nome do cadastro (CRM) como nome principal; vazio sem ligação */
+  function erpPjNome(finId){ if(!finId) return ''; if(!ERP_PJ.carregado){ erpPjCarregar(); return ''; } var p = ERP_PJ.porFin[finId]; return p ? String((p.apelido || '').trim() || p.nome || '').trim() : ''; }
+  function erpPjNomeHtml(finId, nomeProposta){ var n = erpPjNome(finId);
+    if(!n) return escapeHtml(nomeProposta || '');
+    return escapeHtml(n) + '<div class="erp-pj-prop" style="font-size:11.5px;font-weight:400;color:var(--ink-soft);margin-top:2px;white-space:normal">proposta: ' + escapeHtml(nomeProposta || '') + '</div>'; }
+  function erpPjRecarregar(){ ERP_PJ.carregando = null; ERP_PJ.carregado = false; return erpPjCarregar(); }
 
   function renderFinanceiroLista(){
     var el = document.getElementById('finLista');
@@ -8404,7 +8411,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
       if(abertas[0]){ proxParcela = abertas[0]; proxParcela.atrasada = proxParcela.data < todayISO(); }
     }
     header.innerHTML =
-      '<div class="nome">'+(isColapsado?'▸ ':'▾ ')+escapeHtml(rec.cliente)+erpPjHtml(rec.id, rec.cliente)+
+      '<div class="nome">'+(isColapsado?'▸ ':'▾ ')+erpPjNomeHtml(rec.id, rec.cliente)+
         (temCobrar?' <span style="color:#fff;background:var(--red);font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:999px;margin-left:6px;vertical-align:middle;letter-spacing:0.2px;">💰 COBRAR</span>':'')+
         (temCobrancaEnviada?' <span style="color:var(--ink);background:var(--paper);border:1px solid var(--border);font-size:10.5px;font-weight:600;padding:4px 10px;border-radius:999px;margin-left:6px;vertical-align:middle;">✉ Cobrança enviada</span>':'')+
         (temPrevisto?' <span style="color:var(--ink);background:var(--amber-soft);border:1px solid var(--amber);font-size:10.5px;font-weight:600;padding:4px 10px;border-radius:999px;margin-left:6px;vertical-align:middle;">📅 paga em '+escapeHtml(fmtDate(temPrevisto))+'</span>':'')+
@@ -9101,7 +9108,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     painel.innerHTML =
       '<div class="panel"><h3>Novo cliente fechado</h3>'+
       '<div class="form-grid">'+
-        '<div class="full"><label>Cliente</label><input type="text" id="fnCliente" placeholder="Nome do cliente"></div>'+
+        '<div class="full" style="position:relative"><label>Cliente</label><input type="text" id="fnCliente" placeholder="Buscar no cadastro (CRM): nome, fantasia ou código" autocomplete="off"><div id="fnClienteSug" style="display:none;position:absolute;left:0;right:0;z-index:30;background:var(--panel,#fff);border:1px solid var(--line,#ddd);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:280px;overflow:auto"></div><div id="fnClienteLig" style="font-size:12px;margin-top:4px"></div></div>'+
         '<div><label>Número da proposta</label><input type="text" id="fnNumeroProposta" placeholder="Ex: 010571"></div>'+
         '<div><label>Área (m²)</label><input type="number" step="0.01" id="fnAreaM2" placeholder="0"></div>'+
         '<div><label>Quantidade de pavimentos</label><input type="number" step="1" id="fnQtdPavimentos" placeholder="0"></div>'+
@@ -9162,6 +9169,25 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
         '<div class="form-actions"><button class="btn" id="fnBtnSalvar">Criar cliente</button><button class="btn secondary" id="fnBtnCancelar">Cancelar</button></div>'+
       '</div></div>';
 
+    /* 19/11: o cliente vem do cadastro (CRM) */
+    var fnPessoa = null;
+    (function(){
+      var inp = document.getElementById('fnCliente'), box = document.getElementById('fnClienteSug'), lig = document.getElementById('fnClienteLig'), sb = erpPjSb(), t = null, seq = 0;
+      if(!inp || !sb){ return; }
+      var mostraLig = function(){ lig.innerHTML = fnPessoa ? '<span style="color:var(--green,#15803d)">✓ ligado ao cadastro: <b>' + escapeHtml(fnPessoa.nome) + '</b>' + (fnPessoa.codigos_cigam && fnPessoa.codigos_cigam.length ? ' · ' + escapeHtml(fnPessoa.codigos_cigam[0]) : '') + '</span>'
+        : (inp.value.trim().length >= 3 ? '<span style="color:#b45309">escolha a empresa na lista do cadastro (CRM)</span>' : ''); };
+      inp.addEventListener('input', function(){ fnPessoa = null; mostraLig(); clearTimeout(t); var q = erpPjFold(inp.value); if(q.length < 3){ box.style.display = 'none'; return; }
+        t = setTimeout(async function(){ var my = ++seq; var ws = q.split(' ').filter(Boolean).slice(0, 3);
+          var r = sb.from('pessoas_leve').select('id,nome,apelido,codigos_cigam').neq('status', 'inativo').limit(10);
+          ws.forEach(function(w){ r = r.or('nome.ilike.*' + w + '*,apelido.ilike.*' + w + '*'); });
+          var res = await r; if(my !== seq) return; var l = res.data || [];
+          box.innerHTML = l.length ? '<div style="padding:6px 10px;font-size:11px;opacity:.6">Do cadastro (CRM)</div>' + l.map(function(p, i){ return '<div data-fnp="' + i + '" style="padding:8px 10px;cursor:pointer;border-top:1px solid var(--line,#eee)"><b>' + escapeHtml((p.apelido || '').trim() || p.nome) + '</b><div style="font-size:11px;opacity:.65">' + escapeHtml([p.apelido ? p.nome : '', (p.codigos_cigam || [])[0] || ''].filter(Boolean).join(' · ')) + '</div></div>'; }).join('')
+            : '<div style="padding:8px 10px;font-size:12px;opacity:.7">Nada no cadastro com esse nome. Cadastre a empresa no ERP (Telemarketing CRM) antes.</div>';
+          box.style.display = 'block';
+          box.querySelectorAll('[data-fnp]').forEach(function(it){ it.addEventListener('mousedown', function(ev){ ev.preventDefault(); fnPessoa = l[+it.getAttribute('data-fnp')]; inp.value = (fnPessoa.apelido || '').trim() || fnPessoa.nome; box.style.display = 'none'; mostraLig(); }); });
+        }, 300); });
+      inp.addEventListener('blur', function(){ setTimeout(function(){ box.style.display = 'none'; }, 150); });
+    })();
     var fnDescTipo = 'percentual';
     function atualizarBotoesDesconto(){
       document.getElementById('fnDescTipoPct').className = 'btn small' + (fnDescTipo==='percentual' ? '' : ' secondary');
@@ -9268,6 +9294,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
       var nome = document.getElementById('fnCliente').value.trim();
       var erro = document.getElementById('fnErro');
       if(!nome){ erro.textContent = 'Informe o nome do cliente.'; erro.style.display = 'block'; return; }
+      if(!fnPessoa && erpPjSb() && !confirm('Este cliente não foi escolhido no cadastro (CRM) e vai ficar sem ligação com a empresa. Criar assim mesmo?')) return;
       var descontoDigitado = parseFloat(document.getElementById('fnDesconto').value) || 0;
       var valorPorDisciplinaBruto = {};
       painel.querySelectorAll('.fnvd').forEach(function(inp){
@@ -9319,6 +9346,8 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
       avaliarAutoCobranca(novo);
       state.financeiro.push(novo);
       saveFinanceiro();
+      if(fnPessoa && erpPjSb()){ (async function(p, rec){ try{ var r = await erpPjSb().from('vinculos_apps').insert({ app: 'projetos', colecao: 'clm-financeiro', id_app: rec.id, nome_no_app: rec.cliente, pessoa_id: p.id, situacao: 'confirmado', confianca: 1, motivo: 'escolhido do cadastro (CRM) no Novo cliente fechado' });
+        if(r.error) console.warn('[ERP] ligação do cliente novo', r.error); else { await erpPjRecarregar(); try{ renderFinanceiroLista(); }catch(e){} } }catch(e){ console.warn('[ERP] ligação do cliente novo', e); } })(fnPessoa, novo); }
       if(projetosCarregado){ sincronizarProjetosComFinanceiro(); }
       var pessoaContato = (novo.contato || '').trim();
       var mensagemWhats = '\u{1F514} *NOVO CLIENTE \u2014 SINAL RECEBIDO* \u{1F4B0}\n\n'+
