@@ -900,7 +900,7 @@ async function formPessoa(p){
       ${(p.codigos_cigam||[]).length?`<div class="campo largo">Códigos no CIGAM<div>${p.codigos_cigam.map(esc).join(', ')}</div></div>`:''}
     </div>
     ${humano()?`<div class="secao-sens"><h3>Dados sensíveis <span class="cadeado">🔒 só escritório</span></h3><div class="grade">
-      <label class="campo">CPF / CNPJ<input id="sDoc" inputmode="numeric" value="${esc(S.documento?fmtDoc(S.documento):'')}"></label>
+      <label class="campo">CPF / CNPJ<input id="sDoc" inputmode="numeric" data-pid="${p.id||''}" value="${esc(S.documento?fmtDoc(S.documento):'')}"></label>
       <label class="campo">Inscrição estadual<input id="sIe" value="${esc(S.ie)}"></label>
       <label class="campo">Inscrição municipal<input id="sIm" value="${esc(S.im)}"></label>
       <div class="campo largo" style="margin-top:6px"><b style="color:#1c1c1e;font-size:13px">Endereço principal · cobrança</b><span>vai no recibo, na nota fiscal e na cobrança</span></div>
@@ -951,7 +951,7 @@ async function formPessoa(p){
       sd = { documento:doc||null, ie:$('#sIe').value.trim()||null, im:$('#sIm').value.trim()||null, logradouro:$('#sLog').value.trim()||null, numero:$('#sNum').value.trim()||null,
         complemento:$('#sComp').value.trim()||null, bairro:$('#sBairro').value.trim()||null, municipio:$('#sMun').value.trim()||null, uf:$('#sUf').value||null,
         cep:dig($('#sCep').value).replace(/^(\d{5})(\d{3})$/,'$1-$2')||null, telefones:listaTxt($('#sTel').value).map(fmtTel), emails:mails };
-      if(doc){ const r = await priv().from('pessoas_dados').select('pessoa_id').eq('documento',doc).maybeSingle(); if(r.data && r.data.pessoa_id!==p.id){ const o=pessoa(r.data.pessoa_id); return aviso('CPF/CNPJ já cadastrado', 'Esse documento já está em <b>'+esc(o?o.nome:'outra empresa')+'</b>.'); } }
+      if(doc){ const r = await priv().from('pessoas_dados').select('pessoa_id').eq('documento',doc).neq('pessoa_id', p.id || '00000000-0000-0000-0000-000000000000').limit(1); const r0 = (r.data || [])[0]; if(r0){ const o=pessoa(r0.pessoa_id); return aviso('CPF/CNPJ já cadastrado', 'Esse documento já está em <b>'+esc(o?o.nome:'outra empresa')+'</b>.'); } }
     }
     try{
       let id = p.id;
@@ -1735,6 +1735,18 @@ async function buscarCep(cep){
   try{ const r = await fetch(`https://brasilapi.com.br/api/cep/v1/${cep}`); if(r.ok){ const j = await r.json(); return { log: j.street, bairro: j.neighborhood, mun: j.city, uf: j.state }; } if(r.status === 404) return null; }catch(e){}
   throw new Error('sem conexão');
 }
+/* endereço de outro cadastro com o mesmo CEP (empresas e locais; só quem vê os dados do escritório) */
+async function buscarCepCadastro(cep){
+  if(typeof humano === 'function' && !humano()) return null;
+  const f = cep.slice(0, 5) + '-' + cep.slice(5);
+  try{
+    const r = await priv().from('pessoas_dados').select('logradouro,bairro,municipio,uf').in('cep', [f, cep]).not('logradouro', 'is', null).limit(20);
+    const l = (r.data || []).filter(x => x.logradouro);
+    if(!l.length) return null;
+    const moda = c => { const n = {}; l.forEach(x => { const v = (x[c] || '').trim(); if(v) n[v] = (n[v] || 0) + 1; }); return Object.keys(n).sort((a, b) => n[b] - n[a])[0] || ''; };   // o que mais aparece (o cadastro tem erros de digitação)
+    return { log: moda('logradouro'), bairro: moda('bairro'), mun: moda('municipio'), uf: moda('uf') };
+  }catch(e){ return null; }
+}
 document.addEventListener('input', async ev => {
   const alvo = CEP_CAMPOS[ev.target.id]; if(!alvo) return;
   const el = ev.target, cep = el.value.replace(/\D/g, '').slice(0, 8);
@@ -1744,15 +1756,52 @@ document.addEventListener('input', async ev => {
   if(el.dataset.ultimo === cep) return; el.dataset.ultimo = cep;
   st.textContent = 'buscando o endereço…';
   try{
-    const e = await buscarCep(cep);
+    let e = null, falhou = false;
+    try{ e = await buscarCep(cep); }catch(x){ falhou = true; }
+    // 19/11 (Júlio): também usa os endereços já cadastrados com o mesmo CEP (completa o que a internet não trouxe)
+    if(!e || !e.log){ const l = await buscarCepCadastro(cep); if(l){ e = Object.assign({}, l, e || {}, { log: (e && e.log) || l.log, bairro: (e && e.bairro) || l.bairro }); e.doCadastro = true; } }
+    if(!e && falhou) throw new Error('sem conexão');
     if(el.value.replace(/\D/g, '') !== cep) return;            // a pessoa já mudou o CEP
     if(!e){ st.textContent = 'CEP não encontrado — preencha à mão.'; st.style.color = 'var(--verm)'; return; }
     const pôr = (id, v) => { const x = document.getElementById(id); if(x && v) x.value = v; };
     pôr(alvo.log, e.log); pôr(alvo.bairro, e.bairro); pôr(alvo.mun, e.mun); pôr(alvo.uf, e.uf);
     const comp = document.getElementById(alvo.comp); if(comp && !comp.value && e.comp) comp.value = e.comp;
-    st.style.color = 'var(--verde)'; st.textContent = '✓ endereço preenchido' + (e.log ? '' : ' (CEP geral da cidade: falta a rua)');
+    st.style.color = 'var(--verde)'; st.textContent = '✓ endereço preenchido' + (e.doCadastro ? ' pelo cadastro (outro endereço com este CEP)' : '') + (e.log ? '' : ' (CEP geral da cidade: falta a rua)');
     const n = document.getElementById(e.log ? alvo.num : alvo.log); if(n) n.focus();
   }catch(x){ st.style.color = 'var(--amar)'; st.textContent = 'Sem conexão para buscar o CEP — preencha à mão.'; el.dataset.ultimo = ''; }
+});
+
+/* ============ CPF / CNPJ: confere enquanto digita e avisa se já está cadastrado (19/11, pedido do Júlio) ============
+   Ficha da empresa (#sDoc) e cadastro rápido (#rcDoc). Com 11 ou 14 números confere os dígitos verificadores;
+   se estiver certo, procura o documento no cadastro e mostra QUAL empresa já usa (na ficha, com link para abrir).
+   Salvar continua bloqueado pela conferência que já existia no formPessoa. */
+const DOC_CAMPOS = { sDoc: true, rcDoc: true };
+let _docSeq = 0;
+document.addEventListener('input', async ev => {
+  const el = ev.target; if(!DOC_CAMPOS[el.id]) return;
+  const d = dig(el.value), seq = ++_docSeq;
+  if(el.id === 'sDoc' && (d.length === 11 || d.length === 14)) el.value = fmtDoc(d);
+  let st = el.closest('label').querySelector('.doc-st');
+  if(!st){ st = document.createElement('div'); st.className = 'doc-st'; st.style.cssText = 'font-size:12px;margin-top:4px;font-weight:400'; el.closest('label').appendChild(st); }
+  const msg = (cor, h) => { st.style.color = cor; st.innerHTML = h; };
+  if(!d) return msg('', '');
+  if(d.length !== 11 && d.length !== 14) return msg('var(--texto2)', d.length < 11 ? `faltam ${11 - d.length} número(s) para CPF` : d.length < 14 ? `faltam ${14 - d.length} número(s) para CNPJ` : 'número(s) a mais');
+  const ok = d.length === 11 ? validaCPF(d) : validaCNPJ(d), tipo = d.length === 11 ? 'CPF' : 'CNPJ';
+  if(!ok) return msg('var(--verm)', `✗ ${tipo} digitado errado — os dígitos verificadores não conferem`);
+  if(el.id === 'rcDoc') st.textContent = '';            // o cadastro rápido já mostra "✓ válido" no próprio aviso
+  else msg('var(--verde)', `✓ ${tipo} válido`);
+  try{
+    const r = await priv().from('pessoas_dados').select('pessoa_id').eq('documento', d).limit(5);
+    if(seq !== _docSeq) return;                          // a pessoa continuou digitando
+    const meu = el.dataset.pid || '', outros = (r.data || []).map(x => x.pessoa_id).filter(id => id !== meu);
+    if(!outros.length) return;
+    const nomes = outros.map(id => { const p = pessoa(id); const n = p ? p.nome + (p.apelido ? ' (' + p.apelido + ')' : '') + ((p.codigos_cigam || []).length ? ' · ' + p.codigos_cigam.join(', ') : '') : 'outra empresa';
+      return el.id === 'sDoc' && p ? `<a href="#" data-docabre="${id}"><b>${esc(n)}</b></a>` : `<b>${esc(n)}</b>`; }).join(', ');
+    msg('var(--verm)', `⚠ Este ${tipo} já está cadastrado em ${nomes}`);
+    st.querySelectorAll('[data-docabre]').forEach(a => a.onclick = async e => { e.preventDefault();
+      if(!await modal('Abrir o outro cadastro?', 'O que você digitou nesta ficha não será salvo.', [['Ficar aqui', false], ['Abrir', true, 'pri']])) return;
+      ST._painelSujo = false; formPessoa(pessoa(a.dataset.docabre)); });
+  }catch(e){}
 });
 
 /* =================== Padrão dos PDFs do ERP (modelo "Quadro de Cargas – Castro Neves") ===================
