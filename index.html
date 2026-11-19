@@ -786,7 +786,7 @@ const MENU = [
   { area:'Cadastros', itens:[ ['pessoas','🏢','Telemarketing CRM','DAPSG'], ['obras','🏠','Obras (locais)','DAPSG'], ['contatos','📇','Contatos','DAPSG'], ['fila','✅','Aprovação','DAPSG'] ] },
   { area:'Orçamentos', itens:[ ['orc','📑','Orçamentos','DAPSG'], ['ped_cigam','🗂️','Pedidos do CIGAM','DAPSG'] ] },
   { area:'Projetos', itens:[ ['pj_propostas','📄','Propostas e parcelas','DAPG'], ['pj_projetos','📋','Projetos e tarefas','DAPG'], ['pj_cal','📅','Calendário','DAPG'], ['pj_visitas','📝','Visitas e considerações','DAPG'], ['pj_art','📐','ART','DAPG'], ['pj_com','💵','Comissões','DAPG'], ['pj_dim','🧮','Dimensionamento','DAPG'] ] },
-  { area:'Serviços', itens:[ ['sv_agenda','📅','Agenda e atividades','DSAT'], ['sv_os','🧾','Ordens de serviço','DSA'], ['sv_orc','📥','Solicitações de orçamento','DSA'], ['sv_pedidos','🏗️','Obras e pedidos','DSA'], ['sv_manut','🔧','Manutenções e contratos','DSA'], ['sv_oficina','🛠️','Oficina','DSAT'], ['sv_comissoes','💵','Comissões dos técnicos','DA'] ] },
+  { area:'Serviços (apps)', itens:[ ['sv_agenda','📅','Agenda e atividades','DSAT'], ['sv_os','🧾','Ordens de serviço','DSA'], ['sv_orc','📥','Solicitações de orçamento','DSA'], ['sv_pedidos','🏗️','Obras e pedidos','DSA'], ['sv_manut','🔧','Manutenções e contratos','DSA'], ['sv_oficina','🛠️','Oficina','DSAT'], ['sv_comissoes','💵','Comissões dos técnicos','DA'] ] },
   { area:'Suprimentos', itens:[ ['produtos','📦','Materiais','DAPSG'], ['cp_precos','🏷️','Tabelas de preços','DA'], ['cp_compras','🛒','Ordens de compra','DAS'], ['cp_status','🚦','Status das ordens de compra','DAS'], ['sv_estoque','📦','Estoque','DSAT'] ] },
   { area:'Financeiro', itens:[ ['fn_painel','📊','Painel de resultados','DA'], ['fn_cobranca','📞','Cobrança','DA'], ['fn_fluxo','🗓️','Fluxo diário','DA'], ['fn_caixa','🏦','Caixa e bancos','DA'], ['fn_receber','💰','A receber','DA'], ['fn_pagar','💸','Lançamentos','DA'], ['fn_posicao','👤','Posição do cliente','DA'], ['fn_recibos','🧾','Recibos','DA'], ['fn_notas','🧾','Notas fiscais','DA'], ['fn_plano','📒','Plano de contas','DA'], ['fn_recebidas','📥','Notas recebidas','DA'], ['fn_gerencial','📈','Relatório gerencial','DA'], ['fn_contabil','📚','Relatórios para a contabilidade','DA'], ['fn_cnpj','📊','Faturamento por CNPJ','DA'], ['fn_pendencias','⚠️','Pendências de clientes','DAPS'] ] },
   { area:'Administração', itens:[ ['adm_usuarios','👥','Acessos','D'], ['adm_fiscal','⚙️','Configuração fiscal','DA'], ['adm_cert','🔐','Certificados digitais','DA'], ['adm_regras','⚖️','Regras fiscais (CFOP)','DA'], ['registro','🗂️','Registro de ações','D'], ['adm_backup','💾','Backup','D'], ['vinculos','🔗','Migração dos apps','DAPS'], ['projetos','🗄️','App Projetos (antigo)','DAP'], ['servicos','🗄️','App Serviços (antigo)','DAST'] ] }
@@ -3369,7 +3369,7 @@ function _ordPrepara(raiz){
    17/11 (Júlio, script 63): Serviços = só o Gestor; Projetos = sem o financeiro; o financeiro dos dois aplicativos fica no
    Administrativo (menu Financeiro → Financeiro de Serviços / Financeiro de Projetos — fim deste arquivo). Os apps ganham o visual do ERP (window.__erpTemaApp, no fim deste arquivo). */
 const SETORES = {
-  adm:  { nome: 'Administrativo', ic: 'fn_caixa',   txt: 'Cadastros, CRM e orçamentos, pedidos, compras, financeiro e fiscal', areas: ['Cadastros', 'Orçamentos', 'Suprimentos', 'Financeiro', 'Administração'], fora: ['projetos', 'servicos'] },
+  adm:  { nome: 'Administrativo', ic: 'fn_caixa',   txt: 'Cadastros, CRM e orçamentos, pedidos, compras, financeiro e fiscal', areas: ['Cadastros', 'Orçamentos', 'Serviços', 'Suprimentos', 'Financeiro', 'Administração'], fora: ['projetos', 'servicos'] },
   serv: { nome: 'Serviços',       ic: 'sv_manut',    txt: 'Controle dos serviços: agenda, orçamentos, obras, manutenções e estoque', chaves: ['servicos'], app: 'servicos', perfilApp: 'manager' },
   proj: { nome: 'Projetos',       ic: 'pj_projetos', txt: 'Tarefas, clientes, calendário, ART, comissão e dimensionamento', chaves: ['projetos'], app: 'projetos' },
   tec:  { nome: 'Técnico',        ic: 'sv_agenda',   txt: 'Agenda de serviços do técnico', chaves: ['servicos'], app: 'servicos', perfilApp: 'tech' },
@@ -3383,7 +3383,7 @@ function perfilAppDoSetor(k){ window.__erpPerfilApp = (SETORES[k] && SETORES[k].
 /* 17/11 (Júlio): os grupos "Projetos" e "Serviços" do menu do ERP (as telas reescritas) saem do Administrativo — Projetos e Serviços
    são só os aplicativos, nas bases deles. As telas continuam no código (e nos testes, pelo setor interno "tudo"), mas não aparecem
    no menu, na busca, nos avisos nem no Início; qualquer atalho antigo para elas leva para a base certa. */
-function telaFora(k){ return (ST.setor !== 'tudo' || ST._escolhendo) && ['Projetos', 'Serviços'].includes(_areaDaChave()[k]); }   // 'tudo' sem estar escolhendo = só nos testes
+function telaFora(k){ return (ST.setor !== 'tudo' || ST._escolhendo) && ['Projetos', 'Serviços (apps)'].includes(_areaDaChave()[k]); }   // 19/11: o grupo antigo virou "Serviços (apps)"; "Serviços" agora é o grupo das ordens de serviço do Administrativo   // 'tudo' sem estar escolhendo = só nos testes
 const baseDaTelaFora = k => _areaDaChave()[k] === 'Projetos' ? 'proj' : 'serv';
 const _areaDaChave = () => { if(!window._areaChave){ window._areaChave = {}; padraoMenu().forEach(g => g.itens.forEach(i => { window._areaChave[i[0]] = g.area; })); } return window._areaChave; };
 function setorTem(k, item){
@@ -7914,7 +7914,14 @@ async function telaPedCigam(){
 }
 
 async function verPedCigam(numero){
-  const r = await sb.from('pedidos_cigam').select('*').eq('numero', numero).maybeSingle(); const x = r.data; if(!x) return aviso('Pedido não encontrado', '');
+  const [r, ri] = await Promise.all([sb.from('pedidos_cigam').select('*').eq('numero', numero).maybeSingle(), sb.from('pedidos_cigam_itens').select('*').eq('pedido_numero', numero).order('item')]);
+  const x = r.data; if(!x) return aviso('Pedido não encontrado', ''); const IT = ri.error ? [] : (ri.data || []), proj = x.tipo_documento === 'projetos';
+  const tabItens = !IT.length ? '' : `<h3 style="margin:16px 0 6px">${proj ? 'Projetos da proposta' : 'Itens do pedido'} <span class="muted" style="font-weight:400;font-size:12px">· lidos do PDF</span></h3>
+    <div style="overflow-x:auto"><table class="reg"><thead><tr><th style="width:34px">Item</th>${proj ? '' : '<th>Código</th>'}<th>Descrição</th>${proj ? '' : '<th style="text-align:right">Quant.</th><th style="text-align:right">Preço unit.</th>'}<th style="text-align:right">Total</th></tr></thead><tbody>
+    ${IT.map(i => i.titulo ? `<tr><td colspan="${proj ? 3 : 6}" style="font-weight:700;background:var(--fundo2,#f4f4f6)">${esc(i.descricao.replace(/^-\s*|\s*-{3,}\s*$/g, ''))}</td></tr>`
+      : `<tr><td>${i.item ?? ''}</td>${proj ? '' : `<td>${esc(i.codigo || '')}</td>`}<td>${esc(i.descricao || '')}${i.escopo ? `<div class="muted" style="font-size:12px;white-space:pre-wrap">${esc(i.escopo)}</div>` : ''}</td>
+        ${proj ? '' : `<td style="text-align:right">${Number(i.quantidade || 0).toLocaleString('pt-BR')}</td><td style="text-align:right">${Number(i.valor_unitario || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</td>`}<td style="text-align:right">${R$(i.total || 0)}</td></tr>`).join('')}
+    </tbody></table></div>`;
   const pe = pessoa(x.pessoa_id), pg = pessoa(x.pagador_id);
   const lin = (rot, val) => val || val === 0 ? `<div class="campo"><span>${rot}</span><b style="color:var(--preto);font-weight:500">${val}</b></div>` : '';
   abrirPainel(`<div class="cab"><h2>Pedido ${x.numero} <span class="muted" style="font-weight:400">· CIGAM</span></h2>${tagSitCigam(x.situacao)}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
@@ -7922,6 +7929,8 @@ async function verPedCigam(numero){
       <div class="campo largo"><span>Cliente</span><b style="color:var(--preto);font-size:15px">${esc(pe ? pe.nome : x.cliente_nome || '')}</b>
         <span>CIGAM ${esc(x.cliente_codigo || '')}${pe && pe.apelido ? ' · ' + esc(pe.apelido) : ''}${pe ? ` · <a href="#" id="pcEmp">abrir a empresa</a>` : ' · empresa não está no cadastro'}</span></div>
       ${lin('Cobrar de', x.cobranca_codigo && x.cobranca_codigo !== x.cliente_codigo ? esc((pg ? pg.nome : '') + ' (CIGAM ' + x.cobranca_codigo + ')') : '')}
+      ${x.conferir ? `<div class="campo largo"><span style="color:var(--amar)">⚠ Conferir</span><b style="color:var(--preto);font-weight:500">${esc(x.conferir)}</b></div>` : ''}
+      ${lin(proj ? 'Referência' : 'Título do pedido', esc(x.titulo || ''))}${lin('Contato (Att.)', esc(x.contato || ''))}
       ${lin('Sistema / observação', esc(x.sistema || ''))}${lin('Tipo', TIPO_PED[x.tipo])}${lin('Unidade de negócio', esc(x.unidade || ''))}
       ${lin('Data do pedido', dataBR(x.data_pedido))}${lin('Aprovado em', dataBR(x.data_aprovacao))}${lin('Liberado em', dataBR(x.data_liberacao))}
       ${lin('Validade', dataBR(x.data_validade))}${lin('Prazo de entrega', dataBR(x.prazo_entrega))}${lin('Faturado em', dataBR(x.data_faturado))}
@@ -7929,10 +7938,16 @@ async function verPedCigam(numero){
       ${lin('Itens no pedido', x.itens)}${lin('Mercadoria', R$(x.total_mercadoria))}${Number(x.desconto) ? lin('Desconto', R$(x.desconto) + (Number(x.perc_desconto) ? ` (${String(x.perc_desconto).replace('.', ',')}%)` : '')) : ''}
       ${Number(x.frete) ? lin('Frete', R$(x.frete)) : ''}${lin('Total do pedido', `<span style="color:var(--verm);font-weight:700">${R$(x.total)}</span>`)}${lin('Total para faturar (CIGAM)', R$(x.total_faturado))}
       ${Number(x.valor_icms) ? lin('ICMS', R$(x.valor_icms)) : ''}${Number(x.valor_iss) ? lin('ISS', R$(x.valor_iss)) : ''}
-      ${lin('Condição de pagamento', esc([x.condicao_codigo, x.condicao_descricao].filter(Boolean).join(' · ')))}
+      ${lin('Condição de pagamento', esc([x.condicao_codigo, x.condicao_descricao].filter(Boolean).join(' · ')))}${x.condicao_texto && x.condicao_texto !== x.condicao_descricao ? lin('Condição (no documento)', esc(x.condicao_texto)) : ''}
+      ${lin(proj ? 'Endereço da obra' : 'Local de entrega', esc(x.local_entrega || ''))}${lin('Endereço de cobrança', esc(x.cobranca_endereco || ''))}${lin('Praça de pagamento', esc(x.praca_pagamento || ''))}
+      ${lin('Prazo (no documento)', esc(x.prazo_texto || ''))}${lin('Via', esc(x.via || ''))}${lin('Transportadora', esc(x.transportadora || ''))}
+      ${x.montagem != null ? lin('Montagem', R$(x.montagem)) : ''}${lin('Vendedor', esc(x.vendedor || ''))}${lin('Validade da proposta', esc(x.validade_texto || ''))}
+      ${x.visita_complementar != null ? lin('Visita complementar', R$(x.visita_complementar)) : ''}${lin('Responsável técnico', esc(x.responsavel || ''))}
+      ${x.nao_incluso ? `<div class="campo largo"><span>Não está incluso</span><div style="white-space:pre-wrap;color:var(--preto)">${esc(x.nao_incluso)}</div></div>` : ''}
       ${lin('Criado por', esc([x.usuario_criacao, x.usuario_modificacao && x.usuario_modificacao !== x.usuario_criacao ? 'alterado por ' + x.usuario_modificacao : ''].filter(Boolean).join(' · ')))}
       ${x.observacao ? `<div class="campo largo"><span>Observação</span><div style="white-space:pre-wrap;color:var(--preto)">${esc(x.observacao)}</div></div>` : ''}
-    </div><p class="muted" style="font-size:12px;margin-top:12px">Consulta do CIGAM — os itens do pedido não vieram na exportação.</p></div>
+    </div>${tabItens || '<p class="muted" style="font-size:12px;margin-top:12px">Consulta do CIGAM — os itens deste pedido ainda não foram lidos (sem PDF encontrado).</p>'}
+    ${x.pdf_arquivo ? `<p class="muted" style="font-size:11px;margin-top:8px">Documento: ${esc(x.pdf_arquivo)}</p>` : ''}</div>
     <div class="rodape" id="pcRod"></div>`);
   sb.from('orcamentos').select('id,etapa,total').eq('pedido_cigam', numero).maybeSingle().then(o => { if(o.error || !$('#pcRod')) return;
     if(o.data) $('#pcRod').innerHTML = `<span class="muted" style="font-size:13px;margin-right:auto">Já está no ERP como orçamento nº ${numero} (${esc((ETAPAS_ORC[o.data.etapa] || [o.data.etapa])[0])} · ${R$(o.data.total)})</span><button class="btn pri" id="pcAbrir">Abrir no ERP</button>`;
@@ -7989,6 +8004,73 @@ Object.assign(TELAS, { ped_cigam: telaPedCigam });
     (o.data || []).forEach(x => { const td = document.querySelector(`[data-pc="${x.pedido_cigam}"] td`); if(td) td.insertAdjacentHTML('beforeend', ' <span class="tag ok" title="Já é um orçamento do ERP">no ERP</span>'); });
     return r; };
   Object.assign(TELAS, { ped_cigam: window.telaPedCigam }); })();
+
+/* ============ OS do CIGAM (script 79, 19/11 — Júlio) ============
+   Histórico das ordens de serviço do CIGAM, lidas dos PDFs (Y:\!Serviços\ORDENS DE SERVIÇO): cliente, itens (equipamento/serviço,
+   nº de série, reclamado, solução), serviços executados (técnico, data e horário, valor) e materiais. Só consulta. */
+IC.os_cigam = '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>';
+// 19/11 (Júlio): grupo lateral "Serviços" no Administrativo, com as ordens de serviço (antes de Suprimentos)
+(() => { const i = MENU.findIndex(x => x.area === 'Suprimentos'); MENU.splice(i < 0 ? MENU.length : i, 0, { area: 'Serviços', itens: [['os_cigam', '🧾', 'Ordens de serviço (CIGAM)', 'DAS']] }); })();
+ST.osc = { ano: '', serie: '' };
+let _oscCache = null;
+async function telaOSCigam(){
+  carregandoTela();
+  const seq = ST._oscSeq = (ST._oscSeq || 0) + 1, f = ST.osc;
+  if(!_oscCache){ const r = await tudo(() => sb.from('os_cigam').select('numero,situacao,data,cliente_nome,pessoa_id,responsavel,total,conferir').order('numero', { ascending: false }));
+    if(r.error) return $('#conteudo').innerHTML = '<div class="card"><h2>OS do CIGAM</h2><p>Rode o script 79_os_cigam.sql no Supabase.</p></div>';
+    _oscCache = r.data || []; }
+  let porSerie = null;
+  if(f.serie.trim().length >= 3){ const r = await sb.from('os_cigam_itens').select('os_numero').ilike('serie', '%' + f.serie.trim() + '%').limit(500); porSerie = new Set((r.data || []).map(x => x.os_numero)); }
+  if(seq !== ST._oscSeq) return;
+  const q = norm(ST.busca || ''), anos = [...new Set(_oscCache.map(o => String(o.data || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+  const nome = o => { const p = pessoa(o.pessoa_id); return p ? (p.apelido || p.nome) : (o.cliente_nome || ''); };
+  const l = _oscCache.filter(o => (!f.ano || String(o.data || '').startsWith(f.ano)) && (!porSerie || porSerie.has(o.numero))
+    && (!q || norm([o.numero, o.cliente_nome, nome(o), o.responsavel].join(' ')).includes(q)));
+  const MAX = 300, soma = l.reduce((s, o) => s + Number(o.total || 0), 0);
+  $('#conteudo').innerHTML = `<div class="card"><h2>Ordens de serviço (CIGAM) <span class="muted" style="font-weight:400">· ordens de serviço lidas dos PDFs do CIGAM</span></h2>${barraBusca()}
+    <div class="chips" style="margin:-4px 0 10px;align-items:center"><select id="oscAno" style="max-width:130px"><option value="">Todos os anos</option>${anos.map(a => `<option ${f.ano === a ? 'selected' : ''}>${a}</option>`).join('')}</select>
+      <input id="oscSerie" placeholder="Nº de série do equipamento" value="${esc(f.serie)}" style="max-width:230px">
+      <span class="muted" style="font-size:12px;margin-left:auto">${l.length.toLocaleString('pt-BR')} OS · ${R$(soma)}</span></div>
+    <div style="overflow-x:auto"><table class="reg"><thead><tr><th>OS</th><th>Data</th><th>Cliente</th><th>Responsável</th><th>Situação</th><th style="text-align:right">Total</th></tr></thead><tbody>
+    ${l.slice(0, MAX).map(o => `<tr data-osc="${o.numero}" style="cursor:pointer"><td><b>${o.numero}</b>${o.conferir ? ' <span title="Conferir" style="color:var(--amar)">⚠</span>' : ''}</td><td>${dataBR(o.data)}</td>
+      <td>${esc(nome(o))}${o.pessoa_id ? '' : ' <span class="tag" title="Cliente não ligado ao cadastro">sem cadastro</span>'}</td><td style="font-size:12px">${esc(o.responsavel || '')}</td><td>${esc(o.situacao || '')}</td><td style="text-align:right">${R$(o.total || 0)}</td></tr>`).join('')
+      || '<tr><td colspan="6" class="vazio">Nenhuma OS encontrada.</td></tr>'}</tbody></table></div>
+    ${l.length > MAX ? `<p class="muted" style="font-size:12px">Mostrando ${MAX} de ${l.length.toLocaleString('pt-BR')} — use a busca, o ano ou o nº de série.</p>` : ''}</div>`;
+  ligaBarra(null);
+  $('#oscAno').onchange = e => { f.ano = e.target.value; telaOSCigam(); };
+  let t; $('#oscSerie').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.serie = e.target.value; telaOSCigam().then(() => { const i = $('#oscSerie'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 400); };
+  document.querySelectorAll('[data-osc]').forEach(tr => tr.onclick = () => verOSCigam(+tr.dataset.osc));
+  expRegistra(() => [expCols('OS do CIGAM', [['OS', o => o.numero], ['Data', o => dataBR(o.data)], ['Cliente', nome], ['Responsável', o => o.responsavel], ['Situação', o => o.situacao], ['Total', o => Number(o.total || 0)], ['Conferir', o => o.conferir]], l)]);
+}
+async function verOSCigam(numero){
+  const [o, it, sv, mt] = await Promise.all([sb.from('os_cigam').select('*').eq('numero', numero).maybeSingle(), sb.from('os_cigam_itens').select('*').eq('os_numero', numero).order('item'),
+    sb.from('os_cigam_servicos').select('*').eq('os_numero', numero).order('inicio'), sb.from('os_cigam_materiais').select('*').eq('os_numero', numero).order('id')]);
+  const O = o.data; if(!O) return aviso('OS não encontrada', '');
+  const pe = pessoa(O.pessoa_id), hora = v => v ? String(v).slice(11, 16) : '', dia = v => v ? dataBR(String(v).slice(0, 10)) : '';
+  const lin = (rot, val) => val || val === 0 ? `<div class="campo"><span>${rot}</span><b style="font-weight:500">${val}</b></div>` : '';
+  const blocos = (it.data || []).map(i => { const S = (sv.data || []).filter(s => s.item === i.item), M = (mt.data || []).filter(m => m.item === i.item);
+    return `<div class="card"><h3 style="margin:0 0 8px">Item ${i.item} · ${esc(i.descricao || '')}</h3><div class="grade">
+      ${lin('Nº de série', esc(i.serie || ''))}${lin('Cód. produto', esc(i.cod_produto || ''))}${lin('Solicitada em', dataBR(i.data_solicitada))}${lin('Programada para', dataBR(i.data_programada))}
+      ${lin('Prioridade', esc(i.prioridade || ''))}${lin('Local', esc(i.local || ''))}
+      ${i.reclamado ? `<div class="campo largo"><span>Reclamado</span><div>${esc(i.reclamado)}</div></div>` : ''}${i.solucao ? `<div class="campo largo"><span>Solução</span><div>${esc(i.solucao)}</div></div>` : ''}
+      ${i.observacao ? `<div class="campo largo"><span>Observação</span><div>${esc(i.observacao)}</div></div>` : ''}</div>
+      ${S.length ? `<h4 style="margin:12px 0 4px;font-size:13px">Serviços executados</h4><div style="overflow-x:auto"><table class="reg"><thead><tr><th>Atividade</th><th>Técnico</th><th>Data</th><th>Horário</th><th style="text-align:right">Valor</th><th>Faturar</th></tr></thead><tbody>
+        ${S.map(s => `<tr><td>${esc(s.atividade || '')}</td><td>${esc(s.tecnico || '')}</td><td>${dia(s.inicio)}</td><td>${hora(s.inicio)}–${hora(s.fim)}</td><td style="text-align:right">${R$(s.total || 0)}</td><td>${s.faturar ? 'sim' : 'não'}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      ${M.length ? `<h4 style="margin:12px 0 4px;font-size:13px">Materiais utilizados</h4><div style="overflow-x:auto"><table class="reg"><thead><tr><th>Código</th><th>Material</th><th style="text-align:right">Quant.</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>
+        ${M.map(m => `<tr><td>${esc(m.codigo || '')}</td><td>${esc(m.descricao || '')}</td><td style="text-align:right">${Number(m.quantidade || 0).toLocaleString('pt-BR')}</td><td style="text-align:right">${R$(m.valor_unitario || 0)}</td><td style="text-align:right">${R$(m.total || 0)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      <p style="text-align:right;margin:8px 0 0;font-size:13px">Peças ${R$(i.total_pecas || 0)} · Mão de obra ${R$(i.total_mao_obra || 0)}${Number(i.desconto) ? ' · Desconto ' + R$(i.desconto) : ''} · <b>Total do item ${R$(i.total || 0)}</b></p></div>`; }).join('');
+  abrirPainel(`<div class="cab"><h2>OS ${O.numero} <span class="muted" style="font-weight:400">· CIGAM</span></h2><span class="tag">${esc(O.situacao || '')}</span><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+    <div class="card"><div class="grade">
+      <div class="campo largo"><span>Cliente</span><b style="font-size:15px">${esc(pe ? pe.nome : O.cliente_nome || '')}</b><span>${pe ? `<a href="#" id="oscEmp">abrir a empresa</a>` : 'não ligado ao cadastro'}${pe && O.cliente_nome && norm(O.cliente_nome) !== norm(pe.nome) ? ' · na OS: ' + esc(O.cliente_nome) : ''}</span></div>
+      ${lin('Data', dataBR(O.data))}${lin('Responsável', esc(O.responsavel || ''))}${lin('Endereço', esc(O.endereco || ''))}${lin('Telefone', esc(O.telefone || ''))}
+      ${O.conferir ? `<div class="campo largo"><span style="color:var(--amar)">⚠ Conferir</span><b style="font-weight:500">${esc(O.conferir)}</b></div>` : ''}
+      ${lin('Total da OS', `<span style="color:var(--verm);font-weight:700">${R$(O.total || 0)}</span>`)}${Number(O.desconto_total) ? lin('Desconto total', R$(O.desconto_total)) : ''}</div>
+      ${O.pdf_arquivo ? `<p class="muted" style="font-size:11px;margin:8px 0 0">Documento: ${esc(O.pdf_arquivo)}</p>` : ''}</div>
+    ${blocos || '<div class="card"><p class="muted">Sem itens lidos do PDF.</p></div>'}`);
+  $('#folha').style.width = 'min(960px,100%)';
+  if($('#oscEmp')) $('#oscEmp').onclick = e => { e.preventDefault(); fecharPainel(); formPessoa(pe); };
+}
+Object.assign(TELAS, { os_cigam: telaOSCigam });
 
 /* =================== Lançamentos do CIGAM — histórico financeiro (script 55) ===================
    Consulta do "Relatório de lançamentos" do CIGAM (Equiper e EQP). Não mexe no Caixa nem na Cobrança do ERP. */
@@ -9717,7 +9799,7 @@ async function telaCompras(){
       : `<div class="barra"><input type="search" id="busca" placeholder="Fornecedor, pedido, obra, nº da OC ou da nota…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
           <select id="cpSit" style="max-width:170px">${[['abertas','Em aberto'],['atrasadas','Atrasadas'],['recebidas','Recebidas'],['todas','Todas']].map(([k, t]) => `<option value="${k}" ${f.sit === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
         <table class="reg"><thead><tr><th>OC</th><th>Fornecedor</th><th>Pedido / obra</th><th>Previsão</th><th style="text-align:right">Total</th><th>Situação</th><th>Notas</th></tr></thead><tbody>
-        ${lo.map(o => `<tr data-oc="${o.id}" style="cursor:pointer"><td><b>${o.numero}</b> <span class="muted">${o.empresa}</span></td><td>${esc(o.fornecedor || '—')}</td><td>${o.pedido_numero ? esc(o.pedido_numero) + ' · ' + esc(o.obra || '') : '<span class="muted">estoque próprio</span>'}</td>
+        ${lo.map(o => `<tr data-oc="${o.id}" style="cursor:pointer"><td><b>${o.numero}</b> <span class="muted">${o.empresa}</span>${o.origem === 'cigam' ? ' <span class="tag" style="font-size:10px">CIGAM</span>' : ''}${o.conferir ? ' <span title="Conferir" style="color:var(--amar)">⚠</span>' : ''}</td><td>${esc(o.fornecedor || '—')}</td><td>${o.pedido_numero ? esc(o.pedido_numero) + ' · ' + esc(o.obra || '') : o.destino ? esc(o.destino) : '<span class="muted">estoque próprio</span>'}</td>
           <td style="${o.atrasada ? 'color:var(--verm);font-weight:600' : ''}">${o.previsao_entrega ? dataBR(o.previsao_entrega) : '—'}</td><td style="text-align:right">${R$(o.total)}${o.valor_inicial && Number(o.valor_inicial) > Number(o.total) ? `<div style="font-size:11px;color:var(--verde)">economia ${R$(o.valor_inicial - o.total)}</div>` : ''}</td><td>${tagOC(o.situacao)}</td><td>${esc(o.notas || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhuma OC.</td></tr>'}</tbody></table>`}</div>`;
   if($('#busca')) ligaBarra(null);
   document.querySelectorAll('[data-ab]').forEach(b => b.onclick = () => { f.aba = b.dataset.ab; telaCompras(); });
@@ -9784,24 +9866,43 @@ async function verOC(id){
   const O = o.data, its = it.data || [];
   const fdoc = O.fornecedor_id ? ((await priv().from('pessoas_dados').select('documento').eq('pessoa_id', O.fornecedor_id).maybeSingle()).data || {}).documento : null;
   const pend = fdoc ? ((await sb.from('notas_recebidas').select('id,numero,valor,data_emissao,ordem_id,conferida_em,situacao').eq('emitente_doc', fdoc).is('conferida_em', null)).data || []).filter(n => n.situacao === 'autorizada') : [];
-  abrirPainel(`<div class="cab"><h2>OC ${O.numero} · ${esc(O.fornecedor || '')} ${tagOC(O.situacao)}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+  const cig = O.origem === 'cigam', vNum = v => numFmt(v || 0);
+  abrirPainel(`<div class="cab"><h2>OC ${O.numero} · ${esc(O.fornecedor || '')} ${tagOC(O.situacao)}${cig ? ' <span class="tag" title="Veio do CIGAM">CIGAM · ' + esc(O.cigam_situacao || '') + '</span>' : ''}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><div class="grade">
-      <div class="campo"><span>Empresa</span><b>${O.empresa}</b></div><div class="campo"><span>Pedido</span><b>${O.pedido_numero ? esc(O.pedido_numero) + ' · ' + esc(O.obra || '') : 'estoque próprio'}</b></div>
+      <div class="campo"><span>Empresa</span><b>${O.empresa}</b></div><div class="campo"><span>Pedido</span><b>${O.pedido_numero ? esc(O.pedido_numero) + ' · ' + esc(O.obra || '') : esc(O.destino || 'estoque próprio')}</b></div>
       <label class="campo">Previsão de entrega<input id="voPrev" type="date" value="${O.previsao_entrega || ''}"></label><label class="campo">Condição<input id="voCond" value="${esc(O.condicao || '')}"></label>
       <label class="campo">Frete (R$)<input id="voFrete" inputmode="decimal" value="${numFmt(O.frete)}"></label>
-      <label class="campo">Valor da 1ª cotação (R$)<input id="voIni" inputmode="decimal" value="${numFmt(O.valor_inicial)}" title="Para medir a economia da negociação"></label></div>
+      <label class="campo">Valor da 1ª cotação (R$)<input id="voIni" inputmode="decimal" value="${numFmt(O.valor_inicial)}" title="Para medir a economia da negociação"></label>
+      <label class="campo">Para quem / destino<input id="voDest" value="${esc(O.destino || '')}" placeholder="cliente da obra ou Estoque"></label>
+      <label class="campo">Responsável pela compra<input id="voResp" value="${esc(O.responsavel || '')}"></label>
+      <label class="campo">Frete CIF / FOB<select id="voFTipo"><option value=""></option>${['CIF', 'FOB'].map(k => `<option ${O.frete_tipo === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
+      <label class="campo">Transportadora<input id="voTransp" value="${esc(O.transportadora || '')}"></label>
+      <label class="campo">Fone da transportadora<input id="voTFone" value="${esc(O.transportadora_fone || '')}"></label>
+      <label class="campo">Desconto (R$)<input id="voDesc" inputmode="decimal" value="${vNum(O.desconto)}"></label>
+      <label class="campo">IPI (R$)<input id="voIpi" inputmode="decimal" value="${vNum(O.ipi)}"></label>
+      <label class="campo">Encargo (R$)<input id="voEnc" inputmode="decimal" value="${vNum(O.encargo)}"></label>
+      <label class="campo">Seguro (R$)<input id="voSeg" inputmode="decimal" value="${vNum(O.seguro)}"></label>
+      <label class="campo">Encargo financeiro (%)<input id="voEncF" inputmode="decimal" value="${O.encargo_financeiro_pct != null ? numFmt(O.encargo_financeiro_pct) : ''}"></label>
+      ${O.contato || O.contato_email ? `<div class="campo"><span>Contato no fornecedor</span><b>${esc([O.contato, O.contato_email].filter(Boolean).join(' · '))}</b></div>` : ''}
+      ${O.cfop ? `<div class="campo"><span>Tipo de operação / CFOP</span><b>${esc(O.cfop)}</b></div>` : ''}
+      ${O.conferir ? `<div class="campo largo"><span style="color:var(--amar)">⚠ Conferir</span><b style="font-weight:500">${esc(O.conferir)}</b></div>` : ''}
+      ${cig && !its.length ? `<div class="campo largo"><span>Itens</span><b style="font-weight:500">sem PDF desta OC — total do CIGAM: ${R$(O.total_cigam)}</b></div>` : ''}
+      ${O.pdf_arquivo ? `<div class="campo largo"><span>Documento</span><b style="font-weight:400;font-size:12px">${esc(O.pdf_arquivo)}</b></div>` : ''}</div>
       ${O.valor_inicial && Number(O.valor_inicial) > Number(O.total) ? `<p style="color:var(--verde);margin:6px 0 0">Economia na negociação: <b>${R$(O.valor_inicial - O.total)}</b></p>` : ''}</div>
     <div class="card"><table class="reg"><thead><tr><th>Produto</th><th>Cód. fornecedor</th><th style="text-align:right">Qtd</th><th style="text-align:right">Recebido</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>
       ${its.map(i => `<tr data-it="${i.id}"><td>${esc(i.descricao)}</td><td><input data-f="codigo_fornecedor" value="${esc(i.codigo_fornecedor || '')}" style="width:110px"></td><td style="text-align:right">${numFmt(i.quantidade).replace(/,00$/, '')} ${esc(i.unidade)}</td>
         <td style="text-align:right;${Number(i.recebido) >= Number(i.quantidade) ? 'color:var(--verde)' : ''}">${numFmt(i.recebido).replace(/,00$/, '') || '0'}</td><td style="text-align:right"><input data-f="valor_unitario" inputmode="decimal" value="${numFmt(i.valor_unitario)}" style="width:100px;text-align:right" ${O.situacao === 'recebida' ? 'disabled' : ''}></td><td style="text-align:right">${R$(i.quantidade * i.valor_unitario)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="5" style="text-align:right"><b>Total com frete</b></td><td style="text-align:right"><b>${R$(O.total)}</b></td></tr></tfoot></table></div>
+      <tfoot>${[['Frete', O.frete], ['IPI', O.ipi], ['Encargo', O.encargo], ['Seguro', O.seguro], ['Desconto', -Number(O.desconto || 0)]].filter(([, v]) => Number(v)).map(([r, v]) => `<tr><td colspan="5" style="text-align:right">${r}</td><td style="text-align:right">${R$(v)}</td></tr>`).join('')}<tr><td colspan="5" style="text-align:right"><b>Total</b></td><td style="text-align:right"><b>${R$(O.total)}</b></td></tr></tfoot></table></div>
     <div class="card"><h2 style="font-size:15px">Notas do fornecedor</h2>
       ${(nf.data || []).map(n => `<div>NF-e ${esc(n.numero)} · ${R$(n.valor)} · ${n.conferida_em ? '<span class="tag ok">conferida</span>' : `<button class="btn peq pri" data-cf="${n.id}">Conferir recebimento</button>`}</div>`).join('') || '<p class="muted" style="font-size:13px">Nenhuma nota ligada ainda.</p>'}
       ${pend.filter(n => !n.ordem_id).length ? `<p style="font-size:13px;margin-top:8px">Notas deste fornecedor ainda não conferidas:</p>${pend.filter(n => !n.ordem_id).map(n => `<div>NF-e ${esc(n.numero)} · ${R$(n.valor)} · ${dataBR(String(n.data_emissao).slice(0, 10))} <button class="btn peq" data-cf="${n.id}">Conferir com esta OC</button></div>`).join('')}` : ''}</div>
     <div class="rodape">${['rascunho','enviada','parcial'].includes(O.situacao) ? '<button class="btn" id="voCanc">Cancelar OC</button>' : ''}<button class="btn" id="voImp">Imprimir para o fornecedor</button>${['enviada','parcial'].includes(O.situacao) ? '<button class="btn pri" id="voChegou">📦 Chegou</button>' : ''}
       ${O.situacao !== 'recebida' && O.situacao !== 'cancelada' ? '<button class="btn" id="voSalvar">Salvar</button>' : ''}${O.situacao === 'rascunho' ? '<button class="btn pri" id="voEnviar">Enviar</button>' : ''}</div>`);
   $('#folha').style.width = 'min(960px,100%)';
-  const salvar = async () => { const x = await sb.from('compras_ordens').update({ previsao_entrega: $('#voPrev').value || null, condicao: $('#voCond').value.trim() || null, frete: num($('#voFrete').value) || 0, valor_inicial: num($('#voIni').value) || null }).eq('id', id);
+  const salvar = async () => { const x = await sb.from('compras_ordens').update({ previsao_entrega: $('#voPrev').value || null, condicao: $('#voCond').value.trim() || null, frete: num($('#voFrete').value) || 0, valor_inicial: num($('#voIni').value) || null,
+      destino: $('#voDest').value.trim() || null, responsavel: $('#voResp').value.trim() || null, frete_tipo: $('#voFTipo').value || null, transportadora: $('#voTransp').value.trim() || null,
+      transportadora_fone: $('#voTFone').value.trim() || null, desconto: num($('#voDesc').value) || 0, ipi: num($('#voIpi').value) || 0, encargo: num($('#voEnc').value) || 0, seguro: num($('#voSeg').value) || 0,
+      encargo_financeiro_pct: $('#voEncF').value.trim() ? num($('#voEncF').value) : null }).eq('id', id);
     if(x.error) return aviso('Erro', esc(erroBanco(x.error)));
     for(const tr of document.querySelectorAll('#folha [data-it]')){ const y = await sb.from('compras_itens').update({ codigo_fornecedor: tr.querySelector('[data-f=codigo_fornecedor]').value.trim() || null, valor_unitario: num(tr.querySelector('[data-f=valor_unitario]').value) || 0 }).eq('id', tr.dataset.it); if(y.error) return aviso('Erro', esc(erroBanco(y.error))); }
     return true; };
@@ -10055,9 +10156,9 @@ async function telaStatusOC(){
     ['cancelada', '✕ Cancelada', '#9aa0a6', o => o.situacao === 'cancelada' && recente(o)]
   ];
   const cartao = o => `<div class="card" data-oc="${o.id}" style="padding:10px 12px;margin:0 0 8px;cursor:pointer">
-      <div style="display:flex;gap:6px;align-items:baseline"><b>OC ${o.numero}</b><span class="muted" style="font-size:12px">${esc(o.empresa || '')}</span><b style="margin-left:auto">${R$(o.total || 0)}</b></div>
+      <div style="display:flex;gap:6px;align-items:baseline"><b>OC ${o.numero}</b><span class="muted" style="font-size:12px">${esc(o.empresa || '')}</span>${o.origem === 'cigam' ? ' <span class="tag" style="font-size:10px">CIGAM</span>' : ''}<b style="margin-left:auto">${R$(o.total || 0)}</b></div>
       <div style="font-size:13px">${esc(o.fornecedor || o.fornecedor_nome || '—')}</div>
-      <div class="muted" style="font-size:12px">${[o.pedido_numero ? 'pedido ' + o.pedido_numero : '', o.obra, o.previsao_entrega ? 'previsão ' + dataBR(o.previsao_entrega) : '', o.qtd ? `${Number(o.qtd_recebida || 0).toLocaleString('pt-BR')} de ${Number(o.qtd).toLocaleString('pt-BR')} recebidos` : ''].filter(Boolean).map(esc).join(' · ')}</div></div>`;
+      <div class="muted" style="font-size:12px">${[o.pedido_numero ? 'pedido ' + o.pedido_numero : '', o.obra || o.destino, o.previsao_entrega ? 'previsão ' + dataBR(o.previsao_entrega) : '', o.qtd ? `${Number(o.qtd_recebida || 0).toLocaleString('pt-BR')} de ${Number(o.qtd).toLocaleString('pt-BR')} recebidos` : ''].filter(Boolean).map(esc).join(' · ')}</div></div>`;
   $('#conteudo').innerHTML = `<div class="card"><h2>Status das ordens de compra <span class="muted" style="font-weight:400">· onde está cada OC</span></h2>${barraBusca()}
       <div class="chips" style="margin:-4px 0 0"><span class="muted" style="font-size:12px;align-self:center">Recebidas e canceladas dos últimos</span>${[30, 90, 365].map(d => `<button class="chip ${f.dias === d ? 'on' : ''}" data-cpd="${d}">${d} dias</button>`).join('')}</div></div>
     <div id="cpsQuadro" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;align-items:start">
@@ -10582,9 +10683,9 @@ async function pdfOrdemCompra(id){
   const O = o.data, its = it.data || [];
   const prods = its.some(i => i.produto_id) ? ((await sb.from('produtos').select('id,codigo').in('id', its.map(i => i.produto_id).filter(Boolean))).data || []) : [];
   const [forn, comp] = await Promise.all([docDadosPessoa(O.fornecedor_id), docEmpresaGrupo(O.empresa)]);
-  const resp = O.criado_por ? ((await sb.from('usuarios').select('nome').eq('id', O.criado_por).maybeSingle()).data || {}).nome : '';
+  const resp = O.responsavel || (O.criado_por ? ((await sb.from('usuarios').select('nome').eq('id', O.criado_por).maybeSingle()).data || {}).nome : '');
   const SITOC = { rascunho: 'Rascunho', enviada: 'Enviada', parcial: 'Recebida em parte', recebida: 'Recebida', cancelada: 'Cancelada' };
-  const totProd = its.reduce((s, i) => s + Number(i.quantidade || 0) * Number(i.valor_unitario || 0), 0), frete = Number(O.frete || 0), total = Number(O.total || (totProd + frete));
+  const totProd = its.reduce((s, i) => s + Number(i.quantidade || 0) * Number(i.valor_unitario || 0), 0), frete = Number(O.frete || 0), extras = Number(O.ipi || 0) + Number(O.encargo || 0) + Number(O.seguro || 0) - Number(O.desconto || 0), total = Number(O.total || (totProd + frete + extras));
   const nomeForn = forn.p ? forn.p.nome : (O.fornecedor || O.fornecedor_nome || '');
   const corpo = DOC_CSS + `<div class="dgr">
       ${docCaixa('Comprador e local de entrega', [['Empresa', esc(comp && comp.p ? comp.p.nome : O.empresa)], ['CNPJ', esc(docFmtDoc(comp && comp.d && comp.d.documento))], ['Insc. est.', esc(comp && comp.d && comp.d.ie)], ['Endereço', esc(comp && comp.d ? docEnd(comp.d) : '')], ['Telefone', esc(docTel(comp && comp.d))]])}
@@ -10594,9 +10695,11 @@ async function pdfOrdemCompra(id){
     <div class="dtab"><table><thead><tr><th style="width:30px">Item</th><th style="width:96px">Cód. fornecedor</th><th style="width:58px">Nosso cód.</th><th>Especificação</th><th class="num" style="width:76px">Quant.</th><th class="num" style="width:82px">Unitário</th><th class="num" style="width:92px">Total</th></tr></thead><tbody>
       ${its.map((i, n) => { const pr = prods.find(p => p.id === i.produto_id); return `<tr><td>${String(n + 1).padStart(2, '0')}</td><td class="cod">${esc(i.codigo_fornecedor || '·')}</td><td class="cod">${esc(pr ? pr.codigo : '·')}</td><td>${esc(i.descricao)}</td><td class="num">${docQtd(i.quantidade, i.unidade)}</td><td class="num">${R$(i.valor_unitario)}</td><td class="num">${R$(Number(i.quantidade || 0) * Number(i.valor_unitario || 0))}</td></tr>`; }).join('') || '<tr><td colspan="7" class="muted">Sem itens.</td></tr>'}
       <tr class="tt"><td colspan="6" class="num">Total dos produtos</td><td class="num">${R$(totProd)}</td></tr></tbody></table></div>
-    ${pdfResumo([['Produtos', R$(totProd), 'g'], frete ? ['Frete', R$(frete), 'g'] : null, ['Total da ordem', R$(total), 'v']])}
-    ${Math.abs(total - totProd - frete) > 0.01 ? pdfNota('O total da ordem difere de produtos + frete em ' + R$(total - totProd - frete) + ' — conferir.') : ''}
-    <h2>Condições</h2>${pdfNota([`<b>Pagamento:</b> ${esc(O.condicao || 'a combinar')}`, O.observacao ? `<b>Observação:</b> ${esc(O.observacao).replace(/\n/g, '<br>')}` : '', '<b>Importante:</b> a nota fiscal deve acompanhar o material e citar o número desta ordem de compra.'].filter(Boolean).join('<br>'))}
+    ${pdfResumo([['Produtos', R$(totProd), 'g'], Number(O.desconto) ? ['Desconto', R$(-Number(O.desconto)), 'g'] : null, Number(O.ipi) ? ['IPI', R$(O.ipi), 'g'] : null, frete ? ['Frete', R$(frete), 'g'] : null,
+      Number(O.encargo) ? ['Encargo', R$(O.encargo), 'g'] : null, Number(O.seguro) ? ['Seguro', R$(O.seguro), 'g'] : null, ['Total da ordem', R$(total), 'v']])}
+    ${its.length && Math.abs(total - totProd - frete - extras) > 0.01 ? pdfNota('O total da ordem difere de produtos + frete + encargos em ' + R$(total - totProd - frete - extras) + ' — conferir.') : ''}
+    ${O.frete_tipo || O.transportadora ? pdfNota(`<b>Frete:</b> ${esc(O.frete_tipo || '—')}${O.transportadora ? ` · <b>Transportadora:</b> ${esc(O.transportadora)}${O.transportadora_fone ? ' · ' + esc(O.transportadora_fone) : ''}` : ''}`) : ''}
+    <h2>Condições</h2>${pdfNota([`<b>Pagamento:</b> ${esc(O.condicao || 'a combinar')}`, O.destino ? `<b>Para:</b> ${esc(O.destino)}` : '', O.observacao ? `<b>Observação:</b> ${esc(O.observacao).replace(/\n/g, '<br>')}` : '', '<b>Importante:</b> a nota fiscal deve acompanhar o material e citar o número desta ordem de compra.'].filter(Boolean).join('<br>'))}
     <div class="dass"><div>Data</div><div>Divisão de suprimentos</div><div>Autorizado por (nome)</div><div>Assinatura</div></div>`;
   return pdfJanela({ rodape: docRodape(comp) || undefined, titulo: 'Ordem de compra', sub: 'OC nº ' + pdfEsc(String(O.numero)) + ' · ' + pdfEsc(O.empresa || ''), emissao: O.criado_em ? docDia(O.criado_em) : dataBR(hojeISO()), empresa: O.empresa === 'EQP' ? 'EQP' : '',
     faixa: pdfFaixa([['OC', String(O.numero), pdfEsc(SITOC[O.situacao] || '')], ['Fornecedor', nomeForn], ['Comprador', O.empresa || ''], ['Total', R$(total)]]),
