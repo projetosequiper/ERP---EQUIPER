@@ -8059,14 +8059,14 @@ async function verOSCigam(numero){
   const blocos = (it.data || []).map(i => { const S = (sv.data || []).filter(s => s.item === i.item), M = (mt.data || []).filter(m => m.item === i.item);
     return `<div class="card"><h3 style="margin:0 0 8px">Item ${i.item} · ${esc(i.descricao || '')}</h3><div class="grade">
       ${lin('Nº de série', esc(i.serie || ''))}${lin('Cód. produto', esc(i.cod_produto || ''))}${lin('Solicitada em', dataBR(i.data_solicitada))}${lin('Programada para', dataBR(i.data_programada))}
-      ${lin('Prioridade', esc(i.prioridade || ''))}${lin('Local', esc(i.local || ''))}
+      ${lin('Prioridade', esc(i.prioridade || ''))}${lin('Local', esc(i.local || ''))}${lin('Tipo de OS', esc(i.tipo_os || ''))}${lin('Situação do item', esc(i.situacao || ''))}${lin('Concluído em', dataBR(i.data_conclusao))}
       ${i.reclamado ? `<div class="campo largo"><span>Reclamado</span><div>${esc(i.reclamado)}</div></div>` : ''}${i.solucao ? `<div class="campo largo"><span>Solução</span><div>${esc(i.solucao)}</div></div>` : ''}
       ${i.observacao ? `<div class="campo largo"><span>Observação</span><div>${esc(i.observacao)}</div></div>` : ''}</div>
       ${S.length ? `<h4 style="margin:12px 0 4px;font-size:13px">Serviços executados</h4><div style="overflow-x:auto"><table class="reg"><thead><tr><th>Atividade</th><th>Técnico</th><th>Data</th><th>Horário</th><th style="text-align:right">Valor</th><th>Faturar</th></tr></thead><tbody>
         ${S.map(s => `<tr><td>${esc(s.atividade || '')}</td><td>${esc(s.tecnico || '')}</td><td>${dia(s.inicio)}</td><td>${hora(s.inicio)}–${hora(s.fim)}</td><td style="text-align:right">${R$(s.total || 0)}</td><td>${s.faturar ? 'sim' : 'não'}</td></tr>`).join('')}</tbody></table></div>` : ''}
       ${M.length ? `<h4 style="margin:12px 0 4px;font-size:13px">Materiais utilizados</h4><div style="overflow-x:auto"><table class="reg"><thead><tr><th>Código</th><th>Material</th><th style="text-align:right">Quant.</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>
         ${M.map(m => `<tr><td>${esc(m.codigo || '')}</td><td>${esc(m.descricao || '')}</td><td style="text-align:right">${Number(m.quantidade || 0).toLocaleString('pt-BR')}</td><td style="text-align:right">${R$(m.valor_unitario || 0)}</td><td style="text-align:right">${R$(m.total || 0)}</td></tr>`).join('')}</tbody></table></div>` : ''}
-      <p style="text-align:right;margin:8px 0 0;font-size:13px">Peças ${R$(i.total_pecas || 0)} · Mão de obra ${R$(i.total_mao_obra || 0)}${Number(i.desconto) ? ' · Desconto ' + R$(i.desconto) : ''} · <b>Total do item ${R$(i.total || 0)}</b></p></div>`; }).join('');
+      ${i.fonte === 'cigam' && !Number(i.total) ? '<p class="muted" style="margin:8px 0 0;font-size:12px">Item trazido da lista do CIGAM (sem os valores).</p>' : ''}<p style="text-align:right;margin:8px 0 0;font-size:13px${i.fonte === 'cigam' && !Number(i.total) ? ';display:none' : ''}">Peças ${R$(i.total_pecas || 0)} · Mão de obra ${R$(i.total_mao_obra || 0)}${Number(i.desconto) ? ' · Desconto ' + R$(i.desconto) : ''} · <b>Total do item ${R$(i.total || 0)}</b></p></div>`; }).join('');
   abrirPainel(`<div class="cab"><h2>OS ${O.numero} <span class="muted" style="font-weight:400">· CIGAM</span></h2><span class="tag">${esc(O.situacao || '')}</span><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><div class="grade">
       <div class="campo largo"><span>Cliente</span><b style="font-size:15px">${esc(pe ? pe.nome : O.cliente_nome || '')}</b><span>${pe ? `<a href="#" id="oscEmp">abrir a empresa</a>` : 'não ligado ao cadastro'}${pe && O.cliente_nome && norm(O.cliente_nome) !== norm(pe.nome) ? ' · na OS: ' + esc(O.cliente_nome) : ''}</span></div>
@@ -8536,6 +8536,58 @@ async function telaMovCigamMov(){
 }
 
 Object.assign(TELAS, { fs_notas_cigam: telaNotasCigam, es_mov_cigam: telaMovCigam });
+
+/* 47b — CRM do CIGAM (histórico): oportunidade e anotações de contato no painel do pedido do CIGAM e na ficha da empresa.
+   Dados: cigam_oportunidades e cigam_acompanhamentos (script 85; importar_crm_os_cigam.py). Só consulta. */
+(() => {
+  const SIT_COR = { 'Vendida': 'ok', 'Perdida': 'inat', 'Em andamento': 'rasc', 'Liberada': 'ok' };
+  const tagOp = s => s ? `<span class="tag ${SIT_COR[s] || ''}">${esc(s)}</span>` : '';
+  const anot = a => `<div style="font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--borda);white-space:pre-wrap"><span class="muted">${[dataBR(a.data_oportunidade), a.contatante, a.contato].filter(Boolean).map(esc).join(' · ')}${a.proximo_contato ? ' · próximo contato ' + dataBR(a.proximo_contato) : ''}</span>\n${esc(a.texto || '')}</div>`;
+  const lin = (rot, val) => val || val === 0 ? `<div class="campo"><span>${rot}</span><b style="color:var(--preto);font-weight:500">${val}</b></div>` : '';
+  const cartaoOp = (o, AC) => `<div class="card" data-crm-cigam><h3 style="margin:0 0 8px">CRM do CIGAM · oportunidade ${o.numero} ${tagOp(o.situacao)}</h3><div class="grade">
+      ${lin('Aberta em', dataBR(o.data) + (o.hora ? ' ' + esc(o.hora) : ''))}${lin('Pessoa de contato', esc(o.pessoa_contato || ''))}${lin('Primeiro contato', esc(o.primeiro_contato || ''))}
+      ${lin('Próximo contato', o.proximo_contato ? dataBR(o.proximo_contato) + (o.hora_proximo_contato ? ' ' + esc(o.hora_proximo_contato) : '') : '')}${lin('Previsão de venda', dataBR(o.previsao_venda))}
+      ${lin('Validade da proposta', dataBR(o.validade_proposta))}${lin('Prazo de entrega', dataBR(o.prazo_entrega))}${Number(o.total_venda) ? lin('Total da venda', R$(o.total_venda)) : ''}
+      ${lin('Etapa (controle)', esc(o.controle || ''))}${lin('Mercado', esc(o.mercado || ''))}${lin('Criada por', esc(o.usuario_criacao || ''))}${lin('Alterada por', o.usuario_modificacao ? esc(o.usuario_modificacao) + (o.data_modificacao ? ' em ' + dataBR(o.data_modificacao) : '') : '')}
+      ${o.assunto ? `<div class="campo largo"><span>Assunto</span><div style="white-space:pre-wrap">${esc(o.assunto)}</div></div>` : ''}</div>
+      ${AC.length ? `<h4 style="margin:12px 0 2px;font-size:13px">Anotações de contato (${AC.length})</h4>${AC.map(anot).join('')}` : ''}</div>`;
+
+  /* painel do pedido do CIGAM: a oportunidade que gerou o pedido */
+  if(typeof verPedCigam === 'function'){
+    const orig = verPedCigam;
+    window.verPedCigam = verPedCigam = async function(numero){
+      await orig.apply(this, arguments);
+      try {
+        const r = await sb.from('cigam_oportunidades').select('*').eq('pedido', numero).order('numero');
+        const L = r.error ? [] : (r.data || []); if(!L.length || !$('#folha')) return;
+        const a = await sb.from('cigam_acompanhamentos').select('*').in('oportunidade', L.map(o => o.numero)).order('data_oportunidade');
+        const AC = a.error ? [] : (a.data || []);
+        if($('#folha').querySelector('[data-crm-cigam]')) return;
+        $('#folha').insertAdjacentHTML('beforeend', L.map(o => cartaoOp(o, AC.filter(x => x.oportunidade === o.numero))).join(''));
+      } catch(e){}
+    };
+  }
+
+  /* ficha da empresa: oportunidades e anotações do CRM do CIGAM */
+  if(typeof notasCigamDaEmpresa === 'function'){
+    const orig = notasCigamDaEmpresa;
+    window.notasCigamDaEmpresa = notasCigamDaEmpresa = async function(pid, alvo){
+      await orig.apply(this, arguments);
+      if(!alvo || nivelTela('ped_cigam') < 1) return;
+      try {
+        const [o, a] = await Promise.all([ sb.from('cigam_oportunidades').select('numero,data,situacao,total_venda,pedido,pessoa_contato,proximo_contato').eq('pessoa_id', pid).order('data', { ascending: false, nullsFirst: false }).limit(200),
+          sb.from('cigam_acompanhamentos').select('*').eq('pessoa_id', pid).order('data_oportunidade', { ascending: false }) ]);
+        const O = o.error ? [] : (o.data || []), A = a.error ? [] : (a.data || []); if(!O.length && !A.length) return;
+        const conta = s => O.filter(x => x.situacao === s).length, vend = O.filter(x => x.situacao === 'Vendida').reduce((t, x) => t + Number(x.total_venda || 0), 0);
+        alvo.insertAdjacentHTML('beforeend', `<div class="secao-sens"><h3>CRM do CIGAM <span class="muted" style="font-weight:400;font-size:12px">· ${O.length} oportunidade(s): ${conta('Vendida')} vendida(s) (${R$(vend)}), ${conta('Em andamento')} em andamento, ${conta('Perdida')} perdida(s)</span></h3>
+          ${O.slice(0, 12).map(x => `<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--borda);${x.pedido ? 'cursor:pointer' : ''}" ${x.pedido ? `data-crmped="${x.pedido}"` : ''}>${dataBR(x.data)} · oportunidade ${x.numero}${x.pedido ? ' · pedido ' + x.pedido : ''}${x.pessoa_contato ? ' · ' + esc(x.pessoa_contato) : ''} · ${esc(x.situacao || '')} · <b>${Number(x.total_venda) ? R$(x.total_venda) : '—'}</b></div>`).join('')}
+          ${O.length > 12 ? `<p class="muted" style="font-size:11px;margin:4px 0 0">Mostrando as 12 mais recentes.</p>` : ''}
+          ${A.length ? `<h4 style="margin:10px 0 2px;font-size:13px">Anotações de contato (${A.length})</h4>${A.map(anot).join('')}` : ''}</div>`);
+        alvo.querySelectorAll('[data-crmped]').forEach(d => d.onclick = () => verPedCigam(+d.dataset.crmped));
+      } catch(e){}
+    };
+  }
+})();
 
 /* ============ Leitura do certificado digital — só no computador da pessoa ============
    Lê o arquivo .pfx/.p12 (com a senha) ou .cer/.crt/.pem (sem senha) AQUI no navegador,
