@@ -879,6 +879,7 @@ function telaPessoas(){
   document.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>formPessoa(pessoa(b.dataset.ed)));
 }
 
+const DIVISAO_CIGAM = { CL:'Cliente', FO:'Fornecedor', CO:'Colaborador', TR:'Transportadora', GO:'Governo', BN:'Banco', UN:'Unidade de negócio' };   // script 83
 async function formPessoa(p){
   const novo=!p; p = p || { tipo:'PF', papeis:['cliente'], status:'ativo' };
   if(!novo && p.id && !('observacoes' in p)){ const c = await sb.from('pessoas').select('*').eq('id', p.id).maybeSingle(); if(c.data){ Object.assign(p, c.data); const i = ST.pessoas.findIndex(x => x.id === p.id); if(i >= 0) ST.pessoas[i] = p; } }
@@ -897,7 +898,11 @@ async function formPessoa(p){
         ${ro ? '' : '<label class="btn peq" style="cursor:pointer">Escolher foto<input type="file" id="pFotoArq" accept="image/*" style="display:none"></label><button type="button" class="btn peq" id="pFotoTirar">Remover</button>'}</div></div>
       ${novo ? '' : '<div class="campo largo" id="pEquipes" style="font-size:13px"></div>'}
       <label class="campo largo">Observações<textarea id="pObs">${esc(p.observacoes)}</textarea></label>
+      ${novo || 'contato' in p ? `<label class="campo largo">Pessoa de contato<input id="pContato" value="${esc(p.contato)}"></label>` : ''}
       ${(p.codigos_cigam||[]).length?`<div class="campo largo">Códigos no CIGAM<div>${p.codigos_cigam.map(esc).join(', ')}</div></div>`:''}
+      ${[['Divisão no CIGAM', p.cigam_divisao ? esc(DIVISAO_CIGAM[p.cigam_divisao] || p.cigam_divisao) : ''], ['Aniversário', dataBR(p.aniversario)], ['Cliente desde', dataBR(p.cliente_desde)], ['Último movimento no CIGAM', dataBR(p.ultimo_movimento)],
+         ['Condição de pagamento padrão', esc(p.condicao_pagamento_padrao)], ['Tipo de operação padrão', esc(p.tipo_operacao_padrao)], ['Representante', esc(p.representante)]]
+         .filter(c => c[1]).map(c => `<div class="campo" data-cigam-campo><span>${c[0]}</span><b style="color:var(--preto);font-weight:500">${c[1]}</b></div>`).join('')}
     </div>
     ${humano()?`<div class="secao-sens"><h3>Dados sensíveis <span class="cadeado">🔒 só escritório</span></h3><div class="grade">
       <label class="campo">CPF / CNPJ<input id="sDoc" inputmode="numeric" data-pid="${p.id||''}" value="${esc(S.documento?fmtDoc(S.documento):'')}"></label>
@@ -917,6 +922,7 @@ async function formPessoa(p){
     ${!novo && humano() ? '<div id="pEnds"></div>' : ''}
     ${!novo && typeof historicoEmpresaCRM === 'function' && nivelTela('crm') >= 1 ? '<div id="pCrm" data-botao="1"></div>' : ''}
     ${!novo && typeof lancCigamDaEmpresa === 'function' && nivelTela('fn_cigam_lanc') >= 1 ? '<div id="pClg"></div>' : ''}
+    ${!novo && typeof notasCigamDaEmpresa === 'function' ? '<div id="pNfc"></div>' : ''}
     <div id="pPedCigam"></div>
     </div>
     <div class="rodape">${!novo&&diretoria()&&p.status!=='inativo'?'<button class="btn" id="bInat">Inativar</button>':''}${!novo&&humano()&&p.status==='inativo'?'<button class="btn" id="bReat">Reativar</button>':''}
@@ -927,6 +933,7 @@ async function formPessoa(p){
   if($('#pEnds') && typeof enderecosDaEmpresa === 'function') enderecosDaEmpresa(p.id, $('#pEnds'), ro);
   if($('#pCrm')) historicoEmpresaCRM(p.id, $('#pCrm'));
   if($('#pClg')) lancCigamDaEmpresa(p.id, $('#pClg'));
+  if($('#pNfc')) notasCigamDaEmpresa(p.id, $('#pNfc'));
   if(!novo && typeof verPosicao === 'function' && ['diretoria','administrativo'].includes(ST.eu.perfil)){ const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Posição financeira'; b.onclick = () => verPosicao(p.id); $('#folha .rodape').prepend(b); }
   let fotoNova; const fotoAtual = () => fotoNova === undefined ? p.foto : fotoNova;
   const mostraFoto = () => { const f = fotoAtual(); $('#pFotoVer').innerHTML = f ? `<img src="${f}" alt="">` : ico('usuario'); if($('#pFotoTirar')) $('#pFotoTirar').style.display = f ? '' : 'none';
@@ -939,7 +946,8 @@ async function formPessoa(p){
   const dados = () => ({ tipo:$('#pTipo').value, nome:$('#pNome').value.trim(), apelido:$('#pApelido').value.trim()||null,
     papeis:[...document.querySelectorAll('#pPapeis .chip.on')].map(c=>c.dataset.k), observacoes:$('#pObs').value.trim()||null });
   async function salvar(status){
-    const d = dados(); if(!d.nome) return aviso('Falta o nome','Preencha o nome completo ou a razão social.');
+    const d = dados(); if($('#pContato')){ const ct = $('#pContato').value.trim(); if('contato' in p || ct) d.contato = ct || null; }   // script 83; em empresa nova só vai se preenchido
+    if(!d.nome) return aviso('Falta o nome','Preencha o nome completo ou a razão social.');
     if(fotoNova !== undefined && ('foto' in p || novo)) d.foto = fotoNova;
     let sd = null;
     if(humano()){
@@ -8143,11 +8151,20 @@ async function verLancCigam(n){
       ${C('Portador', esc(x.portador_nome || ''))}${C('Forma', esc(x.forma || ''))}
       ${x.nf && x.nf !== '0' ? C('Nota fiscal', esc(x.nf) + (x.serie && x.serie.trim() ? ' série ' + esc(x.serie) : '') + (x.parcela ? ' · parcela ' + esc(x.parcela) : '')) : ''}
       ${x.documento && x.documento !== '0' ? C(x.tipo_documento === 'Ordem' ? 'Ordem de compra' : x.tipo_documento === 'Pedido' ? 'Pedido' : 'Documento', `${esc(x.documento)}${x.tipo_documento === 'Pedido' ? ' · <a href="#" id="clAbrePed">abrir o pedido</a>' : ''}`) : ''}
-      ${C('Contabilização', esc(x.contabilizado || ''))}</div></div>
+      ${C('Contabilização', esc(x.contabilizado || ''))}
+      ${x.vencimento_original && x.vencimento_original !== x.vencimento ? C('Vencimento original', dataBR(x.vencimento_original)) : ''}${C('Última liquidação', dataBR(x.ultima_liquidacao))}
+      ${Number(x.valor_desconto) ? C('Desconto', R$(x.valor_desconto)) : ''}${Number(x.valor_multa) ? C('Multa', R$(x.valor_multa)) : ''}${Number(x.juros_dia) ? C('Juros por dia', R$(x.juros_dia)) : ''}
+      ${C('Cobrança', x.cobranca && x.cobranca !== x.cliente_codigo ? (typeof ncNomeCod === 'function' ? ncNomeCod(x.cobranca) : esc(x.cobranca)) : '')}${C('Tipo de pagamento', esc(x.tipo_pagamento || ''))}${C('Cheque', esc(x.cheque || ''))}${C('Número no banco', esc(x.numero_banco || ''))}
+      ${Number(x.contra_partida) ? C('Contrapartida', `lançamento ${x.contra_partida} · <a href="#" id="clAbreCP">abrir</a>`) : ''}
+      ${C('Conciliado', x.conciliado === 'S' ? 'sim' : esc(x.conciliado || ''))}${C('Conferido', esc(x.conferido || ''))}${C('Projeto', esc(x.projeto || ''))}
+      ${x.complemento_historico ? `<div class="campo largo"><span>Complemento do histórico</span><b style="white-space:pre-wrap">${esc(x.complemento_historico)}</b></div>` : ''}
+      ${C('Incluído', esc([x.usuario_criacao ? 'por ' + x.usuario_criacao : '', x.data_inclusao ? 'em ' + dataBR(x.data_inclusao) : ''].filter(Boolean).join(' ')))}
+      ${C('Alterado', esc([x.usuario_modificacao ? 'por ' + x.usuario_modificacao : '', x.data_modificacao ? 'em ' + dataBR(x.data_modificacao) : ''].filter(Boolean).join(' ')))}</div></div>
     ${(lig.data || []).length ? `<div class="card"><h2 style="font-size:15px">Lançamentos ligados</h2>${lig.data.map(y => `<div style="font-size:13px;padding:4px 0;border-bottom:1px solid var(--borda);cursor:pointer" data-cl2="${y.lancamento}"><b>${y.lancamento}</b> · ${dataBR(y.data)} · ${esc(y.tipo)} · ${esc(y.situacao)} · <span style="color:${clCor(y.valor)}">${R$(y.valor)}</span> · ${esc(y.historico || '')}</div>`).join('')}</div>` : ''}
     <p class="muted" style="font-size:12px">Histórico importado do CIGAM — só consulta, não entra no Caixa nem na Cobrança do ERP.</p>`);
   if($('#clAbreP')) $('#clAbreP').onclick = e => { e.preventDefault(); formPessoa(pessoa(x.pessoa_id)); };
   if($('#clAbrePed')) $('#clAbrePed').onclick = e => { e.preventDefault(); verPedCigam(+x.documento); };
+  if($('#clAbreCP')) $('#clAbreCP').onclick = e => { e.preventDefault(); verLancCigam(+x.contra_partida); };
   document.querySelectorAll('[data-cl2]').forEach(d => d.onclick = () => verLancCigam(+d.dataset.cl2));
 }
 
@@ -8285,6 +8302,240 @@ async function telaLancJuntos(){
   $('#ljDe').onchange = ev => muda('de', ev.target.value); $('#ljAte').onchange = ev => muda('ate', ev.target.value);
   document.querySelectorAll('[data-lj]').forEach(t => t.onclick = () => { const [o, id] = t.dataset.lj.split('|'); o === 'ERP' ? formPagar(id) : verLancCigam(+id); });
 }
+
+/* =================== Notas fiscais e estoque do CIGAM — histórico (scripts 83 e 84, 24/11) ===================
+   Duas telas só de consulta, com o que veio do CIGAM:
+     fs_notas_cigam = Notas fiscais (histórico): notas de saída e de entrada, com os itens (os itens são os movimentos de estoque da nota)
+     es_mov_cigam   = Movimentos de estoque (histórico): abas Saldos (visão cigam_saldo_estoque) e Movimentos (cigam_movimentos)
+   Nada aqui grava no banco. */
+IC.fs_notas_cigam = '<path d="M6 3h12v18l-2.4-1.4L13 21l-2.4-1.4L8.2 21 6 19.7z"/><path d="M9 8h6M9 11.5h6"/><path d="M9.5 15.5l1.5 1.5 3-3"/>';
+IC.es_mov_cigam = '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/><path d="M8 5.2l8 4.6"/>';
+(() => { const poe = (area, depois, item) => { const g = MENU.find(x => x.area === area) || MENU[MENU.length - 1]; if(MENU.some(x => x.itens.some(i => i[0] === item[0]))) return;
+    const i = g.itens.findIndex(x => x[0] === depois); g.itens.splice(i < 0 ? g.itens.length : i + 1, 0, item); };
+  poe('Financeiro', 'fn_notas', ['fs_notas_cigam', '🧾', 'Notas fiscais (histórico)', 'DA']);
+  poe('Suprimentos', 'sv_estoque', ['es_mov_cigam', '📦', 'Movimentos de estoque (histórico)', 'DAPS']); })();
+
+const ncLike = s => String(s).replace(/[,()"\\%*]/g, '_');                 // texto de busca dentro de .or()/.ilike() sem quebrar o filtro
+const ncEmpUn = u => Number(u) === 2 ? 'EQP' : Number(u) === 1 ? 'Equiper' : '';
+const ncQtd = v => v === null || v === undefined || v === '' ? '' : Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+const ncPreco = v => v === null || v === undefined || v === '' ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+const ncTagTipo = t => t === 'saida' || t === 'S' ? '<span class="tag" style="background:#fee2e2;color:#b91c1c">saída</span>' : '<span class="tag" style="background:#dcfce7;color:#15803d">entrada</span>';
+const ncPessoaCod = c => { const k = String(c || '').trim(); return k ? (ST.pessoas || []).find(p => (p.codigos_cigam || []).includes(k)) : null; };
+const ncNomeCod = c => { const p = ncPessoaCod(c); return p ? `${esc(p.nome)} <span class="muted">(CIGAM ${esc(c)})</span>` : esc(c || ''); };
+const ncNumSerie = x => `${x.numero}${x.serie && String(x.serie).trim() ? ' / ' + esc(x.serie) : ''}`;
+const ncSemScript = t => `<div class="card"><h2>${t}</h2><p>Rode os scripts 83_cigam_tudo_campos.sql e 84_telas_cigam_notas.sql no Supabase.</p></div>`;
+
+/* ---------- Notas fiscais (histórico) ---------- */
+ST.nc = { tipo: '', emp: '', de: '', ate: '', pagina: 0, pessoa: '' };
+const NC_COLS = 'id,tipo,empresa,unidade,serie,numero,pessoa_id,pessoa_nome,pessoa_codigo,emissao,tipo_operacao,cfop,total_nf,pedido,itens';
+async function telaNotasCigam(){
+  carregandoTela();
+  const seq = ST._ncSeq = (ST._ncSeq || 0) + 1, f = ST.nc, por = 200, b = (ST.busca || '').trim(); if(ST._ncBusca !== b){ ST._ncBusca = b; f.pagina = 0; }
+  const filtra = q => { if(f.pessoa) q = q.eq('pessoa_id', f.pessoa); if(f.tipo) q = q.eq('tipo', f.tipo); if(f.emp) q = q.eq('empresa', f.emp);
+    if(f.de) q = q.gte('emissao', f.de); if(f.ate) q = q.lte('emissao', f.ate);
+    if(b) q = /^\d{1,15}$/.test(b) ? q.or(`numero.eq.${b},pedido.eq.${b},pessoa_codigo.eq.${b}`) : q.ilike('pessoa_nome', `%${ncLike(b)}%`);
+    return q; };
+  const ordena = q => q.order('emissao', { ascending: false, nullsFirst: false }).order('id', { ascending: false });
+  const [r, cnt] = await Promise.all([ ordena(filtra(sb.from('notas_cigam').select(NC_COLS))).range(f.pagina * por, f.pagina * por + por - 1),
+    filtra(sb.from('notas_cigam').select('id', { count: 'exact', head: true })) ]);
+  if(seq !== ST._ncSeq || ST.aba !== 'fs_notas_cigam') return;   // já pediram outra busca
+  if(r.error) return $('#conteudo').innerHTML = ncSemScript('Notas fiscais (histórico)');
+  const l = r.data || [], total = cnt.count || 0, soma = l.reduce((s, x) => s + Number(x.total_nf || 0), 0);
+  const rotP = f.tipo === 'saida' ? 'Cliente' : f.tipo === 'entrada' ? 'Fornecedor' : 'Cliente / fornecedor';
+  $('#conteudo').innerHTML = `<div class="card"><h2>Notas fiscais (histórico) <span class="muted" style="font-weight:400">· notas de saída e de entrada que vieram do CIGAM, só consulta</span></h2>
+    <div class="barra" style="flex-wrap:wrap">
+      <input type="search" id="busca" placeholder="Nº da nota, nº do pedido / ordem de compra, ou nome do cliente / fornecedor" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
+      <select id="ncTipo" style="max-width:170px"><option value="">Saída e entrada</option><option value="saida" ${f.tipo === 'saida' ? 'selected' : ''}>Só saída (vendas)</option><option value="entrada" ${f.tipo === 'entrada' ? 'selected' : ''}>Só entrada (compras)</option></select>
+      <select id="ncEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper', 'EQP'].map(e => `<option ${f.emp === e ? 'selected' : ''}>${e}</option>`).join('')}</select>
+      <label class="muted" style="font-size:12px">de <input type="date" id="ncDe" value="${f.de}" style="width:auto"></label><label class="muted" style="font-size:12px">até <input type="date" id="ncAte" value="${f.ate}" style="width:auto"></label>
+      ${f.pessoa ? `<span class="tag" style="padding:6px 10px">Empresa: ${esc(pessoa(f.pessoa)?.nome || '')} <a href="#" id="ncTiraP" title="Ver todas">✕</a></span>` : ''}</div>
+    <p class="muted" style="font-size:12px;margin:4px 0 8px">${total.toLocaleString('pt-BR')} nota(s) com estes filtros${total > por ? ` · mostrando ${f.pagina * por + 1} a ${Math.min(total, (f.pagina + 1) * por)}` : ''} · total das notas desta página: <b>${R$(soma)}</b></p>
+    <div style="overflow:auto"><table class="reg"><thead><tr><th>Data</th><th>Nº / série</th><th>Empresa</th><th>${rotP}</th><th>Operação / CFOP</th><th style="text-align:right">Total</th></tr></thead><tbody>
+    ${l.map(x => `<tr data-nc="${x.id}" style="cursor:pointer"><td>${dataBR(x.emissao)}</td><td><b>${ncNumSerie(x)}</b>${f.tipo ? '' : ' ' + ncTagTipo(x.tipo)}</td><td>${tagEmp(x.empresa)}</td>
+      <td>${esc(x.pessoa_nome || (pessoa(x.pessoa_id) || {}).nome || '')}<div class="muted" style="font-size:11px">CIGAM ${esc(x.pessoa_codigo || '')}${x.pedido ? ` · ${x.tipo === 'saida' ? 'pedido' : 'ordem de compra'} ${x.pedido}` : ''}</div></td>
+      <td style="font-size:12px">${esc(x.tipo_operacao || '')}<div class="muted">${esc(x.cfop || '')}</div></td>
+      <td style="text-align:right;white-space:nowrap">${x.total_nf === null ? '—' : R$(x.total_nf)}</td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhuma nota com estes filtros.</td></tr>'}</tbody></table></div>
+    ${total > por ? `<div style="display:flex;gap:8px;justify-content:center;margin-top:10px"><button class="btn peq" id="ncAnt" ${f.pagina ? '' : 'disabled'}>◀ Anteriores</button><button class="btn peq" id="ncProx" ${(f.pagina + 1) * por < total ? '' : 'disabled'}>Próximas ▶</button></div>
+      <p class="muted" style="font-size:12px;text-align:center">O Relatório e o Excel saem com todas as notas dos filtros (até 5.000).</p>` : ''}</div>`;
+  ligaBarra(null);
+  expRegistra(async () => { const t = await ordena(filtra(sb.from('notas_cigam').select(NC_COLS))).limit(5000); const L = t.data || l;
+    return [expCols('Notas fiscais (histórico do CIGAM)', [['Data', x => dataBR(x.emissao)], ['Tipo', x => x.tipo === 'saida' ? 'Saída' : 'Entrada'], ['Nº', x => x.numero], ['Série', x => x.serie], ['Empresa', x => x.empresa],
+      [rotP, x => x.pessoa_nome], ['Código CIGAM', x => x.pessoa_codigo], ['Operação', x => x.tipo_operacao], ['CFOP', x => x.cfop], ['Pedido / OC', x => x.pedido], ['Total', x => x.total_nf === null ? '' : R$(x.total_nf)]], L,
+      [['Total', '', '', '', '', '', '', '', '', '', R$(L.reduce((s, x) => s + Number(x.total_nf || 0), 0))]])]; });
+  const muda = (k, v) => { f[k] = v; f.pagina = 0; telaNotasCigam(); };
+  $('#ncTipo').onchange = e => muda('tipo', e.target.value); $('#ncEmp').onchange = e => muda('emp', e.target.value);
+  $('#ncDe').onchange = e => muda('de', e.target.value); $('#ncAte').onchange = e => muda('ate', e.target.value);
+  if($('#ncAnt')) $('#ncAnt').onclick = () => { f.pagina--; telaNotasCigam(); }; if($('#ncProx')) $('#ncProx').onclick = () => { f.pagina++; telaNotasCigam(); };
+  if($('#ncTiraP')) $('#ncTiraP').onclick = e => { e.preventDefault(); muda('pessoa', ''); };
+  document.querySelectorAll('[data-nc]').forEach(t => t.onclick = () => verNotaCigam(+t.dataset.nc));
+}
+
+/* itens de uma nota = movimentos de estoque com a mesma unidade, número, série e código da empresa */
+function ncItensDaNota(x){
+  let q = sb.from('cigam_movimentos').select('movimento,data,codigo,descricao,unidade_medida,quantidade,preco_unitario,total,desconto,cfop,ncm,atualiza,pedido_oc')
+    .eq('unidade', x.unidade).eq('nf', x.numero).eq('pessoa_codigo', x.pessoa_codigo).eq('tipo', x.tipo === 'saida' ? 'S' : 'E');
+  q = x.serie && String(x.serie).trim() ? q.eq('serie', x.serie) : q.is('serie', null);
+  return q.order('movimento');
+}
+const NC_FRETE = { '1': 'por conta do emitente', '2': 'por conta do destinatário' };
+async function verNotaCigam(id){
+  const r = await sb.from('notas_cigam').select('*').eq('id', id).maybeSingle(); if(r.error || !r.data) return aviso('Não encontrada', 'Esta nota não está no histórico do CIGAM.');
+  const x = r.data, sai = x.tipo === 'saida', it = x.unidade === null ? { data: [] } : await ncItensDaNota(x), IT = it.error ? [] : (it.data || []);
+  const C = (rot, v) => v || v === 0 ? `<div class="campo"><span>${rot}</span><b style="color:var(--preto);font-weight:500">${v}</b></div>` : '';
+  const V = (rot, v) => Number(v) ? C(rot, R$(v)) : '';
+  const pe = pessoa(x.pessoa_id);
+  // campos do CIGAM que vieram a mais (dados): mostra os curtos; os que vieram embaralhados na exportação ficam de fora
+  const extras = Object.entries(x.dados || {}).filter(([, v]) => v !== null && String(v).trim() !== ''), ok = extras.filter(([, v]) => String(v).length <= 80 && !/[\r\n]/.test(String(v))).sort((a, b) => a[0].localeCompare(b[0]));
+  const totItens = IT.reduce((s, i) => s + Number(i.total || 0), 0);
+  abrirPainel(`<div class="cab"><h2>Nota ${ncNumSerie(x)} <span class="muted" style="font-weight:400">· CIGAM</span></h2>${ncTagTipo(x.tipo)} ${tagEmp(x.empresa)}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+    <div class="card"><div class="grade">
+      <div class="campo largo"><span>${sai ? 'Cliente' : 'Fornecedor'}</span><b style="color:var(--preto);font-size:15px">${esc(x.pessoa_nome || (pe || {}).nome || '')}</b>
+        <span>CIGAM ${esc(x.pessoa_codigo || '')}${pe ? ` · <a href="#" id="ncAbreP">abrir a empresa</a>` : ' · não ligada a uma empresa do ERP'}</span></div>
+      ${C('Emissão', dataBR(x.emissao))}${C(sai ? 'Saída' : 'Entrada', dataBR(x.entrada_saida))}${C('Documento', esc(x.documento_fiscal || ''))}
+      ${C('Tipo de operação', esc(x.tipo_operacao || ''))}${C('CFOP', esc(x.cfop || ''))}${C('Condição de pagamento', esc(x.condicao || ''))}
+      <div class="campo" id="ncLig"${x.pedido ? '' : ' style="display:none"'}><span>${sai ? 'Pedido' : 'Ordem de compra'}</span><b style="color:var(--preto);font-weight:500">${x.pedido || ''}</b></div>
+      ${C('Fatura', esc(x.fatura || ''))}${C('Conta', esc(x.conta || ''))}${C('Portador', esc(x.portador || ''))}${C('Representante', esc(x.representante || ''))}
+    </div></div>
+    <div class="card"><h2 style="font-size:15px">Totais</h2><div class="grade">
+      ${C('Total da nota', `<span style="color:var(--verm);font-weight:700">${x.total_nf === null ? '—' : R$(x.total_nf)}</span>`)}${V('Mercadorias', x.total_mercadorias)}${V('Serviços', x.total_servicos)}${V('Total faturado', x.total_faturado)}
+      ${V('Desconto', x.desconto)}${V('Frete', x.frete)}${V('Seguro', x.seguro)}${V('Outras despesas', x.outras_despesas)}</div></div>
+    ${['base_icms', 'valor_icms', 'base_ipi', 'valor_ipi', 'base_iss', 'valor_iss', 'valor_irrf', 'valor_inss', 'base_st', 'valor_st', 'valor_pis'].some(k => Number(x[k])) ? `<div class="card"><h2 style="font-size:15px">Impostos</h2><div class="grade">
+      ${V('Base do ICMS', x.base_icms)}${V('ICMS', x.valor_icms)}${V('Base do IPI', x.base_ipi)}${V('IPI', x.valor_ipi)}${V('Base do ISS', x.base_iss)}${V('ISS', x.valor_iss)}
+      ${V('IRRF', x.valor_irrf)}${V('INSS', x.valor_inss)}${V('Base da subst. tributária', x.base_st)}${V('Subst. tributária', x.valor_st)}${V('PIS', x.valor_pis)}</div></div>` : ''}
+    ${[x.transportadora, x.tipo_frete, x.volume, x.especie, x.peso_liquido, x.peso_bruto, x.placa].some(v => v || v === 0) ? `<div class="card"><h2 style="font-size:15px">Transporte</h2><div class="grade">
+      ${C('Transportadora', ncNomeCod(x.transportadora))}${C('Frete', x.tipo_frete ? esc(NC_FRETE[x.tipo_frete] ? `${x.tipo_frete} · ${NC_FRETE[x.tipo_frete]}` : x.tipo_frete) : '')}
+      ${C('Volumes', ncQtd(x.volume))}${C('Espécie', esc(x.especie || ''))}${Number(x.peso_liquido) ? C('Peso líquido', ncQtd(x.peso_liquido)) : ''}${Number(x.peso_bruto) ? C('Peso bruto', ncQtd(x.peso_bruto)) : ''}
+      ${C('Placa', esc(x.placa || ''))}${C('UF', esc(x.uf || ''))}</div></div>` : ''}
+    <div class="card"><h2 style="font-size:15px">Itens da nota <span class="muted" style="font-weight:400;font-size:12px">· ${IT.length} ${x.itens && x.itens !== IT.length ? `de ${x.itens} ` : ''}· pelos movimentos de estoque do CIGAM</span></h2>
+      ${IT.length ? `<div style="overflow-x:auto"><table class="reg"><thead><tr><th>Código</th><th>Descrição</th><th style="text-align:right">Quant.</th><th>Un.</th><th style="text-align:right">Preço unit.</th><th style="text-align:right">Total</th></tr></thead><tbody>
+        ${IT.map(i => `<tr><td>${esc(i.codigo || '')}</td><td>${esc(i.descricao || '')}${i.ncm || i.cfop ? `<div class="muted" style="font-size:11px">${[i.ncm ? 'NCM ' + esc(i.ncm) : '', i.cfop ? 'CFOP ' + esc(i.cfop) : ''].filter(Boolean).join(' · ')}</div>` : ''}</td>
+          <td style="text-align:right">${ncQtd(i.quantidade)}</td><td>${esc(i.unidade_medida || '')}</td><td style="text-align:right;white-space:nowrap">${ncPreco(i.preco_unitario)}</td><td style="text-align:right;white-space:nowrap">${R$(i.total || 0)}</td></tr>`).join('')}
+        <tr><td colspan="5" style="text-align:right"><b>Total dos itens</b></td><td style="text-align:right;white-space:nowrap"><b>${R$(totItens)}</b></td></tr></tbody></table></div>`
+        : '<p class="muted" style="font-size:13px;margin:0">Esta nota não tem itens no histórico de movimentos do CIGAM (notas só de serviço e algumas antigas não têm).</p>'}</div>
+    ${ok.length ? `<details class="card"><summary style="cursor:pointer"><b>Outros campos do CIGAM</b> <span class="muted">(${ok.length})</span></summary><div class="grade" style="margin-top:10px">${ok.map(([k, v]) => C(esc(k), esc(v))).join('')}</div>
+      ${extras.length > ok.length ? `<p class="muted" style="font-size:12px">${extras.length - ok.length} campo(s) longo(s) não aparecem aqui (vieram embaralhados na exportação do CIGAM).</p>` : ''}</details>` : ''}
+    <p class="muted" style="font-size:12px">Histórico importado do CIGAM — só consulta.${x.usuario_criacao ? ' Criada por ' + esc(x.usuario_criacao) + '.' : ''}${x.usuario_modificacao || x.data_modificacao ? ` Alterada${x.usuario_modificacao ? ' por ' + esc(x.usuario_modificacao) : ''}${x.data_modificacao ? ' em ' + dataBR(x.data_modificacao) : ''}.` : ''}</p>`);
+  if($('#ncAbreP')) $('#ncAbreP').onclick = e => { e.preventDefault(); fecharPainel(); formPessoa(pe); };
+  if(x.pedido) ncLigacao(x);
+}
+/* pedido (saída) ou ordem de compra (entrada) ligado à nota: mostra e, se existir no ERP, deixa abrir */
+async function ncLigacao(x){
+  const alvo = () => { const d = $('#ncLig'); return d && d.querySelector('b'); }, n = x.pedido, links = [];
+  if(x.tipo === 'saida'){
+    const [p, o] = await Promise.all([ nivelTela('ped_cigam') >= 1 ? sb.from('pedidos_cigam').select('numero').eq('numero', n).maybeSingle() : { data: null },
+      nivelTela('orc') >= 1 ? sb.from('orcamentos').select('id').eq('pedido_cigam', n).maybeSingle() : { data: null } ]);
+    if(p.data && typeof verPedCigam === 'function') links.push(['ncAbrePed', 'abrir o pedido do CIGAM', () => verPedCigam(n)]);
+    if(o.data && typeof formOrc === 'function') links.push(['ncAbreOrc', 'abrir o orçamento no ERP', () => { fecharPainel(); formOrc(o.data.id); }]);
+  } else {
+    const o = nivelTela('cp_compras') >= 1 ? await sb.from('compras_ordens').select('id').eq('numero', n).eq('origem', 'cigam').limit(1) : { data: [] };
+    const oc = (o.data || [])[0]; if(oc && typeof verOC === 'function') links.push(['ncAbreOC', 'abrir a ordem de compra', () => verOC(oc.id)]);
+  }
+  const b = alvo(); if(!b || !links.length) return;
+  b.insertAdjacentHTML('afterend', `<span>${links.map(([id, t]) => `<a href="#" id="${id}">${t}</a>`).join(' · ')}</span>`);
+  links.forEach(([id, , fn]) => { if($('#' + id)) $('#' + id).onclick = e => { e.preventDefault(); fn(); }; });
+}
+
+/* na ficha da empresa: as notas dela no CIGAM */
+async function notasCigamDaEmpresa(pid, alvo){
+  if(!alvo || (nivelTela('fs_notas_cigam') < 1 && nivelTela('fn_cigam_lanc') < 1)) return;
+  const [l, c] = await Promise.all([ sb.from('notas_cigam').select('id,tipo,empresa,serie,numero,emissao,total_nf,tipo_operacao').eq('pessoa_id', pid).order('emissao', { ascending: false, nullsFirst: false }).order('id', { ascending: false }).limit(15),
+    sb.from('notas_cigam').select('id', { count: 'exact', head: true }).eq('pessoa_id', pid) ]);
+  if(l.error || !(l.data || []).length) return;
+  const total = c.count || l.data.length;
+  alvo.innerHTML = `<div class="secao-sens"><h3>Notas fiscais no CIGAM <span class="muted" style="font-weight:400;font-size:12px">· ${total.toLocaleString('pt-BR')} nota(s), histórico</span></h3>
+    ${l.data.map(x => `<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--borda);cursor:pointer" data-ncf="${x.id}">${dataBR(x.emissao)} · ${esc(x.empresa || '')} · ${x.tipo === 'saida' ? 'saída' : 'entrada'} · nota ${ncNumSerie(x)} · ${esc(x.tipo_operacao || '')} · <b>${x.total_nf === null ? '—' : R$(x.total_nf)}</b></div>`).join('')}
+    ${nivelTela('fs_notas_cigam') >= 1 ? `<button class="btn peq" type="button" id="ncVerTodas" style="margin-top:6px">Ver todas</button>` : ''}</div>`;
+  alvo.querySelectorAll('[data-ncf]').forEach(d => d.onclick = () => verNotaCigam(+d.dataset.ncf));
+  if($('#ncVerTodas')) $('#ncVerTodas').onclick = () => { fecharPainel(); Object.assign(ST.nc, { tipo: '', emp: '', de: '', ate: '', pagina: 0, pessoa: pid }); ST.aba = 'fs_notas_cigam'; ST.busca = ''; desenhar(); };
+}
+
+/* ---------- Movimentos de estoque (histórico) ---------- */
+ST.mc = { aba: 'saldos', emp: '', soSaldo: true, tipo: '', de: '', ate: '', codigo: '', pagina: 0 };
+let _mcSaldos = null;
+const mcAviso = '<p class="muted" style="font-size:12px;margin:0 0 8px">⚠ Saldo <b>histórico do CIGAM</b>, calculado pelos movimentos — serve para conferência. O CIGAM tem ajustes artificiais, então pode não bater com a contagem física.</p>';
+const mcAbas = () => `<div class="abasLanc">${[['saldos', 'Saldos'], ['movimentos', 'Movimentos']].map(([k, r]) => `<button class="${ST.mc.aba === k ? 'ativo' : ''}" data-mcv="${k}">${r}</button>`).join('')}</div>`;
+const mcLigaAbas = () => document.querySelectorAll('[data-mcv]').forEach(b => b.onclick = () => { if(ST.mc.aba === b.dataset.mcv) return; ST.mc.aba = b.dataset.mcv; ST.mc.pagina = 0; ST.mc.codigo = ''; ST.busca = ''; desenhar(); });
+function telaMovCigam(){ return ST.mc.aba === 'movimentos' ? telaMovCigamMov() : telaMovCigamSaldos(); }
+
+async function telaMovCigamSaldos(){
+  carregandoTela();
+  const seq = ST._mcSeq = (ST._mcSeq || 0) + 1, f = ST.mc;
+  if(!_mcSaldos){ const r = await tudo(() => sb.from('cigam_saldo_estoque').select('unidade,codigo,descricao,unidade_medida,saldo,ultima_entrada,ultima_saida').order('codigo').order('unidade'));
+    if(seq !== ST._mcSeq || ST.aba !== 'es_mov_cigam' || f.aba !== 'saldos') return;
+    if(r.error) return $('#conteudo').innerHTML = ncSemScript('Movimentos de estoque (histórico)');
+    _mcSaldos = r.data || []; }
+  if(seq !== ST._mcSeq || ST.aba !== 'es_mov_cigam' || f.aba !== 'saldos') return;
+  const b = norm(ST.busca || '').split(/\s+/).filter(Boolean), un = f.emp === 'EQP' ? 2 : f.emp === 'Equiper' ? 1 : 0;
+  const l = _mcSaldos.filter(x => (!un || Number(x.unidade) === un) && (!f.soSaldo || Number(x.saldo)) && (!b.length || b.every(w => (x._b || (x._b = norm((x.codigo || '') + ' ' + (x.descricao || '')))).includes(w))));
+  const MAX = 300, neg = l.filter(x => Number(x.saldo) < 0).length;
+  $('#conteudo').innerHTML = `${mcAbas()}<div class="card"><h2>Saldos de estoque no CIGAM <span class="muted" style="font-weight:400">· histórico, só consulta</span></h2>
+    <div class="barra" style="flex-wrap:wrap"><input type="search" id="busca" placeholder="Código ou descrição do material" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
+      <select id="mcEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper', 'EQP'].map(e => `<option ${f.emp === e ? 'selected' : ''}>${e}</option>`).join('')}</select>
+      <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" id="mcSo" style="width:auto" ${f.soSaldo ? 'checked' : ''}> só com saldo</label></div>
+    ${mcAviso}
+    <p class="muted" style="font-size:12px;margin:0 0 8px">${l.length.toLocaleString('pt-BR')} material(is)${neg ? ` · ${neg.toLocaleString('pt-BR')} com saldo negativo` : ''} · clique num material para ver os movimentos dele</p>
+    <div style="overflow:auto"><table class="reg"><thead><tr><th>Código</th><th>Descrição</th><th>Empresa</th><th>Un.</th><th style="text-align:right">Saldo</th><th>Última entrada</th><th>Última saída</th></tr></thead><tbody>
+    ${l.slice(0, MAX).map(x => `<tr data-mcs="${esc(x.codigo || '')}" data-un="${x.unidade}" style="cursor:pointer"><td><b>${esc(x.codigo || '(sem código)')}</b></td><td>${esc(x.descricao || '')}</td><td>${tagEmp(ncEmpUn(x.unidade))}</td><td>${esc(x.unidade_medida || '')}</td>
+      <td style="text-align:right;white-space:nowrap;${Number(x.saldo) < 0 ? 'color:var(--verm)' : ''}"><b>${ncQtd(x.saldo)}</b></td><td>${x.ultima_entrada ? dataBR(x.ultima_entrada) : '—'}</td><td>${x.ultima_saida ? dataBR(x.ultima_saida) : '—'}</td></tr>`).join('')
+      || '<tr><td colspan="7" class="vazio">Nenhum material com estes filtros.</td></tr>'}</tbody></table></div>
+    ${l.length > MAX ? `<p class="muted" style="font-size:12px">Mostrando ${MAX} de ${l.length.toLocaleString('pt-BR')} — use a busca ou os filtros. (O Relatório e o Excel saem com todos.)</p>` : ''}</div>`;
+  ligaBarra(null); mcLigaAbas();
+  expRegistra(() => [expCols('Saldos de estoque (histórico do CIGAM)', [['Código', x => x.codigo], ['Descrição', x => x.descricao], ['Empresa', x => ncEmpUn(x.unidade)], ['Un.', x => x.unidade_medida], ['Saldo', x => ncQtd(x.saldo)],
+    ['Última entrada', x => dataBR(x.ultima_entrada)], ['Última saída', x => dataBR(x.ultima_saida)]], l)]);
+  $('#mcEmp').onchange = e => { f.emp = e.target.value; telaMovCigamSaldos(); }; $('#mcSo').onchange = e => { f.soSaldo = e.target.checked; telaMovCigamSaldos(); };
+  document.querySelectorAll('[data-mcs]').forEach(t => t.onclick = () => { if(!t.dataset.mcs) return; Object.assign(f, { aba: 'movimentos', codigo: t.dataset.mcs, emp: ncEmpUn(t.dataset.un), tipo: '', de: '', ate: '', pagina: 0 }); ST.busca = ''; desenhar(); });
+}
+
+const MC_COLS = 'unidade,movimento,data,tipo,atualiza,codigo,descricao,unidade_medida,quantidade,preco_unitario,total,tipo_documento,documento,serie,nf,pedido_oc,pessoa_codigo,pessoa_id,tipo_operacao,cfop,historico';
+async function telaMovCigamMov(){
+  carregandoTela();
+  const seq = ST._mcSeq = (ST._mcSeq || 0) + 1, f = ST.mc, por = 200, b = (ST.busca || '').trim(); if(ST._mcBusca !== b){ ST._mcBusca = b; f.pagina = 0; }
+  const filtra = q => { if(f.codigo) q = q.eq('codigo', f.codigo); if(f.emp) q = q.eq('unidade', f.emp === 'EQP' ? 2 : 1); if(f.tipo) q = q.eq('tipo', f.tipo);
+    if(f.de) q = q.gte('data', f.de); if(f.ate) q = q.lte('data', f.ate);
+    if(b) q = /^\d{1,15}$/.test(b) ? q.or(`nf.eq.${b},codigo.ilike.%${b}`) : q.or(`descricao.ilike.%${ncLike(b)}%,codigo.ilike.%${ncLike(b)}%`);
+    return q; };
+  const ordena = q => q.order('data', { ascending: false, nullsFirst: false }).order('movimento', { ascending: false });
+  const [r, cnt] = await Promise.all([ ordena(filtra(sb.from('cigam_movimentos').select(MC_COLS))).range(f.pagina * por, f.pagina * por + por - 1),
+    filtra(sb.from('cigam_movimentos').select('movimento', { count: 'exact', head: true })) ]);
+  if(seq !== ST._mcSeq || ST.aba !== 'es_mov_cigam' || f.aba !== 'movimentos') return;
+  if(r.error) return $('#conteudo').innerHTML = ncSemScript('Movimentos de estoque (histórico)');
+  const l = r.data || [], total = cnt.count || 0;
+  const sd = f.codigo && _mcSaldos ? _mcSaldos.filter(x => x.codigo === f.codigo && (!f.emp || ncEmpUn(x.unidade) === f.emp)) : [];
+  const nomeP = x => { const p = pessoa(x.pessoa_id); return p ? p.nome : x.pessoa_codigo ? 'CIGAM ' + x.pessoa_codigo : ''; };
+  const docTxt = x => [x.nf ? 'NF ' + x.nf + (x.serie && String(x.serie).trim() ? ' / ' + x.serie : '') : '', x.pedido_oc && !/^0*$/.test(x.pedido_oc) ? (x.tipo === 'S' ? 'Ped. ' : 'OC ') + x.pedido_oc.replace(/^0+/, '') : ''].filter(Boolean).join(' · ');
+  $('#conteudo').innerHTML = `${mcAbas()}<div class="card"><h2>Movimentos de estoque no CIGAM <span class="muted" style="font-weight:400">· histórico, só consulta</span></h2>
+    <div class="barra" style="flex-wrap:wrap"><input type="search" id="busca" placeholder="Código, descrição do material ou nº da nota" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
+      <select id="mcEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper', 'EQP'].map(e => `<option ${f.emp === e ? 'selected' : ''}>${e}</option>`).join('')}</select>
+      <select id="mcTipo" style="max-width:150px"><option value="">Entradas e saídas</option><option value="E" ${f.tipo === 'E' ? 'selected' : ''}>Só entradas</option><option value="S" ${f.tipo === 'S' ? 'selected' : ''}>Só saídas</option></select>
+      <label class="muted" style="font-size:12px">de <input type="date" id="mcDe" value="${f.de}" style="width:auto"></label><label class="muted" style="font-size:12px">até <input type="date" id="mcAte" value="${f.ate}" style="width:auto"></label>
+      ${f.codigo ? `<span class="tag" style="padding:6px 10px">Material: ${esc(f.codigo)} <a href="#" id="mcTiraC" title="Ver todos">✕</a></span>` : ''}</div>
+    ${sd.length ? `<p style="font-size:13px;margin:0 0 6px"><b>${esc(sd[0].descricao || '')}</b> · saldo no CIGAM: ${sd.map(x => `${tagEmp(ncEmpUn(x.unidade))} <b>${ncQtd(x.saldo)}</b> ${esc(x.unidade_medida || '')}`).join(' · ')}</p>${mcAviso}` : ''}
+    <p class="muted" style="font-size:12px;margin:4px 0 8px">${total.toLocaleString('pt-BR')} movimento(s) com estes filtros${total > por ? ` · mostrando ${f.pagina * por + 1} a ${Math.min(total, (f.pagina + 1) * por)}` : ''} · clique num movimento com nota para abrir a nota</p>
+    <div style="overflow:auto"><table class="reg"><thead><tr><th>Data</th><th>Empresa</th><th>Tipo</th><th>Código</th><th>Descrição</th><th style="text-align:right">Quant.</th><th>Un.</th><th style="text-align:right">Preço unit.</th><th style="text-align:right">Total</th><th>Nota / pedido</th><th>Cliente / fornecedor</th></tr></thead><tbody>
+    ${l.map(x => `<tr data-mcm="${x.unidade}|${x.movimento}" ${x.nf ? 'style="cursor:pointer"' : ''}><td>${dataBR(x.data)}</td><td>${tagEmp(ncEmpUn(x.unidade))}</td><td>${ncTagTipo(x.tipo)}${x.atualiza === 'A' ? '' : '<div class="muted" style="font-size:11px" title="Este movimento não alterou o saldo no CIGAM">não mexeu no saldo</div>'}</td>
+      <td>${esc(x.codigo || '')}</td><td style="font-size:12px">${esc(x.descricao || '')}${x.historico ? `<div class="muted">${esc(x.historico)}</div>` : ''}</td>
+      <td style="text-align:right;white-space:nowrap">${ncQtd(x.quantidade)}</td><td>${esc(x.unidade_medida || '')}</td><td style="text-align:right;white-space:nowrap">${ncPreco(x.preco_unitario)}</td><td style="text-align:right;white-space:nowrap">${x.total === null ? '' : R$(x.total)}</td>
+      <td style="font-size:12px">${esc(docTxt(x))}<div class="muted">${esc([x.tipo_operacao, x.cfop].filter(Boolean).join(' · '))}</div></td><td style="font-size:12px">${esc(nomeP(x))}</td></tr>`).join('')
+      || '<tr><td colspan="11" class="vazio">Nenhum movimento com estes filtros.</td></tr>'}</tbody></table></div>
+    ${total > por ? `<div style="display:flex;gap:8px;justify-content:center;margin-top:10px"><button class="btn peq" id="mcAnt" ${f.pagina ? '' : 'disabled'}>◀ Anteriores</button><button class="btn peq" id="mcProx" ${(f.pagina + 1) * por < total ? '' : 'disabled'}>Próximos ▶</button></div>
+      <p class="muted" style="font-size:12px;text-align:center">O Relatório e o Excel saem com todos os movimentos dos filtros (até 5.000).</p>` : ''}</div>`;
+  ligaBarra(null); mcLigaAbas();
+  expRegistra(async () => { const t = await ordena(filtra(sb.from('cigam_movimentos').select(MC_COLS))).limit(5000); const L = t.data || l;
+    return [expCols('Movimentos de estoque (histórico do CIGAM)', [['Data', x => dataBR(x.data)], ['Empresa', x => ncEmpUn(x.unidade)], ['Tipo', x => x.tipo === 'S' ? 'Saída' : 'Entrada'], ['Código', x => x.codigo], ['Descrição', x => x.descricao],
+      ['Quant.', x => ncQtd(x.quantidade)], ['Un.', x => x.unidade_medida], ['Preço unit.', x => ncPreco(x.preco_unitario)], ['Total', x => x.total === null ? '' : R$(x.total)], ['Nota / pedido', docTxt], ['Cliente / fornecedor', nomeP],
+      ['Mexeu no saldo', x => x.atualiza === 'A' ? 'sim' : 'não']], L)]; });
+  const muda = (k, v) => { f[k] = v; f.pagina = 0; telaMovCigamMov(); };
+  $('#mcEmp').onchange = e => muda('emp', e.target.value); $('#mcTipo').onchange = e => muda('tipo', e.target.value);
+  $('#mcDe').onchange = e => muda('de', e.target.value); $('#mcAte').onchange = e => muda('ate', e.target.value);
+  if($('#mcAnt')) $('#mcAnt').onclick = () => { f.pagina--; telaMovCigamMov(); }; if($('#mcProx')) $('#mcProx').onclick = () => { f.pagina++; telaMovCigamMov(); };
+  if($('#mcTiraC')) $('#mcTiraC').onclick = e => { e.preventDefault(); muda('codigo', ''); };
+  document.querySelectorAll('[data-mcm]').forEach(t => t.onclick = async () => { const [un, mv] = t.dataset.mcm.split('|'), x = l.find(y => String(y.unidade) === un && String(y.movimento) === mv); if(!x || !x.nf) return;
+    let q = sb.from('notas_cigam').select('id').eq('unidade', x.unidade).eq('numero', x.nf).eq('tipo', x.tipo === 'S' ? 'saida' : 'entrada').eq('serie', x.serie || '');
+    if(x.pessoa_codigo) q = q.eq('pessoa_codigo', x.pessoa_codigo);
+    const n = await q.limit(1); if(n.error || !(n.data || []).length) return toast('A nota ' + x.nf + ' não está no histórico de notas do CIGAM.'); verNotaCigam(n.data[0].id); });
+}
+
+Object.assign(TELAS, { fs_notas_cigam: telaNotasCigam, es_mov_cigam: telaMovCigam });
 
 /* ============ Leitura do certificado digital — só no computador da pessoa ============
    Lê o arquivo .pfx/.p12 (com a senha) ou .cer/.crt/.pem (sem senha) AQUI no navegador,
