@@ -7241,7 +7241,7 @@ async function formOrc(id, pre){
     O = { tipo: pre.tipo, obra_id: pre.obra_id || null, pagador_id: pre.pagador_id || pagadorPadrao(pre.obra_id), area_m2: pre.area_m2 ?? null, etapa:'elaboracao', desconto_tipo:'valor', desconto_valor:0, desconto_percentual:0, frete:0, data_orcamento: hojeISO(), validade: somaDias(hojeISO(), 15),
       condicao_pagamento_id: COND_PADRAO[pre.tipo], tipo_operacao: opPadrao(pre.tipo, pre.obra_id),
       parcelas: (ST.condicoes.find(c => c.codigo === COND_PADRAO[pre.tipo])?.parcelas || PARC_PADRAO[pre.tipo]).map(p => ({ ...p })), textos: pre.tipo === 'projeto' ? { ...TEXTOS_PROJETO } : {}, vendedor: ST.eu.nome, solicitacao_id: pre.solicitacao_id || null,
-      referencia: pre.tipo === 'projeto' ? 'PROJETOS DE INSTALAÇÕES' : '', prazo_texto: pre.tipo === 'equipamento' ? 'A combinar' : '', observacoes: pre.tipo === 'equipamento' ? 'Preço reajustável por itens.' : '' };
+      referencia: pre.referencia || (pre.tipo === 'projeto' ? 'PROJETOS DE INSTALAÇÕES' : ''), prazo_texto: pre.tipo === 'equipamento' ? 'A combinar' : '', observacoes: pre.tipo === 'equipamento' ? 'Preço reajustável por itens.' : '' };
     G = pre.copiaGrupos ? pre.copiaGrupos : pre.tipo === 'projeto' ? [{ titulo:'Projetos', itens:[] }] : (pre.grupos && pre.grupos.length ? pre.grupos : ['ITENS']).map(t => ({ titulo: t, itens: [] }));
   }
   O.textos = { ...(O.tipo === 'projeto' ? TEXTOS_PROJETO : {}), ...(O.textos || {}) };
@@ -7587,6 +7587,190 @@ async function pdfOrcamento(id){
 }
 
 Object.assign(TELAS, { orc: telaOrc, produtos: telaProdutos });
+
+/* ============ Orçamento Express + Configuração do Express (script 93, 25/11 — pedido do Júlio) ============
+   Traz para o ERP a "Planilha orçamento equipamentos": escolhe o cliente, marca os sistemas (PRESSURIZAÇÃO, AQUECIMENTO…),
+   responde as perguntas de cada um e o ERP monta os pedidos com os códigos do cadastro de materiais.
+   Tudo o que aparece de opção vem de express_sistemas.config (ver sql/93): a tela "Configuração do Express" edita
+   sistemas → subdivisões → equipamentos → itens que vêm junto. O orçamento gerado abre no formulário normal (formOrc). */
+IC.vd_express = '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>';
+IC.vd_express_cfg = '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>';
+MENU.find(g => g.area === 'Orçamentos').itens.push(['vd_express', '⚡', 'Orçamento Express', 'DAS'], ['vd_express_cfg', '⚙', 'Configuração do Express', 'DA']);
+const EXP = { prod: null, sis: null };
+const expId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const expCod = v => { const t = String(v == null ? '' : v).trim(); return /^\d{1,6}$/.test(t) ? t.padStart(6, '0') : t; };
+const QTD_TIPOS = [['unid', 'por unidade ×'], ['cada', '1 a cada'], ['fixo', 'fixo'], ['menos', 'unidades menos']];
+async function expCarrega(forcar){
+  if(!EXP.prod){ const r = await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,tipo,unidade,ativo').order('id')); EXP.prod = Object.fromEntries((r.data || []).map(p => [p.codigo, p])); }
+  if(!EXP.sis || forcar){ const r = await sb.from('express_sistemas').select('*').order('ordem').order('nome'); if(r.error){ EXP.erro = true; EXP.sis = []; } else { EXP.erro = false; EXP.sis = r.data || []; } }
+}
+const expSemScript = t => `<div class="card"><h2>${t}</h2><p class="vazio">Falta rodar o script <b>93_orcamento_express.sql</b> no Supabase.</p></div>`;
+const expSe = (se, resp) => !se || Object.entries(se).every(([p, v]) => !v || resp[p] === v);
+/* quantidade de um item que vem junto, para n unidades do equipamento */
+function expQtd(q, n){ const v = Number(q && q.v) || 1; return !q || q.tipo === 'unid' ? n * v : q.tipo === 'cada' ? Math.ceil(n / v) : q.tipo === 'fixo' ? v : Math.max(0, n - v); }
+/* monta os itens de UM sistema escolhido: inst = { resp: {pergunta: valor}, esc: {grupoId: { eq, n }} } */
+function expItens(cfg, inst){
+  const out = [], soma = (codigo, nome, q) => { if(!(q > 0)) return; const x = out.find(i => i.codigo === codigo); if(x) x.quantidade += q; else out.push({ codigo, nome, quantidade: q }); };
+  (cfg.grupos || []).forEach(g => { const e = inst.esc[g.id]; if(!e || !e.eq || !(e.n > 0)) return;
+    const eq = (g.equipamentos || []).find(x => x.id === e.eq); if(!eq || !expSe(eq.se, inst.resp)) return;
+    soma(eq.codigo, eq.nome, e.n);
+    (eq.junto || []).forEach(j => { if(expSe(j.se, inst.resp) && e.n >= (Number(j.qmin) || 0)) soma(j.codigo, j.nome, expQtd(j.qtd, e.n)); }); });
+  return out.map(i => { const p = EXP.prod[i.codigo]; return { ...i, p, preco: p ? Number(p.preco) || 0 : 0 }; });
+}
+
+/* ================= Orçamento Express ================= */
+ST.express = { cliente: '', inst: [] };
+async function telaExpress(){
+  carregandoTela(); await expCarrega(true);
+  if(EXP.erro) return $('#conteudo').innerHTML = expSemScript('Orçamento Express');
+  const X = ST.express, ativos = EXP.sis.filter(s => s.ativo);
+  const novaInst = s => { const cfg = s.config || {}, resp = {}; (cfg.perguntas || []).forEach(p => resp[p.id] = p.padrao || (p.opcoes || [])[0] || '');
+    return { id: expId('i'), sis: s.id, titulo: s.nome, resp, esc: {} }; };
+  const sisDe = i => EXP.sis.find(s => s.id === i.sis);
+  X.inst = X.inst.filter(sisDe);
+  const cartao = (i, k) => { const s = sisDe(i), cfg = s.config || {}, its = expItens(cfg, i), tot = its.reduce((a, x) => a + x.quantidade * x.preco, 0);
+    return `<div class="card" data-xi="${k}" style="border-left:4px solid var(--verm)">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><b class="muted" style="font-size:12px">PEDIDO ${k + 1}</b><input data-xt="${k}" value="${esc(i.titulo)}" style="font-weight:700;flex:1" title="Título do pedido"><button class="btn peq" data-xrem="${k}" title="Tirar este sistema">✕</button></div>
+      <div class="grade">${(cfg.perguntas || []).map(p => `<label class="campo">${esc(p.rotulo)}<select data-xp="${k}:${esc(p.id)}">${(p.opcoes || []).map(o => `<option ${i.resp[p.id] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`).join('')}</div>
+      ${(cfg.grupos || []).map(g => { const ops = (g.equipamentos || []).filter(e => expSe(e.se, i.resp)), e = i.esc[g.id] || {};
+        return `<div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;flex-wrap:wrap"><label class="campo" style="flex:1 1 260px;margin:0">${esc(g.rotulo || g.nome)}<select data-xg="${k}:${esc(g.id)}"><option value="">— não tem —</option>${ops.map(o => `<option value="${esc(o.id)}" ${e.eq === o.id ? 'selected' : ''}>${esc(o.nome)}${EXP.prod[o.codigo] ? '' : ' (código ' + esc(o.codigo) + ' não achado)'}</option>`).join('')}</select></label>
+          <label class="campo" style="width:110px;margin:0">Quantidade<input data-xn="${k}:${esc(g.id)}" type="number" min="1" step="1" value="${e.n || 1}"></label></div>`; }).join('')}
+      ${its.length ? `<div style="overflow-x:auto;margin-top:12px"><table class="reg"><thead><tr><th>Código</th><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>
+        ${its.map(x => `<tr><td>${esc(x.codigo)}</td><td>${x.p ? esc(x.p.descricao) : `<span style="color:var(--verm)">não está no cadastro de materiais</span> · ${esc(x.nome || '')}`}${x.p && TIPOS_PROD[x.p.tipo] && x.p.tipo !== 'equipamento' ? ` <span class="muted" style="font-size:11px">${TIPOS_PROD[x.p.tipo].toLowerCase()}</span>` : ''}</td>
+          <td style="text-align:right">${x.quantidade.toLocaleString('pt-BR')}</td><td style="text-align:right">${x.preco ? R$(x.preco) : '<span style="color:#b45309">sem preço</span>'}</td><td style="text-align:right">${R$(x.quantidade * x.preco)}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="4" style="text-align:right"><b>Total do pedido</b></td><td style="text-align:right"><b>${R$(tot)}</b></td></tr></tfoot></table></div>` : '<p class="muted" style="font-size:13px;margin:10px 0 0">Escolha o equipamento para ver os itens.</p>'}</div>`; };
+  const geral = X.inst.reduce((a, i) => a + expItens(sisDe(i).config || {}, i).reduce((b, x) => b + x.quantidade * x.preco, 0), 0);
+  $('#conteudo').innerHTML = `<div class="card"><h2>Orçamento Express <span class="muted" style="font-weight:400">· escolha o cliente e os sistemas; o ERP monta os pedidos</span></h2>
+      <div class="campo largo" data-nao-suja="1"><span><b>1.</b> Cliente</span><div id="xCli"></div></div>
+      <div style="margin-top:14px"><span style="font-size:13px"><b>2.</b> O que este orçamento vai ter? Toque para acrescentar um sistema (pode repetir):</span>
+        <div class="chips" style="margin-top:6px">${ativos.map(s => `<button class="chip" data-xadd="${s.id}">+ ${esc(s.nome)}</button>`).join('') || '<span class="muted">Nenhum sistema cadastrado. Cadastre em Configuração do Express.</span>'}</div></div></div>
+    ${X.inst.map(cartao).join('')}
+    <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1"><b>3.</b> ${X.inst.length} pedido(s) · total <b style="font-size:17px">${R$(geral)}</b><div class="muted" style="font-size:12px">Abre o orçamento pronto para conferir, ajustar e salvar. Preços do cadastro de materiais.</div></span>
+      ${X.inst.length ? '<button class="btn" id="xLimpa">Limpar</button>' : ''}<button class="btn pri" id="xGerar">⚡ Gerar orçamento</button></div>`;
+  const pega = pickEmpresa($('#xCli'), X.cliente, pid => { X.cliente = pid; }, { papel: 'cliente', rotulo: 'cliente' });
+  document.querySelectorAll('[data-xadd]').forEach(b => b.onclick = () => { X.inst.push(novaInst(EXP.sis.find(s => s.id === b.dataset.xadd))); telaExpress(); });
+  document.querySelectorAll('[data-xrem]').forEach(b => b.onclick = () => { X.inst.splice(+b.dataset.xrem, 1); telaExpress(); });
+  document.querySelectorAll('[data-xt]').forEach(i => i.onchange = () => { X.inst[+i.dataset.xt].titulo = i.value.trim() || X.inst[+i.dataset.xt].titulo; });
+  document.querySelectorAll('[data-xp]').forEach(s => s.onchange = () => { const [k, p] = s.dataset.xp.split(':'); X.inst[+k].resp[p] = s.value; telaExpress(); });
+  document.querySelectorAll('[data-xg]').forEach(s => s.onchange = () => { const [k, g] = s.dataset.xg.split(':'), e = X.inst[+k].esc[g] || (X.inst[+k].esc[g] = { n: 1 }); e.eq = s.value; telaExpress(); });
+  document.querySelectorAll('[data-xn]').forEach(n => n.onchange = () => { const [k, g] = n.dataset.xn.split(':'), e = X.inst[+k].esc[g] || (X.inst[+k].esc[g] = {}); e.n = Math.max(1, Math.round(num(n.value) || 1)); telaExpress(); });
+  if($('#xLimpa')) $('#xLimpa').onclick = () => { X.inst = []; telaExpress(); };
+  $('#xGerar').onclick = async () => {
+    const cli = pega(); if(!cli) return aviso('Cliente', 'Escolha o cliente do orçamento.');
+    const grupos = X.inst.map(i => ({ titulo: (i.titulo || sisDe(i).nome).toUpperCase(), itens: expItens(sisDe(i).config || {}, i).filter(x => x.p).map(x => ({ produto_id: x.p.id, codigo: x.p.codigo, descricao: x.p.descricao, tipo: x.p.tipo, unidade: x.p.unidade || 'UN', quantidade: x.quantidade, preco_unit: x.preco })) })).filter(g => g.itens.length);
+    if(!grupos.length) return aviso('Sistemas', 'Acrescente pelo menos um sistema e escolha o equipamento.');
+    const fora = X.inst.flatMap(i => expItens(sisDe(i).config || {}, i).filter(x => !x.p).map(x => x.codigo));
+    if(fora.length && !await modal('Itens fora do cadastro', `Os códigos <b>${fora.map(esc).join(', ')}</b> não estão no cadastro de materiais e vão ficar de fora. Gerar assim mesmo?`, [['Cancelar', false], ['Gerar', true, 'pri']])) return;
+    if(!podeOrc('equipamento')) return aviso('Sem permissão', 'Seu perfil não monta orçamentos de equipamento.');
+    await novoOrcamento('', { tipo: 'equipamento', pagador_id: cli, copiaGrupos: grupos, referencia: grupos.map(g => g.titulo).join(' · ') });
+    ST.express = { cliente: '', inst: [] };
+  };
+}
+
+/* ================= Configuração do Express ================= */
+ST.expCfg = { sis: null, aberto: {} };
+async function telaExpressCfg(){
+  carregandoTela(); if(!ST.expCfg.obj) await expCarrega(true);
+  if(EXP.erro) return $('#conteudo').innerHTML = expSemScript('Configuração do Express');
+  const C = ST.expCfg, edita = nivelTela('vd_express_cfg') >= 3;
+  if(!C.obj){ const s = EXP.sis.find(x => x.id === C.sis) || EXP.sis[0]; C.sis = s ? s.id : null; C.obj = s ? JSON.parse(JSON.stringify(s)) : null; C.sujo = false; }
+  const S = C.obj, cfg = S ? (S.config = S.config || {}) : null; if(cfg){ cfg.perguntas = cfg.perguntas || []; cfg.grupos = cfg.grupos || []; }
+  const dis = edita ? '' : 'disabled';
+  const seSel = (path, se) => { const ps = cfg.perguntas; if(!ps.length) return ''; const atual = se ? Object.entries(se).filter(([, v]) => v).map(([p, v]) => p + '=' + v)[0] || '' : '';
+    return `<select data-se="${path}" style="max-width:190px;font-size:12px" ${dis} title="Só aparece / só entra quando a resposta for esta"><option value="">sempre</option>${ps.map(p => (p.opcoes || []).map(o => `<option value="${esc(p.id + '=' + o)}" ${atual === p.id + '=' + o ? 'selected' : ''}>se ${esc(p.rotulo)} = ${esc(o)}</option>`).join('')).join('')}</select>`; };
+  const prodTxt = cod => { const p = EXP.prod[expCod(cod)]; return !cod ? '<span class="muted">digite o código ou parte do nome</span>' : p ? `${esc(p.descricao)} · <b>${p.preco > 0 ? R$(p.preco) : '<span style="color:#b45309">sem preço</span>'}</b>` : '<span style="color:var(--verm)">código não achado no cadastro de materiais</span>'; };
+  const codInput = (path, cod) => `<input data-p="${path}" data-cod value="${esc(cod || '')}" placeholder="código" style="width:92px" ${dis} autocomplete="off">`;
+  const juntoTr = (j, base) => `<tr><td>${codInput(base + '.codigo', j.codigo)}</td><td style="font-size:12px" data-desc="${base}.codigo">${prodTxt(j.codigo)}</td>
+      <td style="white-space:nowrap"><select data-p="${base}.qtd.tipo" style="width:130px;font-size:12px" ${dis}>${QTD_TIPOS.map(([k, t]) => `<option value="${k}" ${(j.qtd && j.qtd.tipo || 'unid') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        <input data-p="${base}.qtd.v" data-num value="${j.qtd && j.qtd.v != null ? j.qtd.v : 1}" style="width:54px;text-align:right" ${dis}></td>
+      <td>${seSel(base + '.se', j.se)}</td><td><input data-p="${base}.qmin" data-num value="${j.qmin || ''}" placeholder="—" title="Só entra a partir desta quantidade do equipamento" style="width:54px;text-align:right" ${dis}></td>
+      <td>${edita ? `<button class="btn peq" data-del="${base}" title="Tirar">✕</button>` : ''}</td></tr>`;
+  const eqHtml = (e, gi, ei) => { const base = `grupos.${gi}.equipamentos.${ei}`, ab = C.aberto[e.id];
+    return `<div style="border:1px solid var(--borda);border-radius:10px;padding:8px 10px;margin:8px 0;background:var(--fundo)">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input data-p="${base}.nome" value="${esc(e.nome || '')}" placeholder="Nome que aparece na lista" style="flex:1 1 200px;font-weight:600" ${dis}>${codInput(base + '.codigo', e.codigo)}
+        <span style="flex:2 1 220px;font-size:12px" data-desc="${base}.codigo">${prodTxt(e.codigo)}</span>${seSel(base + '.se', e.se)}
+        <button class="btn peq" data-abre="${esc(e.id)}">${ab ? '▾' : '▸'} vêm junto (${(e.junto || []).length})</button>
+        ${edita ? `<button class="btn peq" data-dup="${base}" title="Duplicar este equipamento com os itens que vêm junto">⧉</button><button class="btn peq" data-del="${base}" title="Excluir o equipamento">✕</button>` : ''}</div>
+      ${ab ? `<div style="overflow-x:auto;margin-top:8px"><table class="reg"><thead><tr><th>Código</th><th>Item que vem junto</th><th>Quantidade</th><th>Quando</th><th title="Quantidade mínima do equipamento">A partir de</th><th></th></tr></thead><tbody>
+        ${(e.junto || []).map((j, ji) => juntoTr(j, `${base}.junto.${ji}`)).join('') || '<tr><td colspan="6" class="muted" style="font-size:12px">Nenhum item acompanha este equipamento.</td></tr>'}</tbody></table>
+        ${edita ? `<button class="btn peq" data-add="${base}.junto" data-novo="junto" style="margin-top:6px">+ item que vem junto</button>` : ''}</div>` : ''}</div>`; };
+  $('#conteudo').innerHTML = `<div class="card"><h2>Configuração do Express <span class="muted" style="font-weight:400">· os sistemas e equipamentos que aparecem no Orçamento Express</span></h2>
+      <div class="chips" style="margin:4px 0 10px">${EXP.sis.map(s => `<button class="chip ${S && s.id === S.id ? 'on' : ''}" data-sis="${s.id}">${esc(s.nome)}${s.ativo ? '' : ' <span class="muted">(desligado)</span>'}</button>`).join('')}${edita ? '<button class="chip" id="cfNovo">+ Novo sistema</button>' : ''}</div>
+      ${!S ? '<p class="vazio">Nenhum sistema ainda. Toque em "+ Novo sistema".</p>' : `
+      <div class="grade"><label class="campo largo">Nome do sistema (vira o título do pedido)<input data-raiz="nome" value="${esc(S.nome)}" ${dis}></label>
+        <label class="campo">Ordem na lista<input data-raiz="ordem" data-num value="${S.ordem}" ${dis}></label>
+        <label class="campo">Aparece no Express<select data-raiz="ativo" ${dis}><option value="1" ${S.ativo ? 'selected' : ''}>Sim</option><option value="0" ${S.ativo ? '' : 'selected'}>Não (desligado)</option></select></label></div>
+      <h3 style="font-size:14px;margin:14px 0 4px">Perguntas do sistema <span class="muted" style="font-weight:400;font-size:12px">· ex.: Tipo de gás (GN, GLP). Servem para mostrar um equipamento ou incluir um item só em certa resposta.</span></h3>
+      ${cfg.perguntas.map((p, pi) => `<div style="display:flex;gap:8px;margin:4px 0;flex-wrap:wrap"><input data-p="perguntas.${pi}.rotulo" value="${esc(p.rotulo || '')}" placeholder="Pergunta" style="flex:1 1 200px" ${dis}>
+        <input data-p="perguntas.${pi}.opcoes" data-lista value="${esc((p.opcoes || []).join(', '))}" placeholder="Respostas separadas por vírgula (a 1ª é a padrão)" style="flex:2 1 280px" ${dis}>${edita ? `<button class="btn peq" data-del="perguntas.${pi}">✕</button>` : ''}</div>`).join('') || '<p class="muted" style="font-size:12px;margin:2px 0">Nenhuma pergunta.</p>'}
+      ${edita ? '<button class="btn peq" data-add="perguntas" data-novo="pergunta" style="margin-top:4px">+ pergunta</button>' : ''}
+      ${cfg.grupos.map((g, gi) => `<div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--borda)">
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap"><label class="campo" style="flex:1 1 180px;margin:0">Subdivisão<input data-p="grupos.${gi}.nome" value="${esc(g.nome || '')}" placeholder="ex.: Reservatório, Bombas de apoio" style="font-weight:700" ${dis}></label>
+          <label class="campo" style="flex:2 1 240px;margin:0">Pergunta no Express<input data-p="grupos.${gi}.rotulo" value="${esc(g.rotulo || '')}" placeholder="ex.: Modelo da bomba" ${dis}></label>
+          ${edita ? `<button class="btn peq" data-del="grupos.${gi}" title="Excluir a subdivisão inteira">✕ subdivisão</button>` : ''}</div>
+        ${(g.equipamentos || []).map((e, ei) => eqHtml(e, gi, ei)).join('') || '<p class="muted" style="font-size:12px;margin:8px 0">Nenhum equipamento nesta subdivisão.</p>'}
+        ${edita ? `<button class="btn peq" data-add="grupos.${gi}.equipamentos" data-novo="equip">+ equipamento</button>` : ''}</div>`).join('')}
+      ${edita ? '<div style="margin-top:14px"><button class="btn" data-add="grupos" data-novo="grupo">+ subdivisão</button></div>' : ''}
+      <p class="muted" style="font-size:12px;margin-top:12px">Quantidade do item que vem junto: <b>por unidade ×</b> N (N para cada equipamento) · <b>1 a cada</b> N equipamentos (arredonda para cima) · <b>fixo</b> N · <b>unidades menos</b> N. O preço e a descrição vêm sempre do cadastro de materiais, pelo código.</p>`}
+      <div id="cfSug" style="display:none;position:fixed;z-index:60;background:#fff;border:1px solid var(--borda);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.2);max-height:260px;overflow:auto;width:min(520px,92vw)"></div></div>
+    ${S && edita ? `<div class="card" style="position:sticky;bottom:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:5"><span style="flex:1" id="cfEst" class="muted">${C.sujo ? '<b style="color:#b45309">Há alterações não salvas.</b>' : 'Sem alterações.'}</span>
+      <button class="btn" id="cfExc">Excluir sistema</button><button class="btn" id="cfDesf">Desfazer</button><button class="btn pri" id="cfSalvar">Salvar</button></div>` : ''}`;
+  if(!S){ if($('#cfNovo')) $('#cfNovo').onclick = novoSis; return; }
+  const noh = path => path.split('.').reduce((o, k) => o[k], cfg), pai = path => { const ks = path.split('.'), u = ks.pop(); return [ks.reduce((o, k) => o[k], cfg), u]; };
+  const suja = () => { C.sujo = true; if($('#cfEst')) $('#cfEst').innerHTML = '<b style="color:#b45309">Há alterações não salvas.</b>'; };
+  const ler = () => { document.querySelectorAll('#conteudo [data-p]').forEach(i => { const [o, k] = pai(i.dataset.p); if(!o) return;
+      o[k] = 'lista' in i.dataset ? i.value.split(',').map(x => x.trim()).filter(Boolean) : 'num' in i.dataset ? (i.value.trim() === '' ? null : num(i.value)) : 'cod' in i.dataset ? expCod(i.value) : i.value.trim(); });
+    cfg.perguntas.forEach(p => { if(!p.id) p.id = expId('p'); p.padrao = (p.opcoes || [])[0] || ''; });
+    document.querySelectorAll('#conteudo [data-raiz]').forEach(i => { const k = i.dataset.raiz; S[k] = k === 'ativo' ? i.value === '1' : k === 'ordem' ? (num(i.value) || 100) : i.value.trim(); });
+    document.querySelectorAll('#conteudo [data-se]').forEach(s => { const [o, k] = pai(s.dataset.se); if(!o) return; if(!s.value) delete o[k]; else { const [p, ...v] = s.value.split('='); o[k] = { [p]: v.join('=') }; } }); };
+  const redesenha = () => { ler(); const y = scrollY; telaExpressCfg().then(() => scrollTo(0, y)); };
+  document.querySelectorAll('#conteudo [data-p], #conteudo [data-raiz], #conteudo [data-se]').forEach(i => i.addEventListener('input', suja));
+  document.querySelectorAll('#conteudo [data-se], #conteudo [data-lista]').forEach(i => i.addEventListener('change', () => { suja(); redesenha(); }));
+  /* código: aceita o número ou busca pelo nome */
+  const sug = $('#cfSug');
+  document.querySelectorAll('#conteudo [data-cod]').forEach(i => {
+    const desc = () => { const d = document.querySelector(`[data-desc="${i.dataset.p}"]`); if(d) d.innerHTML = prodTxt(i.value); };
+    i.addEventListener('input', () => { const t = i.value.trim(); desc();
+      if(/^\d*$/.test(t) || t.length < 3){ sug.style.display = 'none'; return; }
+      const ws = norm(t).split(/\s+/).filter(Boolean), l = Object.values(EXP.prod).filter(p => p.ativo !== false && ws.every(w => norm(p.codigo + ' ' + p.descricao).includes(w))).slice(0, 12);
+      const r = i.getBoundingClientRect(); sug.style.left = Math.min(r.left, innerWidth - 540) + 'px'; sug.style.top = (r.bottom + 4) + 'px'; sug.style.display = l.length ? '' : 'none';
+      sug.innerHTML = l.map(p => `<div data-sg="${esc(p.codigo)}" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--borda);font-size:13px"><b>${esc(p.codigo)}</b> ${esc(p.descricao)} <span class="muted">· ${p.preco > 0 ? R$(p.preco) : 'sem preço'}</span></div>`).join('');
+      sug.querySelectorAll('[data-sg]').forEach(d => d.onmousedown = ev => { ev.preventDefault(); i.value = d.dataset.sg; sug.style.display = 'none'; suja(); desc();
+        const nome = document.querySelector(`[data-p="${i.dataset.p.replace(/\.codigo$/, '.nome')}"]`); if(nome && !nome.value.trim()) nome.value = EXP.prod[d.dataset.sg].descricao; }); });
+    i.addEventListener('blur', () => { setTimeout(() => sug.style.display = 'none', 150); if(/^\d{1,6}$/.test(i.value.trim())){ i.value = expCod(i.value); desc(); } }); });
+  document.querySelectorAll('[data-sis]').forEach(b => b.onclick = async () => { if(b.dataset.sis === S.id) return; ler();
+    if(C.sujo && !await modal('Alterações não salvas', `Você mudou <b>${esc(S.nome)}</b> e não salvou. Descartar?`, [['Voltar', false], ['Descartar', true, 'pri']])) return;
+    C.sis = b.dataset.sis; C.obj = null; C.aberto = {}; telaExpressCfg(); });
+  document.querySelectorAll('[data-abre]').forEach(b => b.onclick = () => { C.aberto[b.dataset.abre] = !C.aberto[b.dataset.abre]; redesenha(); });
+  const NOVO = { pergunta: () => ({ id: expId('p'), rotulo: '', opcoes: [], padrao: '' }), grupo: () => ({ id: expId('g'), nome: '', rotulo: '', equipamentos: [] }),
+    equip: () => { const e = { id: expId('e'), nome: '', codigo: '', junto: [] }; C.aberto[e.id] = true; return e; }, junto: () => ({ id: expId('j'), codigo: '', nome: '', qtd: { tipo: 'unid', v: 1 } }) };
+  document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { ler(); const [o, k] = pai(b.dataset.add); (o[k] = o[k] || []).push(NOVO[b.dataset.novo]()); suja(); const y = scrollY; telaExpressCfg().then(() => scrollTo(0, y)); });
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { ler(); const [o, k] = pai(b.dataset.del), alvo = o[k];
+    if((alvo.equipamentos && alvo.equipamentos.length || alvo.junto && alvo.junto.length) && !await modal('Excluir?', `Excluir <b>${esc(alvo.nome || 'este item')}</b> e tudo o que está dentro dele?`, [['Cancelar', false], ['Excluir', true, 'pri']])) return;
+    o.splice(+k, 1); suja(); const y = scrollY; telaExpressCfg().then(() => scrollTo(0, y)); });
+  document.querySelectorAll('[data-dup]').forEach(b => b.onclick = () => { ler(); const [o, k] = pai(b.dataset.dup), c = JSON.parse(JSON.stringify(o[k])); c.id = expId('e'); c.nome = (c.nome || '') + ' (cópia)'; (c.junto || []).forEach(j => j.id = expId('j'));
+    o.splice(+k + 1, 0, c); C.aberto[c.id] = true; suja(); const y = scrollY; telaExpressCfg().then(() => scrollTo(0, y)); });
+  async function novoSis(){ const n = await pedirTexto('Novo sistema', 'Nome do sistema (vira o título do pedido) — ex.: AQUECIMENTO COM BOILER:', ''); if(!n || !n.trim()) return;
+    const r = await sb.from('express_sistemas').insert({ nome: n.trim().toUpperCase(), ordem: (Math.max(0, ...EXP.sis.map(s => s.ordem || 0)) + 10), config: { perguntas: [], grupos: [{ id: expId('g'), nome: 'Equipamento', rotulo: 'Modelo', equipamentos: [] }] } }).select().single();
+    if(r.error) return aviso('Erro', /duplicate|unique/i.test(r.error.message) ? 'Já existe um sistema com esse nome.' : esc(erroBanco(r.error)));
+    EXP.sis = null; C.sis = r.data.id; C.obj = null; C.aberto = {}; telaExpressCfg(); }
+  if($('#cfNovo')) $('#cfNovo').onclick = async () => { ler(); if(C.sujo && !await modal('Alterações não salvas', 'Descartar o que você mudou neste sistema?', [['Voltar', false], ['Descartar', true, 'pri']])) return; novoSis(); };
+  if($('#cfDesf')) $('#cfDesf').onclick = () => { C.obj = null; C.aberto = {}; telaExpressCfg(); };
+  if($('#cfExc')) $('#cfExc').onclick = async () => { if(!await confirmaDuplo('Excluir sistema', `Excluir o sistema ${S.nome} com todos os equipamentos cadastrados nele? Ele some do Orçamento Express.`, 'Excluir')) return;
+    const r = await sb.from('express_sistemas').delete().eq('id', S.id); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); EXP.sis = null; C.sis = null; C.obj = null; toast('Sistema excluído.'); telaExpressCfg(); };
+  if($('#cfSalvar')) $('#cfSalvar').onclick = async () => { ler();
+    if(!S.nome) return aviso('Nome', 'Dê um nome ao sistema.');
+    const todos = cfg.grupos.flatMap(g => (g.equipamentos || [])), semCod = todos.filter(e => !e.codigo).length + todos.flatMap(e => e.junto || []).filter(j => !j.codigo).length;
+    if(semCod) return aviso('Falta o código', `${semCod} item(ns) estão sem código. Preencha ou exclua antes de salvar.`);
+    const fora = [...new Set(todos.map(e => e.codigo).concat(todos.flatMap(e => (e.junto || []).map(j => j.codigo))).filter(c => !EXP.prod[c]))];
+    if(fora.length && !await modal('Códigos não achados', `Estes códigos não estão no cadastro de materiais: <b>${fora.map(esc).join(', ')}</b>. No Express eles aparecem avisando e ficam fora do orçamento. Salvar assim mesmo?`, [['Voltar', false], ['Salvar', true, 'pri']])) return;
+    todos.forEach(e => { if(!e.nome) e.nome = (EXP.prod[e.codigo] || {}).descricao || e.codigo; (e.junto || []).forEach(j => { j.nome = (EXP.prod[j.codigo] || {}).descricao || j.nome || ''; }); });
+    const r = await sb.from('express_sistemas').update({ nome: S.nome.toUpperCase(), ordem: S.ordem, ativo: S.ativo, config: cfg, atualizado_em: new Date().toISOString() }).eq('id', S.id);
+    if(r.error) return aviso('Erro', /duplicate|unique/i.test(r.error.message) ? 'Já existe um sistema com esse nome.' : esc(erroBanco(r.error)));
+    toast('Configuração salva. Já vale no Orçamento Express.'); EXP.sis = null; C.obj = null; telaExpressCfg(); };
+}
+Object.assign(TELAS, { vd_express: telaExpress, vd_express_cfg: telaExpressCfg });
 
 /* =================== Proposta online (script 39) ===================
    Um link por orçamento (proposta.html?p=<token>): o cliente liga/desliga sistemas, aprova ou pede alteração.
@@ -12266,7 +12450,7 @@ window.MENU_GUARDADAS = {};
   const GRUPOS = [
     ['', ['inicio', 'chat']],
     ['Cadastros', ['pessoas', 'produtos']],
-    ['Vendas', ['orc', 'pv_precos']],
+    ['Vendas', ['orc', 'vd_express', 'pv_precos', 'vd_express_cfg']],
     ['Compras', ['cp_compras', 'cp_controle', 'cp_precos']],
     ['Financeiro', ['fn_receber', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fin_servicos', 'fin_projetos']],
     ['Fiscal', ['fn_notas', 'fn_recebidas', 'fn_contabil', 'adm_fiscal', 'adm_cert', 'adm_regras']],
