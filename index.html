@@ -7539,7 +7539,7 @@ async function pdfOrcamento(id){
       ['Total', null, '100%', R$(total)]);
   const tit = O.tipo === 'projeto' ? 'Proposta de projetos' : O.tipo === 'servico' ? 'Proposta de serviço' : 'Proposta comercial';
   const faixa = pdfFaixa([
-    ['Cliente', cli, [doc && doc.documento ? 'CPF/CNPJ ' + docFmt(doc.documento) + (doc.ie ? ' · IE ' + esc(doc.ie) : '') : '', O.aos_cuidados ? 'Contato: ' + esc(O.aos_cuidados) : ''].filter(Boolean).join('<br>')],
+    ['Cliente', cli, doc && doc.documento ? 'CPF/CNPJ ' + docFmt(doc.documento) : ''],   // 25/11 (Júlio): sem IE e sem pessoa de contato no PDF
     ['Local', ob.nome || (pg && pg.apelido) || '—', esc(end)],
     O.tipo === 'projeto' ? ['Área construída', O.area_m2 ? qtdTxt(O.area_m2, 'M2') : '—'] : ['Faturamento', O.empresa || 'a definir', O.prazo_texto ? 'Prazo: ' + esc(O.prazo_texto) : '']]);
   const assin = esq => `<div class="ass"><div>EQUIPER PROJETOS E INSTALAÇÕES${O.vendedor ? '<br>' + esc(O.vendedor) : ''}</div><div>${esq}</div></div>`;
@@ -7550,7 +7550,7 @@ async function pdfOrcamento(id){
   if(O.tipo === 'projeto'){
     const itens = G.flatMap(g => g.itens), tx = { ...TEXTOS_PROJETO, ...(O.textos || {}) };
     let k = 0;
-    corpo = (O.referencia ? `<p><b>Ref.:</b> ${esc(O.referencia)}</p>` : '') + `<p>Prezados senhores,</p><p>${esc(tx.apresentacao)}</p>
+    corpo = (O.referencia ? `<div style="margin:2px 0 12px;padding:2px 0 2px 10px;border-left:4px solid #d0151b;font-size:17px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;line-height:1.25">${esc(O.referencia)}</div>` : '') + `<p>Prezados senhores,</p><p>${esc(tx.apresentacao)}</p>
       <h2>Preço e escopo dos serviços</h2>
       ${pdfTabela([{ t:'Item', w:'40px' }, 'Projeto', { t:'Valor', num:true, w:'120px' }],
         itens.map(it => it.tipo === 'titulo' ? { tit: it.descricao } : [String(++k).padStart(2, '0'),
@@ -7569,7 +7569,7 @@ async function pdfOrcamento(id){
     const cat = it => it.tipo === 'mao_obra' ? 'mo' : it.tipo === 'material' ? 'mat' : 'eq';
     const soma = (l, c) => l.filter(it => it.tipo !== 'titulo' && cat(it) === c).reduce((s, it) => s + Number(it.total), 0);
     const todos = G.flatMap(g => g.itens), seq = G.length > 1, ou = v => v ? R$(v) : '—';
-    corpo = (O.referencia ? `<p style="margin:0 0 6px"><b>Ref.:</b> ${esc(O.referencia)}</p>` : '') +
+    corpo = (O.referencia ? `<div style="margin:2px 0 12px;padding:2px 0 2px 10px;border-left:4px solid #d0151b;font-size:17px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;line-height:1.25">${esc(O.referencia)}</div>` : '') +
       G.map((g, gi) => { let k = 0; const tg = g.itens.reduce((s, it) => s + Number(it.total), 0);
         return `<h2>Pedido ${seq ? n + '-' + (gi + 1) : n} · ${esc(g.titulo)}${g.empresa && g.empresa !== O.empresa ? ` <span style="font-weight:400;opacity:.75;text-transform:none">· faturado por ${g.empresa}</span>` : ''}</h2>
         ${pdfTabela([{ t:'Item', w:'34px' }, { t:'Código', w:'58px' }, 'Descrição', { t:'Qtd.', w:'58px', num:true }, { t:'Unitário', num:true, w:'88px' }, { t:'Total', num:true, w:'96px' }],
