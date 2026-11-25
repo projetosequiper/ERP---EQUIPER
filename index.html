@@ -798,7 +798,7 @@ const obra = id => ST.obras.find(x=>x.id===id);
 const MENU = [
   { area:'', itens:[ ['inicio','🏠','Início','DAPSG'], ['chat','💬','Chat','DAPS'] ] },
   { area:'Cadastros', itens:[ ['pessoas','🏢','Telemarketing CRM','DAPSG'], ['obras','🏠','Obras (locais)','DAPSG'], ['contatos','📇','Contatos','DAPSG'], ['fila','✅','Aprovação','DAPSG'] ] },
-  { area:'Orçamentos', itens:[ ['orc','📑','Orçamentos','DAPSG'], ['ped_cigam','🗂️','Pedidos do CIGAM','DAPSG'] ] },
+  { area:'Orçamentos', itens:[ ['orc','📑','Orçamentos','DAPSG'], ['ped_cigam','🗂️','Pedidos','DAPSG'] ] },
   { area:'Projetos', itens:[ ['pj_propostas','📄','Propostas e parcelas','DAPG'], ['pj_projetos','📋','Projetos e tarefas','DAPG'], ['pj_cal','📅','Calendário','DAPG'], ['pj_visitas','📝','Visitas e considerações','DAPG'], ['pj_art','📐','ART','DAPG'], ['pj_com','💵','Comissões','DAPG'], ['pj_dim','🧮','Dimensionamento','DAPG'] ] },
   { area:'Serviços (apps)', itens:[ ['sv_agenda','📅','Agenda e atividades','DSAT'], ['sv_os','🧾','Ordens de serviço','DSA'], ['sv_orc','📥','Solicitações de orçamento','DSA'], ['sv_pedidos','🏗️','Obras e pedidos','DSA'], ['sv_manut','🔧','Manutenções e contratos','DSA'], ['sv_oficina','🛠️','Oficina','DSAT'], ['sv_comissoes','💵','Comissões dos técnicos','DA'] ] },
   { area:'Suprimentos', itens:[ ['produtos','📦','Materiais','DAPSG'], ['cp_precos','🏷️','Tabelas de preços','DA'], ['cp_compras','🛒','Ordens de compra','DAS'], ['cp_status','🚦','Status das ordens de compra','DAS'], ['sv_estoque','📦','Estoque','DSAT'] ] },
@@ -877,11 +877,11 @@ function telaPessoas(){
   const podeImp = ['diretoria','administrativo'].includes(ST.eu.perfil);
   $('#conteudo').innerHTML = `<div class="card"><h2>Empresas <span class="muted" style="font-weight:400">· todo mundo com quem a Equiper se relaciona: clientes, fornecedores, parceiros, terceirizados, funcionários…</span></h2>${barraBusca('Nova empresa')}
     <div class="chips" style="margin:-4px 0 12px"><button class="chip ${!ST.papel?'on':''}" data-pf="">Todas <span class="muted">${todas.length.toLocaleString('pt-BR')}</span></button>${PAPEIS.filter(([k]) => nP(k)).map(([k,r]) => `<button class="chip ${ST.papel===k?'on':''}" data-pf="${k}">${r} <span class="muted">${nP(k).toLocaleString('pt-BR')}</span></button>`).join('')}${todas.some(p => !(p.papeis||[]).length) ? `<button class="chip ${ST.papel==='-'?'on':''}" data-pf="-">Sem relação marcada</button>` : ''}
-      ${podeImp ? '<button class="btn peq" id="bImpEmp" style="margin-left:auto">⤵ Importar empresas do CIGAM</button>' : ''}</div>
+      ${podeImp ? '<button class="btn peq" id="bImpEmp" style="margin-left:auto">⤵ Importar empresas</button>' : ''}</div>
     <div class="lista">${l.length?l.slice(0, MAX).map(p=>`<div class="item" data-abre="${p.id}"><div><div class="nome" data-ed="${p.id}" style="cursor:pointer">${esc(p.nome)}${tagStatus(p.status)}${tagPrev(p.id)}</div>
       <div class="sub">${[p.apelido ? 'Nome fantasia: ' + p.apelido : '', (p.codigos_cigam||[]).join(', '), p.tipo, (p.papeis||[]).map(papelTxt).join(', '), (pagaPor.get(p.id)||[]).map(n=>'🏠 '+n).join(' · ')].filter(Boolean).map(esc).join(' · ')}</div></div>
       <div class="acoes"><button class="btn peq" data-ed="${p.id}">${podeEditar(p)?'Editar':'Ver'}</button></div></div>`).join(''):'<div class="vazio">Nenhuma empresa encontrada.</div>'}</div>
-    ${l.length > MAX ? `<p class="muted" style="font-size:12px">Mostrando ${MAX} de ${l.length.toLocaleString('pt-BR')} — use a busca (nome, apelido, código do CIGAM) ou os filtros acima.</p>` : ''}</div>`;
+    ${l.length > MAX ? `<p class="muted" style="font-size:12px">Mostrando ${MAX} de ${l.length.toLocaleString('pt-BR')} — use a busca (nome, apelido, código) ou os filtros acima.</p>` : ''}</div>`;
   ligaBarra(()=>formPessoa(null));
   expRegistra(async () => {
     let dados = new Map();
@@ -890,7 +890,7 @@ function telaPessoas(){
     return [expCols('Empresas', [['Nome / razão social', p => p.nome], ['Apelido', p => p.apelido], ['Tipo', p => p.tipo], ['Relação', p => (p.papeis||[]).map(papelTxt).join(', ')],
       ...(humano() ? [['CPF/CNPJ', p => d(p).documento ? fmtDoc(d(p).documento) : ''], ['Inscr. estadual', p => d(p).ie], ['Endereço', p => [d(p).logradouro, d(p).numero, d(p).complemento].filter(Boolean).join(', ')], ['Bairro', p => d(p).bairro],
         ['Município', p => d(p).municipio], ['UF', p => d(p).uf], ['CEP', p => d(p).cep], ['Telefones', p => lst(d(p).telefones)], ['E-mails', p => lst(d(p).emails)]] : []),
-      ['Códigos CIGAM', p => (p.codigos_cigam||[]).join(', ')], ['Paga as obras', p => (pagaPor.get(p.id)||[]).join(' · ')], ['Situação', p => p.status]], l)];
+      ['Códigos', p => (p.codigos_cigam||[]).join(', ')], ['Paga as obras', p => (pagaPor.get(p.id)||[]).join(' · ')], ['Situação', p => p.status]], l)];
   });
   document.querySelectorAll('[data-pf]').forEach(b => b.onclick = () => { ST.papel = b.dataset.pf; telaPessoas(); });
   if($('#bImpEmp')) $('#bImpEmp').onclick = importarEmpresas;
@@ -918,8 +918,8 @@ async function formPessoa(p){
       ${novo ? '' : '<div class="campo largo" id="pEquipes" style="font-size:13px"></div>'}
       <label class="campo largo">Observações<textarea id="pObs">${esc(p.observacoes)}</textarea></label>
       ${novo || 'contato' in p ? `<label class="campo largo">Pessoa de contato<input id="pContato" value="${esc(p.contato)}"></label>` : ''}
-      ${(p.codigos_cigam||[]).length?`<div class="campo largo">Códigos no CIGAM<div>${p.codigos_cigam.map(esc).join(', ')}</div></div>`:''}
-      ${[['Divisão no CIGAM', p.cigam_divisao ? esc(DIVISAO_CIGAM[p.cigam_divisao] || p.cigam_divisao) : ''], ['Aniversário', dataBR(p.aniversario)], ['Cliente desde', dataBR(p.cliente_desde)], ['Último movimento no CIGAM', dataBR(p.ultimo_movimento)],
+      ${(p.codigos_cigam||[]).length?`<div class="campo largo">Código<div>${p.codigos_cigam.map(esc).join(', ')}</div></div>`:''}
+      ${[['Divisão', p.cigam_divisao ? esc(DIVISAO_CIGAM[p.cigam_divisao] || p.cigam_divisao) : ''], ['Aniversário', dataBR(p.aniversario)], ['Cliente desde', dataBR(p.cliente_desde)], ['Último movimento', dataBR(p.ultimo_movimento)],
          ['Condição de pagamento padrão', esc(p.condicao_pagamento_padrao)], ['Tipo de operação padrão', esc(p.tipo_operacao_padrao)], ['Representante', esc(p.representante)]]
          .filter(c => c[1]).map(c => `<div class="campo" data-cigam-campo><span>${c[0]}</span><b style="color:var(--preto);font-weight:500">${c[1]}</b></div>`).join('')}
     </div>
@@ -1272,7 +1272,7 @@ async function telaVinculos(){
       <button class="btn pri" id="bTrazerTudo">⤵ Trazer tudo</button><div id="trazerRel" style="margin-top:10px;font-size:13px"></div></div>` : ''}
     <div class="card"><h2>Migração dos apps antigos</h2>
     <div class="chips" style="margin-bottom:10px">${Object.entries(VINC).map(([k,x]) => `<button class="chip ${ST.vincApp===k?'on':''}" data-vapp="${k}">App ${x.nome}</button>`).join('')}</div>
-    <p class="muted" style="margin-top:-4px">Cada cliente do app ${esc(K.nome)} aponta para uma <b>empresa do cadastro</b> (vindo do CIGAM) ou para uma <b>obra</b>. O ERP liga sozinho o que é seguro (nº do pedido, nome ou nome fantasia igual) e deixa o resto como sugestão para você confirmar.</p>
+    <p class="muted" style="margin-top:-4px">Cada cliente do app ${esc(K.nome)} aponta para uma <b>empresa do cadastro</b> ou para uma <b>obra</b>. O ERP liga sozinho o que é seguro (nº do pedido, nome ou nome fantasia igual) e deixa o resto como sugestão para você confirmar.</p>
     <div class="barra"><input type="search" id="busca" placeholder="Buscar cliente do app" value="${esc(ST.busca)}"><button class="btn pri" id="bSugerir">Ligar ao cadastro automaticamente</button></div>
     <div class="muted" style="font-size:12px">${linhas.length} cliente(s) no app · ${linhas.filter(l=>l.conf).length} ligado(s) · ${linhas.filter(l=>!l.conf).length} sem ligação</div></div>
     <div class="card"><h2>Sem ligação <span class="tag rasc">${pend.length}</span></h2><div class="lista">${pend.length ? pend.map(l => `<div class="item"><div style="flex:1">
@@ -1305,7 +1305,7 @@ async function telaVinculos(){
     if(r.error) return aviso('Erro', esc(erroBanco(r.error)));
     const a = (r.data.por_app || {})[ST.vincApp] || {}; await aviso('Ligação com o cadastro', `App ${esc(K.nome)}: <b>${a.confirmados || 0}</b> ligado(s), <b>${a.sugeridos || 0}</b> com sugestão para conferir, <b>${a.sem_ligacao || 0}</b> sem correspondência.`); telaVinculos(); };
   document.querySelectorAll('[data-emp]').forEach(bt => bt.onclick = () => { const cl = (c.data||[]).find(x => x.id_app === bt.dataset.emp); let pid = '';
-    $('#mTit').textContent = 'Ligar "' + (cl?.cliente || '') + '" a uma empresa'; $('#mTxt').innerHTML = '<p class="muted" style="margin:0 0 8px">Procure pela razão social, pelo nome fantasia ou pelo código do CIGAM.</p><div id="vincPk"></div>';
+    $('#mTit').textContent = 'Ligar "' + (cl?.cliente || '') + '" a uma empresa'; $('#mTxt').innerHTML = '<p class="muted" style="margin:0 0 8px">Procure pela razão social, pelo nome fantasia ou pelo código.</p><div id="vincPk"></div>';
     const bs = $('#mBtns'); bs.innerHTML = ''; [['Cancelar', 0, ''], ['Ligar', 1, 'pri']].forEach(([r, v, k]) => { const e = document.createElement('button'); e.className = 'btn ' + k; e.textContent = r;
       e.onclick = async () => { if(v && !pid) return toast('Escolha a empresa.'); $('#modal').classList.add('hidden'); if(!v) return;
         try{ await exec(sb.from('vinculos_apps').insert({ app: ST.vincApp, colecao: K.colecao, id_app: cl.id_app, nome_no_app: cl.cliente, pessoa_id: pid, situacao: 'confirmado', motivo: 'ligado manualmente', conferido_por: ST.eu.id }), 'Ligado.'); telaVinculos(); }catch(e){} }; bs.appendChild(e); });
@@ -3005,7 +3005,7 @@ async function pesquisaGeral(texto){
     const m = new Map([...d, ...extra].map(x => [x.id, x]));
     add('Orçamentos', [...m.values()].slice(0, 8).map(o => ({ ic: 'orc', t: `Orçamento ${o.numero} · ${nomeP(o.pagador_id)}`, s: [o.tipo, (typeof ETAPAS_ORC === 'object' ? (ETAPAS_ORC[o.etapa] || [o.etapa])[0] : o.etapa), o.referencia, R$(o.total)].filter(Boolean).join(' · '), abrir: () => formOrc(o.id) }))); });
   job(pode('ped_cigam'), async () => { const r = n ? await sb.from('pedidos_cigam').select('numero,cliente_nome,sistema,situacao,total').eq('numero', +n) : await sb.from('pedidos_cigam').select('numero,cliente_nome,sistema,situacao,total').buscaEm(['cliente_nome', 'sistema'], q).order('numero', { ascending: false }).limit(6);
-    add('Pedidos do CIGAM', (r.data || []).map(x => ({ ic: 'ped_cigam', t: `Pedido ${x.numero} · ${x.cliente_nome || ''}`, s: [x.sistema, (typeof SIT_CIGAM === 'object' ? (SIT_CIGAM[x.situacao] || [x.situacao])[0] : x.situacao), R$(x.total)].filter(Boolean).join(' · '), abrir: () => verPedCigam(x.numero) }))); });
+    add('Pedidos', (r.data || []).map(x => ({ ic: 'ped_cigam', t: `Pedido ${x.numero} · ${x.cliente_nome || ''}`, s: [x.sistema, (typeof SIT_CIGAM === 'object' ? (SIT_CIGAM[x.situacao] || [x.situacao])[0] : x.situacao), R$(x.total)].filter(Boolean).join(' · '), abrir: () => verPedCigam(x.numero) }))); });
   job(pode('sv_pedidos'), async () => { const r = n ? await sb.from('pedidos_servico').select('id,numero,descricao,situacao,valor,obra_id').eq('numero', n) : await sb.from('pedidos_servico').select('id,numero,descricao,situacao,valor,obra_id').buscaEm(['descricao'], q).limit(6);
     add('Pedidos de equipamento', (r.data || []).map(x => ({ ic: 'sv_pedidos', t: `Pedido ${x.numero || ''} · ${obra(x.obra_id)?.nome || ''}`, s: [x.descricao, x.situacao, R$(x.valor)].filter(Boolean).join(' · '), abrir: () => formPedido(x.id) }))); });
   job(pode('pj_propostas'), async () => { const r = await sb.from('propostas_projeto').select('id,numero_proposta,obra_id,valor_total').ilike('numero_proposta', like).limit(6);
@@ -3025,7 +3025,7 @@ async function pesquisaGeral(texto){
   job(pode('fn_receber'), async () => { const r = n ? await sb.from('receber_geral').select('id,lancamento,obra,descricao,valor,vencimento,situacao').eq('lancamento', n).limit(6) : await sb.from('receber_geral').select('id,lancamento,obra,descricao,valor,vencimento,situacao').buscaEm(['obra', 'descricao'], q).order('vencimento', { ascending: false }).limit(6);
     add('A receber', (r.data || []).map(x => ({ ic: 'fn_receber', t: `${x.obra || ''} · ${R$(x.valor)}`, s: [x.lancamento ? 'lanç. ' + x.lancamento : '', x.descricao, 'venc. ' + dataBR(x.vencimento), x.situacao].filter(Boolean).join(' · '), abrir: () => vaiParaTela('fn_receber', x.lancamento ? String(x.lancamento) : (x.obra || '')) }))); });
   job(pode('fn_cigam_lanc'), async () => { const r = n ? await sb.from('cigam_lancamentos').select('lancamento,data,cliente_nome,historico,valor,situacao,empresa').or(`lancamento.eq.${n},nf.eq.${n}`).limit(6) : await sb.from('cigam_lancamentos').select('lancamento,data,cliente_nome,historico,valor,situacao,empresa').buscaEm(['cliente_nome'], q).order('data', { ascending: false }).limit(6);
-    add('Lançamentos do CIGAM', (r.data || []).map(x => ({ ic: 'fn_cigam_lanc', t: `${x.lancamento} · ${x.cliente_nome || ''} · ${R$(x.valor)}`, s: [x.empresa, dataBR(x.data), x.historico, x.situacao].filter(Boolean).join(' · '), abrir: () => verLancCigam(x.lancamento) }))); });
+    add('Lançamentos anteriores', (r.data || []).map(x => ({ ic: 'fn_cigam_lanc', t: `${x.lancamento} · ${x.cliente_nome || ''} · ${R$(x.valor)}`, s: [x.empresa, dataBR(x.data), x.historico, x.situacao].filter(Boolean).join(' · '), abrir: () => verLancCigam(x.lancamento) }))); });
   job(pode('produtos'), async () => { const r = await sb.from('produtos').select('id,codigo,descricao,tipo,preco,marca').or(n ? `codigo.eq.${n.padStart(6, '0')},busca.ilike.${like}` : `busca.ilike.%${norm(q).replace(/\s+/g, '%')}%`).eq('ativo', true).limit(8);
     add('Produtos', (r.data || []).map(x => ({ ic: 'produtos', t: `${x.codigo} · ${x.descricao}`, s: [x.tipo, x.marca, x.preco ? R$(x.preco) : ''].filter(Boolean).join(' · '), abrir: () => formProduto(x.id) }))); });
   job(pode('crm') && !n, async () => { const r = await sb.from('crm_contatos').select('*').buscaEm(['resumo'], q).order('quando', { ascending: false }).limit(5);
@@ -3038,7 +3038,7 @@ async function pesquisaGeral(texto){
   if(seq !== BUSCA.seq) return;   // já digitaram outra coisa
   desenhaBusca(grupos, q, false);
 }
-const ORDEM_BUSCA = ['Funções','Empresas','Empresas pelo CPF/CNPJ','Obras e endereços','Orçamentos','Pedidos do CIGAM','Pedidos de equipamento','Propostas de projeto','Tarefas de projeto','Atividades e OS','Contratos de manutenção','Nº de série','Contatos (CRM)','A receber','Lançamentos (a pagar)','Notas fiscais emitidas','Notas recebidas','Lançamentos do CIGAM','Produtos'];
+const ORDEM_BUSCA = ['Funções','Empresas','Empresas pelo CPF/CNPJ','Obras e endereços','Orçamentos','Pedidos','Pedidos de equipamento','Propostas de projeto','Tarefas de projeto','Atividades e OS','Contratos de manutenção','Nº de série','Contatos (CRM)','A receber','Lançamentos (a pagar)','Notas fiscais emitidas','Notas recebidas','Lançamentos anteriores','Produtos'];
 function desenhaBusca(grupos, q, parcial){
   if(!$('#bgRes')) return;
   grupos = grupos.slice().sort((a, b) => ORDEM_BUSCA.indexOf(a[0]) - ORDEM_BUSCA.indexOf(b[0]));
@@ -4268,7 +4268,7 @@ async function cadastroRapidoEmpresa(nomeInicial, papel = 'cliente'){
   if(sd && sd.documento){ const q = await priv().from('pessoas_dados').select('pessoa_id').eq('documento', sd.documento).maybeSingle(); if(q.data) ja = pessoa(q.data.pessoa_id); }
   if(!ja) ja = ST.pessoas.find(p => p.status !== 'inativo' && norm(p.nome) === norm(d.nome));
   if(ja){
-    const c = await modal('Essa empresa já existe', `Já tem <b>${esc(ja.nome)}</b> no cadastro de Empresas${(ja.codigos_cigam || []).length ? ' (CIGAM ' + esc(ja.codigos_cigam.join(', ')) + ')' : ''}.`,
+    const c = await modal('Essa empresa já existe', `Já tem <b>${esc(ja.nome)}</b> no cadastro de Empresas${(ja.codigos_cigam || []).length ? ' (cód. ' + esc(ja.codigos_cigam.join(', ')) + ')' : ''}.`,
       [['Cancelar', null], ...(sd && sd.documento ? [] : [['Cadastrar outra mesmo assim', 'nova']]), ['Usar essa', 'usar', 'pri']]);
     if(!c) return null;
     if(c === 'usar'){ const pp = [...new Set([...(ja.papeis || []), ...d.papeis])];
@@ -4410,7 +4410,7 @@ function pickEmpresa(alvo, inicial, aoEscolher, opt = {}){
   let pid = inicial || '';
   const desenha = () => { const p = pessoa(pid);
     alvo.innerHTML = p ? `<div style="display:flex;gap:8px;align-items:center"><b style="flex:1">${esc(p.nome)}${p.apelido ? ' <span class="muted">(' + esc(p.apelido) + ')</span>' : ''}</b><button type="button" class="btn peq" id="pkTroca">Trocar</button></div>`
-      : `<input id="pkBusca" placeholder="Digite o nome, apelido ou código do CIGAM…" autocomplete="off"><div id="pkLista" style="max-height:200px;overflow:auto"></div>`;
+      : `<input id="pkBusca" placeholder="Digite o nome, apelido ou código…" autocomplete="off"><div id="pkLista" style="max-height:200px;overflow:auto"></div>`;
     if(p){ $('#pkTroca').onclick = () => { pid = ''; desenha(); aoEscolher && aoEscolher(''); }; return; }
     const lista = () => { const q = norm($('#pkBusca').value), ws = q.split(/\s+/).filter(Boolean);
       const l = ws.length ? ST.pessoas.filter(x => x.status !== 'inativo' && ws.every(w => norm(x.nome + ' ' + (x.apelido || '') + ' ' + (x.codigos_cigam || []).join(' ')).includes(w))).slice(0, 25) : [];
@@ -5748,9 +5748,9 @@ async function formContas(){
   await carregaFin(true);
   const cs = ST.fin.contas, dir = diretoria();
   abrirPainel(`<div class="cab"><h2>Contas de caixa e bancos</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
-    <div class="card"><p class="muted" style="font-size:12px;margin-top:0">Os portadores do CIGAM (caixa, bancos, aplicações, cartões). O saldo inicial é o saldo no começo do dia informado (o do extrato). A conta "padrão" de cada empresa recebe as baixas quando não se escolhe outra.
+    <div class="card"><p class="muted" style="font-size:12px;margin-top:0">Os portadores (caixa, bancos, aplicações, cartões). O saldo inicial é o saldo no começo do dia informado (o do extrato). A conta "padrão" de cada empresa recebe as baixas quando não se escolhe outra.
       ${dir ? '<b>Conta do sócio</b>: só a diretoria vê, e ela fica fora dos saldos e relatórios da empresa.' : ''} Cartões: só cadastro por enquanto.</p>
-      <div style="overflow:auto"><table class="reg" style="min-width:1100px"><thead><tr><th>CIGAM</th><th>Nome</th><th>Empresa</th><th>Tipo</th><th>Banco</th><th>Agência</th><th>Conta</th>${dir ? '<th>Sócio</th>' : ''}<th>Saldo inicial</th><th>Em</th><th>Padrão</th><th>Ativa</th></tr></thead><tbody id="ctLin">
+      <div style="overflow:auto"><table class="reg" style="min-width:1100px"><thead><tr><th>Código</th><th>Nome</th><th>Empresa</th><th>Tipo</th><th>Banco</th><th>Agência</th><th>Conta</th>${dir ? '<th>Sócio</th>' : ''}<th>Saldo inicial</th><th>Em</th><th>Padrão</th><th>Ativa</th></tr></thead><tbody id="ctLin">
       ${[...cs, {}].map(c => `<tr data-ct="${c.id || ''}" ${c.socio ? 'style="background:#f6f3ff"' : ''}><td><input data-f="codigo_cigam" value="${esc(c.codigo_cigam || '')}" style="width:56px"></td>
         <td><input data-f="nome" value="${esc(c.nome || '')}" placeholder="${c.id ? '' : 'nova conta…'}" style="min-width:190px"></td><td><select data-f="empresa">${['Equiper','EQP'].map(e => `<option ${c.empresa === e ? 'selected' : ''}>${e}</option>`).join('')}</select></td>
         <td><select data-f="tipo">${Object.entries(TIPO_CONTA).map(([k, t]) => `<option value="${k}" ${(c.tipo || 'banco') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
@@ -5758,9 +5758,9 @@ async function formContas(){
         ${dir ? `<td style="text-align:center"><input type="checkbox" data-f="socio" ${c.socio ? 'checked' : ''} style="width:auto"></td>` : ''}
         <td><input data-f="saldo_inicial" inputmode="decimal" value="${numFmt(c.saldo_inicial)}" style="width:110px"></td><td><input data-f="saldo_em" type="date" value="${c.saldo_em || hojeISO()}"></td>
         <td style="text-align:center"><input type="checkbox" data-f="padrao" ${c.padrao ? 'checked' : ''} style="width:auto"></td><td style="text-align:center"><input type="checkbox" data-f="ativo" ${c.ativo !== false ? 'checked' : ''} style="width:auto"></td></tr>`).join('')}</tbody></table></div></div>
-    <div class="card"><h2 style="font-size:15px">Início do caixa no ERP</h2><p class="muted" style="font-size:12px">Recebimentos e pagamentos marcados com data anterior não geram movimento (já estão no CIGAM). Use o dia da virada.</p>
+    <div class="card"><h2 style="font-size:15px">Início do caixa no ERP</h2><p class="muted" style="font-size:12px">Recebimentos e pagamentos marcados com data anterior não geram movimento (já foram lançados no sistema anterior). Use o dia da virada.</p>
       <label class="campo" style="max-width:220px"><input id="ctIni" type="date" value="${ST.fin.config.inicio_caixa || hojeISO()}" ${dir ? '' : 'disabled'}></label></div>
-    <div class="card"><h2 style="font-size:15px">Plano de contas</h2><p class="muted" style="font-size:12px;margin:0">Agora fica em Financeiro → <a href="#" id="ctPlano">Plano de contas</a> (o do CIGAM, com as contas que faltavam).</p></div>
+    <div class="card"><h2 style="font-size:15px">Plano de contas</h2><p class="muted" style="font-size:12px;margin:0">Agora fica em Financeiro → <a href="#" id="ctPlano">Plano de contas</a> (com as contas que faltavam).</p></div>
     <div class="rodape"><button class="btn pri" id="ctSalvar">Salvar</button></div>`);
   $('#folha').style.width = 'min(1240px,100%)';
   $('#ctPlano').onclick = ev => { ev.preventDefault(); fecharPainel(); ST.busca = ''; ST.aba = 'fn_plano'; desenhar(); };
@@ -6251,7 +6251,7 @@ async function formBoleto(x, depois){
     ['semdata', '#6e6e73', 'Liberados sem data', 'sem vencimento e sem data combinada: ficam fora da previsão', x => cobravel(x) && !dataDe(x)],
     ['semempresa', '#6e6e73', 'Sem empresa definida', 'falta dizer se é EQP ou Equiper', x => aberto(x) && !x.empresa && x.app !== 'projetos'],
     ['semcliente', '#6e6e73', 'Sem cliente (quem paga)', 'a obra não tem quem paga cadastrado', x => aberto(x) && !x.app && !x.cliente],
-    ['semligacao', '#6e6e73', 'Cliente do aplicativo sem ligação com o cadastro', 'ligue em Administração → Vínculos para juntar com o cadastro do CIGAM', x => aberto(x) && x.app && !x.pessoa_id]
+    ['semligacao', '#6e6e73', 'Cliente do aplicativo sem ligação com o cadastro', 'ligue em Administração → Vínculos para juntar com o cadastro de empresas', x => aberto(x) && x.app && !x.pessoa_id]
   ];
 
   function abasHtml(){ const h = hoje(), n = filtrados().filter(x => ALERTAS.slice(0, 5).some(a => a[4](x, h))).length;
@@ -6599,7 +6599,7 @@ async function telaPlano(){
   carregandoTela();
   const [p, u] = await Promise.all([ sb.from('fin_plano').select('*'), sb.from('fin_plano_uso').select('*') ]);
   if(p.error) return $('#conteudo').innerHTML = semScript22();
-  if(!(p.data || []).some(x => x.classificacao)) return $('#conteudo').innerHTML = '<div class="card"><h2>Plano de contas</h2><div class="vazio">Falta rodar o script <b>31_plano_contas.sql</b> (plano do CIGAM).</div></div>';
+  if(!(p.data || []).some(x => x.classificacao)) return $('#conteudo').innerHTML = '<div class="card"><h2>Plano de contas</h2><div class="vazio">Falta rodar o script <b>31_plano_contas.sql</b> (plano de contas).</div></div>';
   const uso = Object.fromEntries((u.data || []).map(x => [x.codigo, x])), f = ST.pc, b = norm(ST.busca), pode = ['diretoria','administrativo'].includes(ST.eu.perfil);
   const todas = (p.data || []).sort((a, x) => clKey(a).localeCompare(clKey(x)));
   const l = todas.filter(x => (f.ver === 'todas' || (f.ver === 'gerencial' ? x.tipo === 'gerencial' : x.tipo !== 'gerencial')) && (ST.mostrarInativos || x.ativo)
@@ -6607,7 +6607,7 @@ async function telaPlano(){
   const nivel = x => x.classificacao && x.classificacao !== 'ERP' ? x.classificacao.split('.').length - 1 : 0;
   const nA = todas.filter(x => x.tipo_conta === 'A' && x.tipo !== 'gerencial').length, nG = todas.filter(x => x.tipo === 'gerencial' && x.tipo_conta === 'A').length, nE = todas.filter(x => x.origem === 'erp').length;
   $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px"><div class="kpi"><span class="muted">Contas de lançamento</span><b>${nA}</b></div><div class="kpi"><span class="muted">Gerenciais (centro de custo)</span><b>${nG}</b></div><div class="kpi"><span class="muted">Criadas no ERP</span><b>${nE}</b></div></div>
-    <div class="card"><h2>Plano de contas <span class="muted" style="font-weight:400">· o mesmo do CIGAM (EQP e Equiper), com as contas que faltavam</span></h2>
+    <div class="card"><h2>Plano de contas <span class="muted" style="font-weight:400">· EQP e Equiper, com as contas que faltavam</span></h2>
     <div class="barra"><input type="search" id="busca" placeholder="Código, classificação ou nome…" value="${esc(ST.busca)}">
       <select id="pcVer" style="max-width:220px">${[['contabil','Contas contábeis'],['gerencial','Gerenciais (8.x)'],['todas','Todas']].map(([k, r]) => `<option value="${k}" ${f.ver === k ? 'selected' : ''}>${r}</option>`).join('')}</select>
       <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" id="vInat" style="width:auto" ${ST.mostrarInativos ? 'checked' : ''}> desativadas</label>
@@ -6616,7 +6616,7 @@ async function telaPlano(){
     <div style="overflow:auto"><table class="reg"><thead><tr><th>Classificação</th><th>Código</th><th>Nome</th><th>Tipo</th><th>Natureza</th><th>Origem</th><th style="text-align:right">Lançamentos</th><th></th></tr></thead><tbody>
     ${l.map(x => `<tr style="${x.ativo ? '' : 'opacity:.5'}${x.tipo_conta === 'S' ? ';background:#f6f6f8' : ''}"><td style="white-space:nowrap">${esc(x.classificacao || '')}</td><td><b>${esc(x.codigo)}</b></td>
       <td style="padding-left:${8 + nivel(x) * 16}px">${x.tipo_conta === 'S' ? `<b>${esc(x.nome)}</b>` : esc(x.nome)}${x.ativo ? '' : ' <span class="tag inat">desativada</span>'}</td>
-      <td>${x.tipo_conta}</td><td>${NAT_PC[x.tipo] || x.tipo}</td><td>${x.origem === 'erp' ? '<span class="tag" style="background:#7c3aed1a;color:#7c3aed">criada no ERP</span>' : '<span class="tag">CIGAM</span>'}</td>
+      <td>${x.tipo_conta}</td><td>${NAT_PC[x.tipo] || x.tipo}</td><td>${x.origem === 'erp' ? '<span class="tag" style="background:#7c3aed1a;color:#7c3aed">criada no ERP</span>' : '<span class="tag">padrão</span>'}</td>
       <td style="text-align:right">${(uso[x.codigo]?.usos || 0) + (x.tipo === 'gerencial' ? (uso[x.codigo]?.produtos || 0) : 0) || ''}${x.tipo === 'gerencial' && uso[x.codigo]?.produtos ? ' <span class="muted" style="font-size:11px">produtos</span>' : ''}</td>
       <td style="white-space:nowrap">${pode && x.codigo !== 'TRF' ? `<button class="btn peq" data-pce="${esc(x.codigo)}">Editar</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="vazio">Nenhuma conta.</td></tr>'}</tbody></table></div></div>`;
   ligaBarra(() => formConta(null, todas, uso));
@@ -6637,7 +6637,7 @@ function proximaConta(grupo, todas){
 async function formConta(C, todas, uso){
   const novo = !C, grupos = todas.filter(x => x.tipo_conta === 'S' && x.ativo);
   const usos = C ? (uso[C.codigo]?.usos || 0) + (uso[C.codigo]?.produtos || 0) : 0, filhos = C ? todas.filter(x => x.pai === C.codigo).length : 0;
-  abrirPainel(`<div class="cab"><h2>${novo ? 'Nova conta' : 'Conta ' + esc(C.codigo)}</h2>${C && C.origem === 'cigam' ? '<span class="tag">CIGAM</span>' : C ? '<span class="tag" style="background:#7c3aed1a;color:#7c3aed">criada no ERP</span>' : ''}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+  abrirPainel(`<div class="cab"><h2>${novo ? 'Nova conta' : 'Conta ' + esc(C.codigo)}</h2>${C && C.origem === 'cigam' ? '<span class="tag">padrão</span>' : C ? '<span class="tag" style="background:#7c3aed1a;color:#7c3aed">criada no ERP</span>' : ''}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><div class="grade">
       ${novo ? `<label class="campo largo">Dentro do grupo<select id="pcGrupo"><option value="">— escolha —</option>${grupos.map(g => `<option value="${esc(g.codigo)}">${esc(g.classificacao)} · ${esc(g.nome)}</option>`).join('')}</select></label>
         <label class="campo">Tipo<select id="pcTipo"><option value="A">A · conta de lançamento</option><option value="S">S · grupo (só soma)</option></select></label>` : ''}
@@ -6645,7 +6645,7 @@ async function formConta(C, todas, uso){
       <label class="campo">Código<input id="pcCod" value="${esc(C?.codigo || '')}" ${novo ? '' : 'disabled'}></label>
       <label class="campo largo">Nome<input id="pcNome" value="${esc(C?.nome || '')}" style="text-transform:uppercase"></label>
       ${C ? `<label class="campo" style="justify-content:flex-end"><span style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="pcAtivo" style="width:auto" ${C.ativo ? 'checked' : ''}> ativa</span></label>` : ''}</div>
-      ${C ? `<p class="muted" style="font-size:12px">${NAT_PC[C.tipo] || C.tipo} · tipo ${C.tipo_conta} · ${usos ? `<b>${usos}</b> lançamento(s)/produto(s) usam esta conta` : 'nenhum lançamento usa esta conta'}${filhos ? ` · ${filhos} conta(s) dentro dela` : ''}.${C.origem === 'cigam' ? ' Mudar o nome aqui não muda no CIGAM.' : ''}</p>` : '<p class="muted" style="font-size:12px">O ERP sugere a próxima classificação e um código livre dentro do grupo — dá para trocar. Use códigos que não existem no CIGAM.</p>'}</div>
+      ${C ? `<p class="muted" style="font-size:12px">${NAT_PC[C.tipo] || C.tipo} · tipo ${C.tipo_conta} · ${usos ? `<b>${usos}</b> lançamento(s)/produto(s) usam esta conta` : 'nenhum lançamento usa esta conta'}${filhos ? ` · ${filhos} conta(s) dentro dela` : ''}.${C.origem === 'cigam' ? '' : ''}</p>` : '<p class="muted" style="font-size:12px">O ERP sugere a próxima classificação e um código livre dentro do grupo — dá para trocar. Use códigos que ainda não existem.</p>'}</div>
     <div class="rodape">${C && C.origem === 'erp' && !usos && !filhos ? '<button class="btn" id="pcExc">Excluir</button>' : ''}<button class="btn pri" id="pcSalvar">Salvar</button></div>`);
   if(novo) $('#pcGrupo').onchange = () => { const g = todas.find(x => x.codigo === $('#pcGrupo').value); if(!g) return; const s = proximaConta(g, todas); $('#pcClass').value = s.classificacao; $('#pcCod').value = s.codigo; };
   $('#pcSalvar').onclick = async () => {
@@ -6677,7 +6677,7 @@ Object.assign(TELAS, { fn_painel: telaPainel });
 EXPORTA.fn_painel = () => ST.pnExp ? ST.pnExp() : null;
 
 const PN_COR = { projeto:'#2a78d6', equipamento:'#eb6834', servico:'#1baf7a', cigam:'#eda100', outro:'#9aa0a6', entradas:'#2a78d6', saidas:'#eb6834' };
-const PN_AREA = { projeto:'Projetos', equipamento:'Equipamentos', servico:'Serviços', cigam:'CIGAM (histórico)', outro:'Outros' };
+const PN_AREA = { projeto:'Projetos', equipamento:'Equipamentos', servico:'Serviços', cigam:'Anteriores', outro:'Outros' };
 const PN_TIPO_ITEM = { equipamento:'Equipamentos', mao_obra:'Mão de obra', material:'Material', projeto:'Projetos', servico:'Serviços', outro:'Outros' };
 const pnR$ = v => R$(v || 0).replace(/,\d\d$/, '');                       // sem centavos nos gráficos
 const pnK = v => { v = Number(v) || 0; const a = Math.abs(v); return a >= 1e6 ? (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mi' : a >= 1e3 ? (v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' mil' : v.toLocaleString('pt-BR', { maximumFractionDigits: 0 }); };
@@ -6960,15 +6960,15 @@ async function telaProdutos(){
     <div class="barra"><input type="search" id="busca" placeholder="Buscar por código, descrição, referência ou fabricante (qualquer ordem, sem acento)…" value="${esc(ST.busca)}">
       <select id="pTipo" style="max-width:190px"><option value="">Todos os tipos</option>${Object.entries(TIPOS_PROD).map(([k,r]) => `<option value="${k}" ${ST.prod.tipo===k?'selected':''}>${r}</option>`).join('')}</select>
       <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" id="vInat" style="width:auto" ${ST.mostrarInativos?'checked':''}> inativos</label>
-      ${pode?'<button class="btn" id="pImp">⤵ Importar planilha do CIGAM</button><button class="btn pri" id="btnNovo">+ Produto</button>':''}</div>
+      ${pode?'<button class="btn" id="pImp">⤵ Importar planilha</button><button class="btn pri" id="btnNovo">+ Produto</button>':''}</div>
     <table class="reg"><thead><tr><th>Código</th><th>Descrição</th><th>Tipo</th><th>Grupo</th><th style="text-align:right">Preço de venda</th></tr></thead><tbody>
-    ${(r.data||[]).map(p => `<tr data-pr="${p.id}" style="cursor:pointer"><td>${esc(p.codigo)}</td><td><b>${esc(p.descricao)}</b>${p.ativo?'':'<span class="tag inat">inativo</span>'}${p.estrutura?' <span class="tag">kit</span>':''}${p.disciplina?` <span class="tag">${esc(p.disciplina)}</span>`:''}</td><td>${TIPOS_PROD[p.tipo]||p.tipo}</td><td>${esc([p.grupo, p.subgrupo].filter(Boolean).join('/'))}</td><td style="text-align:right">${p.tipo==='titulo'?'':Number(p.preco)?R$(p.preco)+'<span class="muted" style="font-size:11px"> /'+unidadeTxt(p.unidade)+'</span>':'<span class="muted">sem preço</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum produto. Importe a planilha do CIGAM.</td></tr>'}</tbody></table>
+    ${(r.data||[]).map(p => `<tr data-pr="${p.id}" style="cursor:pointer"><td>${esc(p.codigo)}</td><td><b>${esc(p.descricao)}</b>${p.ativo?'':'<span class="tag inat">inativo</span>'}${p.estrutura?' <span class="tag">kit</span>':''}${p.disciplina?` <span class="tag">${esc(p.disciplina)}</span>`:''}</td><td>${TIPOS_PROD[p.tipo]||p.tipo}</td><td>${esc([p.grupo, p.subgrupo].filter(Boolean).join('/'))}</td><td style="text-align:right">${p.tipo==='titulo'?'':Number(p.preco)?R$(p.preco)+'<span class="muted" style="font-size:11px"> /'+unidadeTxt(p.unidade)+'</span>':'<span class="muted">sem preço</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum produto. Importe a planilha de produtos.</td></tr>'}</tbody></table>
     ${r.total > (r.data||[]).length ? `<p class="muted" style="font-size:12px">Mostrando ${(r.data||[]).length} de ${r.total.toLocaleString('pt-BR')} encontrados — digite mais palavras na busca para achar o item.</p>` : (ST.busca ? `<p class="muted" style="font-size:12px">${r.total} encontrado(s).</p>` : '')}</div>`;
   ligaBarra(() => formProduto(null));
   $('#pTipo').onchange = e => { ST.prod.tipo = e.target.value; telaProdutos(); };
   expRegistra(async () => { const t = await consultaProdutos({ q: ST.busca, tipo: ST.prod.tipo || null, ativos: !ST.mostrarInativos, lim: Math.max(r.total || 0, (r.data || []).length, 1) + 10 });
     return [expCols('Materiais', [['Código', p => p.codigo], ['Descrição', p => p.descricao], ['Tipo', p => TIPOS_PROD[p.tipo] || p.tipo], ['Grupo', p => p.grupo], ['Subgrupo', p => p.subgrupo], ['Disciplina', p => p.disciplina],
-      ['Unidade', p => p.unidade], ['Referência', p => p.referencia], ['Marca', p => p.marca], ['NCM', p => p.ncm], ['IPI %', p => p.ipi], ['Origem', p => ({ nacional: 'Nacional', importacao_direta: 'Importação direta', importacao_indireta: 'Importação indireta' })[p.origem] || ''], ['Nº de série', p => p.controla_serie ? 'sim' : ''], ['Fornecedor no CIGAM', p => p.fornecedor_cigam], ['Preço de venda', p => p.preco != null ? R$(p.preco) : ''], ['Ativo', p => p.ativo === false ? 'não' : 'sim'], ['Kit', p => p.estrutura ? 'sim' : '']], t.data || t)]; });
+      ['Unidade', p => p.unidade], ['Referência', p => p.referencia], ['Marca', p => p.marca], ['NCM', p => p.ncm], ['IPI %', p => p.ipi], ['Origem', p => ({ nacional: 'Nacional', importacao_direta: 'Importação direta', importacao_indireta: 'Importação indireta' })[p.origem] || ''], ['Nº de série', p => p.controla_serie ? 'sim' : ''], ['Fornecedor (código)', p => p.fornecedor_cigam], ['Preço de venda', p => p.preco != null ? R$(p.preco) : ''], ['Ativo', p => p.ativo === false ? 'não' : 'sim'], ['Kit', p => p.estrutura ? 'sim' : '']], t.data || t)]; });
   document.querySelectorAll('[data-pr]').forEach(t => t.onclick = () => pode && formProduto(t.dataset.pr));
   if($('#pImp')) $('#pImp').onclick = importarProdutos;
 }
@@ -6984,7 +6984,7 @@ async function formProduto(id){
       <label class="campo">Substituição tributária (ST)<select id="prSt" title="Usado na tabela de preços: itens com ST e sem ST têm margens diferentes"><option value="">não definido</option><option value="1" ${P.tem_st === true ? 'selected' : ''}>Com ST</option><option value="0" ${P.tem_st === false ? 'selected' : ''}>Sem ST</option></select></label>
       <label class="campo largo">Descrição<input id="prDesc" value="${esc(P.descricao)}"></label>
       <label class="campo">Unidade<input id="prUn" value="${esc(P.unidade)}"></label>
-      <label class="campo">Preço de venda (R$ por unidade)<input id="prPreco" inputmode="decimal" value="${fmt3(P.preco)}"><span class="muted" id="prCigam" style="font-size:11px;font-weight:400">${P.preco_cigam != null ? `Tabela do CIGAM (venda): <b>${R$(P.preco_cigam)}</b>` : (id ? 'Fora da tabela de venda do CIGAM' : '')}${P.custo != null && P.custo_tabela ? ` · compra <b>${R$(P.custo)}</b> (${esc(String(P.custo_tabela).split(' · ')[0])}${P.margem != null ? ', margem ' + (1 + Number(P.margem) / 100).toFixed(2).replace('.', ',') : ''})` : (id ? ' · sem preço na tabela de compra' : '')}</span></label>
+      <label class="campo">Preço de venda (R$ por unidade)<input id="prPreco" inputmode="decimal" value="${fmt3(P.preco)}"><span class="muted" id="prCigam" style="font-size:11px;font-weight:400">${P.preco_cigam != null ? `Tabela de preços (venda): <b>${R$(P.preco_cigam)}</b>` : (id ? 'Fora da tabela de preços de venda' : '')}${P.custo != null && P.custo_tabela ? ` · compra <b>${R$(P.custo)}</b> (${esc(String(P.custo_tabela).split(' · ')[0])}${P.margem != null ? ', margem ' + (1 + Number(P.margem) / 100).toFixed(2).replace('.', ',') : ''})` : (id ? ' · sem preço na tabela de compra' : '')}</span></label>
       <label class="campo">Grupo / subgrupo<input id="prGrupo" value="${esc([P.grupo, P.subgrupo].filter(Boolean).join('/'))}"></label>
       <label class="campo">Fabricante / marca<input id="prMarca" value="${esc(P.marca)}"></label>
       <label class="campo">Referência do fabricante<input id="prRef" value="${esc(P.referencia)}"></label>
@@ -6992,7 +6992,7 @@ async function formProduto(id){
       <label class="campo">IPI (%)<input id="prIpi" inputmode="decimal" value="${P.ipi != null ? String(P.ipi).replace('.', ',') : ''}"></label>
       <label class="campo">Peso (kg)<input id="prPeso" inputmode="decimal" value="${P.peso != null ? String(P.peso).replace('.', ',') : ''}"></label>
       <label class="campo">Origem da mercadoria<select id="prOrigem"><option value="">—</option>${[['nacional','Nacional'],['importacao_direta','Importação direta'],['importacao_indireta','Importação indireta']].map(([k, r]) => `<option value="${k}" ${P.origem === k ? 'selected' : ''}>${r}</option>`).join('')}</select></label>
-      <label class="campo">Fornecedor no CIGAM<input id="prFornC" value="${esc(P.fornecedor_cigam)}"></label>
+      <label class="campo">Fornecedor (código)<input id="prFornC" value="${esc(P.fornecedor_cigam)}"></label>
       <label class="campo" style="justify-content:flex-end"><span style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="prSerie" style="width:auto" ${P.controla_serie ? 'checked' : ''}> controla nº de série</span></label>
       <label class="campo" id="prDiscW">Disciplina (projetos)<select id="prDisc"><option value="">—</option>${DISC_ORC.map(d => `<option ${P.disciplina===d?'selected':''}>${d}</option>`).join('')}</select></label>
       <label class="campo largo" id="prEscW">Escopo que vai na proposta (um item por linha)<textarea id="prEsc" rows="5">${esc(P.escopo)}</textarea></label>
@@ -7001,8 +7001,8 @@ async function formProduto(id){
     </div>
     <div class="secao-sens" id="prKitW"><h3>Itens do kit</h3><p class="muted" style="font-size:12px;margin-top:-4px">"× kit" = a quantidade acompanha a do kit (ex.: área em m²). Sem marcar, entra a quantidade fixa.</p>
       <div id="prComp"></div><div style="position:relative;margin-top:8px"><input id="prCompBusca" placeholder="🔎 adicionar item ao kit (código ou descrição)…" autocomplete="off"><div id="prCompSug" class="sugestoes"></div></div></div>
-    <div class="grade" style="margin-top:8px"><label class="campo largo">Conta gerencial (área — centro de custo do CIGAM)<select id="prGer"><option value="">—</option></select></label></div>
-    ${P.tipo_cigam || P.conta_gerencial ? `<p class="muted" style="font-size:12px">CIGAM: tipo ${esc(P.tipo_cigam||'—')} · conta ${esc(P.conta_gerencial||'—')}</p>` : ''}
+    <div class="grade" style="margin-top:8px"><label class="campo largo">Conta gerencial (área — centro de custo)<select id="prGer"><option value="">—</option></select></label></div>
+    ${P.tipo_cigam || P.conta_gerencial ? `<p class="muted" style="font-size:12px">Classificação: tipo ${esc(P.tipo_cigam||'—')} · conta ${esc(P.conta_gerencial||'—')}</p>` : ''}
     </div><div class="rodape"><button class="btn pri" id="bSalvar">Salvar</button></div>`);
   const vis = () => { const t = $('#prTipo').value, pj = ['projeto','consultoria','visita'].includes(t); $('#prDiscW').style.display = pj ? '' : 'none'; $('#prEscW').style.display = pj ? '' : 'none'; $('#prKitW').style.display = $('#prKit').checked ? '' : 'none'; };
   $('#prTipo').onchange = vis; $('#prKit').onchange = vis; vis();
@@ -7261,7 +7261,7 @@ async function formOrc(id, pre){
   const tit = `${TIPOS_ORC[T][1]} Orçamento de ${TIPOS_ORC[T][0].toLowerCase()}${id ? ' nº ' + numOrc(O.numero) : ' (novo)'}`;
   abrirPainel(`<div class="cab"><h2>${tit}</h2>${tagOrc(O.etapa)}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><div class="grade">
-      <div class="campo largo"><span style="display:flex;align-items:center;gap:8px">Cliente *${travado ? '' : '<button type="button" class="btn peq" id="ocCliNovo" style="margin-left:auto">+ Nova empresa</button>'}</span><div style="position:relative"><input id="ocCli" autocomplete="off" placeholder="Digite o nome, apelido ou código do CIGAM do cliente…" value="${esc(pessoa(O.pagador_id)?.nome || pre?.cliente_texto || '')}"><div id="ocCliSug" class="sugestoes"></div></div>
+      <div class="campo largo"><span style="display:flex;align-items:center;gap:8px">Cliente *${travado ? '' : '<button type="button" class="btn peq" id="ocCliNovo" style="margin-left:auto">+ Nova empresa</button>'}</span><div style="position:relative"><input id="ocCli" autocomplete="off" placeholder="Digite o nome, apelido ou código do cliente…" value="${esc(pessoa(O.pagador_id)?.nome || pre?.cliente_texto || '')}"><div id="ocCliSug" class="sugestoes"></div></div>
         <div id="ocCliInfo" class="muted" style="font-size:12px;margin-top:3px"></div></div>
       <label class="campo">Obra / local<select id="ocObra"></select></label>
       <label class="campo">Empresa que fatura<select id="ocEmp"><option value="">A definir</option>${['EQP','Equiper'].map(e => `<option ${O.empresa===e?'selected':''}>${e}</option>`).join('')}</select></label>
@@ -7302,7 +7302,7 @@ async function formOrc(id, pre){
   const obrasDoCli = () => cliId ? [...new Set(ST.pagadores.filter(g => g.pessoa_id === cliId).map(g => g.obra_id))].map(obra).filter(o => o && o.status !== 'inativo') : [];
   const nObras = pid => new Set(ST.pagadores.filter(g => g.pessoa_id === pid).map(g => g.obra_id)).size;
   function infoCli(){ const p = pessoa(cliId);
-    $('#ocCliInfo').innerHTML = p ? [(p.codigos_cigam || []).length ? 'CIGAM ' + p.codigos_cigam.join(', ') : 'sem código do CIGAM', p.apelido, (p.papeis || []).map(papelTxt).join(', '),
+    $('#ocCliInfo').innerHTML = p ? [(p.codigos_cigam || []).length ? 'cód. ' + p.codigos_cigam.join(', ') : 'sem código', p.apelido, (p.papeis || []).map(papelTxt).join(', '),
       cliDados ? [cliDados.bairro, [cliDados.municipio, cliDados.uf].filter(Boolean).join(' - ')].filter(Boolean).join(' · ') : ''].filter(Boolean).map(esc).join(' · ')
       : (inpCli.value.trim() ? '<span style="color:var(--verm)">Clique numa empresa da lista (ou cadastre uma nova).</span>' : ''); }
   function desenhaObras(alvo){
@@ -7339,7 +7339,7 @@ async function formOrc(id, pre){
     const q = inpCli.value.trim(); if(q.length < 2 && !/^\d$/.test(q)){ boxCli.innerHTML = ''; return; }
     const l = buscaEmpresas(q);
     boxCli.innerHTML = (l.total > l.length ? `<div class="sug muted" style="cursor:default;font-size:12px">Mostrando ${l.length} de ${l.total.toLocaleString('pt-BR')} — digite mais uma palavra.</div>` : '')
-      + l.map(p => `<div class="sug" data-cli="${p.id}"><b>${esc(p.nome)}</b>${p.apelido ? ' · ' + esc(p.apelido) : ''} <span class="muted">· ${[(p.codigos_cigam || []).length ? 'CIGAM ' + p.codigos_cigam.join(', ') : '', (p.papeis || []).map(papelTxt).join(', ')].filter(Boolean).map(esc).join(' · ')}${(n => n ? ` · 🏠 ${n} obra${n > 1 ? 's' : ''}` : '')(nObras(p.id))}</span></div>`).join('')
+      + l.map(p => `<div class="sug" data-cli="${p.id}"><b>${esc(p.nome)}</b>${p.apelido ? ' · ' + esc(p.apelido) : ''} <span class="muted">· ${[(p.codigos_cigam || []).length ? 'cód. ' + p.codigos_cigam.join(', ') : '', (p.papeis || []).map(papelTxt).join(', ')].filter(Boolean).map(esc).join(' · ')}${(n => n ? ` · 🏠 ${n} obra${n > 1 ? 's' : ''}` : '')(nObras(p.id))}</span></div>`).join('')
       + (l.length ? '' : '<div class="sug muted" style="cursor:default">Nenhuma empresa com esse nome.</div>')
       + `<div class="sug muted" data-cli-novo="1">＋ Cadastrar “${esc(q)}” como nova empresa</div>`;
     boxCli.querySelectorAll('[data-cli]').forEach(x => x.onclick = () => escolheCli(pessoa(x.dataset.cli)));
@@ -7483,7 +7483,7 @@ async function formOrc(id, pre){
     area_m2: $('#ocArea') && $('#ocArea').value.trim() ? num($('#ocArea').value) : null, condicao_pagamento_id: $('#ocCond').value ? +$('#ocCond').value : null, tipo_operacao: $('#ocTOp').value || null }; };
   async function salvar(silencioso){
     lerItens(); const d = dadosCab();
-    if(!d.pagador_id){ await aviso('Falta o cliente', 'No campo Cliente, digite o nome, o apelido ou o código do CIGAM e clique na empresa da lista (ou cadastre uma nova).'); inpCli.focus(); return null; }
+    if(!d.pagador_id){ await aviso('Falta o cliente', 'No campo Cliente, digite o nome, o apelido ou o código e clique na empresa da lista (ou cadastre uma nova).'); inpCli.focus(); return null; }
     if(!d.obra_id && $('#ocObra').value !== '__nova'){ await aviso('Falta a obra', 'Este cliente tem mais de uma obra: escolha em qual é o orçamento (ou “Nova obra ao aprovar”).'); return null; }
     if(!G.some(g => g.itens.some(i => i.tipo !== 'titulo'))){ await aviso('Orçamento vazio', 'Adicione pelo menos um item do catálogo.'); return null; }
     if(multi && G.some(g => g.itens.length && !g.titulo)){ await aviso('Falta o sistema', 'Dê um nome a cada pedido (ex.: PRESSURIZAÇÃO).'); return null; }
@@ -8233,7 +8233,7 @@ function importarPedidosCigam(){
     $('#icRes').innerHTML = `<div class="kpis" style="margin-bottom:10px">
         <div class="kpi" style="cursor:default"><span class="muted">Pedidos</span><b>${L.linhas.length.toLocaleString('pt-BR')}</b></div>
         <div class="kpi" style="cursor:default"><span class="muted">Período</span><b>${anos[0] || '?'}–${anos[anos.length - 1] || '?'}</b></div>
-        <div class="kpi" style="cursor:default"><span class="muted">Faturados no CIGAM</span><b>${L.linhas.filter(x => x.faturado).length.toLocaleString('pt-BR')}</b></div>
+        <div class="kpi" style="cursor:default"><span class="muted">Faturados</span><b>${L.linhas.filter(x => x.faturado).length.toLocaleString('pt-BR')}</b></div>
         <div class="kpi ${semEmp ? 'v' : ''}" style="cursor:default"><span class="muted">Sem a empresa no ERP</span><b>${semEmp}</b></div></div>
       <p style="font-size:13px">Situação: ${Object.entries(sit).map(([s, n]) => `${(SIT_CIGAM[s] || [s])[0]} <b>${n.toLocaleString('pt-BR')}</b>`).join(' · ')}<br>
         Tipo (pela observação): ${Object.entries(tip).map(([t, n]) => `${TIPO_PED[t]} <b>${n.toLocaleString('pt-BR')}</b>`).join(' · ')}</p>
@@ -8247,7 +8247,7 @@ function importarPedidosCigam(){
         if(r.error){ b.disabled = false; return aviso('Parou no meio', esc(erroBanco(r.error)) + `<br>Já foram ${i} pedidos. Pode importar de novo: o que já entrou só é atualizado.`); }
         Object.keys(t).forEach(k => t[k] += r.data[k] || 0); }
       $('#icProg').innerHTML = `✅ ${t.novos} novos · ${t.atualizados} atualizados${t.sem_empresa ? ` · ${t.sem_empresa} sem empresa ligada` : ''}`;
-      ST.pedCigam = null; toast('Pedidos do CIGAM importados.'); if(ST.aba === 'ped_cigam') telaPedCigam();
+      ST.pedCigam = null; toast('Pedidos importados.'); if(ST.aba === 'ped_cigam') telaPedCigam();
     };
   };
 }
@@ -8255,13 +8255,13 @@ function importarPedidosCigam(){
 async function carregaPedCigam(forcar){
   if(ST.pedCigam && !forcar) return ST.pedCigam;
   const r = await tudo(() => sb.from('pedidos_cigam').select('numero,unidade,situacao,tipo,tipo_operacao,data_pedido,cliente_codigo,cliente_nome,pessoa_id,pagador_id,sistema,total,total_faturado,faturado,nota_fiscal,condicao_descricao,usuario_criacao').order('numero', { ascending:false }));
-  if(r.error){ aviso('Erro ao carregar os pedidos do CIGAM', esc(erroBanco(r.error)) + '<br>Rodou o script 19 no Supabase?'); return []; }
+  if(r.error){ aviso('Erro ao carregar os pedidos', esc(erroBanco(r.error)) + '<br>Rodou o script 19 no Supabase?'); return []; }
   return ST.pedCigam = r.data || [];
 }
 
 ST.pcSit = ''; ST.pcTipo = ''; ST.pcAno = '';
 async function telaPedCigam(){
-  $('#conteudo').innerHTML = '<div class="card"><p class="muted">Carregando os pedidos do CIGAM…</p></div>';
+  $('#conteudo').innerHTML = '<div class="card"><p class="muted">Carregando os pedidos…</p></div>';
   const todos = await carregaPedCigam(), pode = ['diretoria','administrativo'].includes(ST.eu.perfil);
   const b = norm(ST.busca).split(/\s+/).filter(Boolean);
   const nomeCli = x => (pessoa(x.pessoa_id) || {}).nome || x.cliente_nome || '';
@@ -8270,13 +8270,13 @@ async function telaPedCigam(){
   const l = base.filter(x => (!ST.pcSit || x.situacao === ST.pcSit) && (!ST.pcTipo || x.tipo === ST.pcTipo));
   const n = f => base.filter(f).length, soma = l.reduce((s, x) => s + Number(x.total || 0), 0), MAX = 300;
   const anos = [...new Set(todos.map(x => (x.data_pedido || '').slice(0, 4)).filter(Boolean))].sort().reverse();
-  $('#conteudo').innerHTML = `<div class="card"><h2>Pedidos do CIGAM <span class="muted" style="font-weight:400">· histórico (consulta) · ${todos.length.toLocaleString('pt-BR')} pedidos</span></h2>
+  $('#conteudo').innerHTML = `<div class="card"><h2>Pedidos <span class="muted" style="font-weight:400">· ${todos.length.toLocaleString('pt-BR')} pedidos</span></h2>
     <div class="barra"><input type="search" id="busca" placeholder="Buscar nº do pedido, cliente, código, sistema ou nota…" value="${esc(ST.busca)}">
       <select id="pcAno" style="width:auto"><option value="">Todos os anos</option>${anos.map(a => `<option ${ST.pcAno === a ? 'selected' : ''}>${a}</option>`).join('')}</select>
-      ${pode ? '<button class="btn" id="pcRel" title="Liga de novo cada pedido à empresa pelo código do CIGAM">Religar às empresas</button><button class="btn pri" id="pcImp">⤵ Importar do CIGAM</button>' : ''}</div>
+      ${pode ? '<button class="btn" id="pcRel" title="Liga de novo cada pedido à empresa pelo código">Religar às empresas</button><button class="btn pri" id="pcImp">⤵ Importar pedidos</button>' : ''}</div>
     <div class="chips" style="margin:2px 0 6px"><button class="chip ${!ST.pcSit ? 'on' : ''}" data-pcs="">Todas <span class="muted">${base.length.toLocaleString('pt-BR')}</span></button>${Object.entries(SIT_CIGAM).map(([k, [r]]) => n(x => x.situacao === k) ? `<button class="chip ${ST.pcSit === k ? 'on' : ''}" data-pcs="${k}">${r} <span class="muted">${n(x => x.situacao === k).toLocaleString('pt-BR')}</span></button>` : '').join('')}</div>
     <div class="chips" style="margin:0 0 12px"><button class="chip ${!ST.pcTipo ? 'on' : ''}" data-pct="">Todos os tipos</button>${Object.entries(TIPO_PED).map(([k, r]) => n(x => x.tipo === k) ? `<button class="chip ${ST.pcTipo === k ? 'on' : ''}" data-pct="${k}">${r} <span class="muted">${n(x => x.tipo === k).toLocaleString('pt-BR')}</span></button>` : '').join('')}</div>
-    ${!todos.length ? `<div class="vazio">Nenhum pedido importado ainda.${pode ? ' Use “Importar do CIGAM”.' : ''}</div>` : `
+    ${!todos.length ? `<div class="vazio">Nenhum pedido importado ainda.${pode ? ' Use “Importar pedidos”.' : ''}</div>` : `
     <p class="muted" style="font-size:13px;margin:0 0 8px">${l.length.toLocaleString('pt-BR')} pedido(s) · total ${R$(soma)}</p>
     <div style="overflow:auto"><table class="reg"><thead><tr><th>Pedido</th><th>Data</th><th>Cliente · sistema</th><th>Tipo</th><th>Situação</th><th style="text-align:right">Total</th></tr></thead><tbody>
     ${l.slice(0, MAX).map(x => `<tr data-pc="${x.numero}" style="cursor:pointer"><td><b>${x.numero}</b>${x.unidade === '2' ? ' <span class="muted" style="font-size:11px">UN 2</span>' : ''}</td><td>${dataBR(x.data_pedido)}</td>
@@ -8284,7 +8284,7 @@ async function telaPedCigam(){
       <td>${TIPO_PED[x.tipo] || ''}</td><td>${tagSitCigam(x.situacao)}${x.nota_fiscal ? `<div class="muted" style="font-size:11px">NF ${esc(x.nota_fiscal)}</div>` : ''}</td><td style="text-align:right;white-space:nowrap">${R$(x.total)}</td></tr>`).join('')}
     </tbody></table></div>
     ${l.length > MAX ? `<p class="muted" style="font-size:12px">Mostrando ${MAX} de ${l.length.toLocaleString('pt-BR')} — use a busca, o ano ou os filtros. (O Relatório e o Excel saem com todos.)</p>` : ''}`}</div>`;
-  expRegistra(() => [expCols('Pedidos do CIGAM', [['Pedido', x => x.numero], ['Data', x => dataBR(x.data_pedido)], ['Cliente', nomeCli], ['Código CIGAM', x => x.cliente_codigo], ['Sistema', x => x.sistema], ['Tipo', x => TIPO_PED[x.tipo] || x.tipo],
+  expRegistra(() => [expCols('Pedidos', [['Pedido', x => x.numero], ['Data', x => dataBR(x.data_pedido)], ['Cliente', nomeCli], ['Código', x => x.cliente_codigo], ['Sistema', x => x.sistema], ['Tipo', x => TIPO_PED[x.tipo] || x.tipo],
     ['Situação', x => (SIT_CIGAM[x.situacao] || [x.situacao])[0]], ['Nota fiscal', x => x.nota_fiscal], ['Unidade', x => x.unidade], ['Total', x => R$(x.total)]], l, [['Total', '', '', '', '', '', '', '', '', R$(soma)]])]);
   let t; $('#busca').oninput = e => { clearTimeout(t); t = setTimeout(() => { ST.busca = e.target.value; telaPedCigam().then(() => { const i = $('#busca'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 250); };
   $('#pcAno').onchange = e => { ST.pcAno = e.target.value; telaPedCigam(); };
@@ -8306,11 +8306,11 @@ async function verPedCigam(numero){
     </tbody></table></div>`;
   const pe = pessoa(x.pessoa_id), pg = pessoa(x.pagador_id);
   const lin = (rot, val) => val || val === 0 ? `<div class="campo"><span>${rot}</span><b style="color:var(--preto);font-weight:500">${val}</b></div>` : '';
-  abrirPainel(`<div class="cab"><h2>Pedido ${x.numero} <span class="muted" style="font-weight:400">· CIGAM</span></h2>${tagSitCigam(x.situacao)}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+  abrirPainel(`<div class="cab"><h2>Pedido ${x.numero}</h2>${tagSitCigam(x.situacao)}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><div class="grade">
       <div class="campo largo"><span>Cliente</span><b style="color:var(--preto);font-size:15px">${esc(pe ? pe.nome : x.cliente_nome || '')}</b>
-        <span>CIGAM ${esc(x.cliente_codigo || '')}${pe && pe.apelido ? ' · ' + esc(pe.apelido) : ''}${pe ? ` · <a href="#" id="pcEmp">abrir a empresa</a>` : ' · empresa não está no cadastro'}</span></div>
-      ${lin('Cobrar de', x.cobranca_codigo && x.cobranca_codigo !== x.cliente_codigo ? esc((pg ? pg.nome : '') + ' (CIGAM ' + x.cobranca_codigo + ')') : '')}
+        <span>cód. ${esc(x.cliente_codigo || '')}${pe && pe.apelido ? ' · ' + esc(pe.apelido) : ''}${pe ? ` · <a href="#" id="pcEmp">abrir a empresa</a>` : ' · empresa não está no cadastro'}</span></div>
+      ${lin('Cobrar de', x.cobranca_codigo && x.cobranca_codigo !== x.cliente_codigo ? esc((pg ? pg.nome : '') + ' (cód. ' + x.cobranca_codigo + ')') : '')}
       ${x.conferir ? `<div class="campo largo"><span style="color:var(--amar)">⚠ Conferir</span><b style="color:var(--preto);font-weight:500">${esc(x.conferir)}</b></div>` : ''}
       ${lin(proj ? 'Referência' : 'Título do pedido', esc(x.titulo || ''))}${lin('Contato (Att.)', esc(x.contato || ''))}
       ${lin('Sistema / observação', esc(x.sistema || ''))}${lin('Tipo', TIPO_PED[x.tipo])}${lin('Unidade de negócio', esc(x.unidade || ''))}
@@ -8318,7 +8318,7 @@ async function verPedCigam(numero){
       ${lin('Validade', dataBR(x.data_validade))}${lin('Prazo de entrega', dataBR(x.prazo_entrega))}${lin('Faturado em', dataBR(x.data_faturado))}
       ${lin('Nota fiscal', esc(x.nota_fiscal || ''))}${lin('Tipo de operação', esc(x.tipo_operacao || ''))}${lin('Conta', esc(x.conta || ''))}
       ${lin('Itens no pedido', x.itens)}${lin('Mercadoria', R$(x.total_mercadoria))}${Number(x.desconto) ? lin('Desconto', R$(x.desconto) + (Number(x.perc_desconto) ? ` (${String(x.perc_desconto).replace('.', ',')}%)` : '')) : ''}
-      ${Number(x.frete) ? lin('Frete', R$(x.frete)) : ''}${lin('Total do pedido', `<span style="color:var(--verm);font-weight:700">${R$(x.total)}</span>`)}${lin('Total para faturar (CIGAM)', R$(x.total_faturado))}
+      ${Number(x.frete) ? lin('Frete', R$(x.frete)) : ''}${lin('Total do pedido', `<span style="color:var(--verm);font-weight:700">${R$(x.total)}</span>`)}${lin('Total para faturar', R$(x.total_faturado))}
       ${Number(x.valor_icms) ? lin('ICMS', R$(x.valor_icms)) : ''}${Number(x.valor_iss) ? lin('ISS', R$(x.valor_iss)) : ''}
       ${lin('Condição de pagamento', esc([x.condicao_codigo, x.condicao_descricao].filter(Boolean).join(' · ')))}${x.condicao_texto && x.condicao_texto !== x.condicao_descricao ? lin('Condição (no documento)', esc(x.condicao_texto)) : ''}
       ${lin(proj ? 'Endereço da obra' : 'Local de entrega', esc(x.local_entrega || ''))}${lin('Endereço de cobrança', esc(x.cobranca_endereco || ''))}${lin('Praça de pagamento', esc(x.praca_pagamento || ''))}
@@ -8328,7 +8328,7 @@ async function verPedCigam(numero){
       ${x.nao_incluso ? `<div class="campo largo"><span>Não está incluso</span><div style="white-space:pre-wrap;color:var(--preto)">${esc(x.nao_incluso)}</div></div>` : ''}
       ${lin('Criado por', esc([x.usuario_criacao, x.usuario_modificacao && x.usuario_modificacao !== x.usuario_criacao ? 'alterado por ' + x.usuario_modificacao : ''].filter(Boolean).join(' · ')))}
       ${x.observacao ? `<div class="campo largo"><span>Observação</span><div style="white-space:pre-wrap;color:var(--preto)">${esc(x.observacao)}</div></div>` : ''}
-    </div>${tabItens || '<p class="muted" style="font-size:12px;margin-top:12px">Consulta do CIGAM — os itens deste pedido ainda não foram lidos (sem PDF encontrado).</p>'}
+    </div>${tabItens || '<p class="muted" style="font-size:12px;margin-top:12px">Os itens deste pedido ainda não foram lidos (sem PDF encontrado).</p>'}
     ${x.pdf_arquivo ? `<p class="muted" style="font-size:11px;margin-top:8px">Documento: ${esc(x.pdf_arquivo)}</p>` : ''}</div>
     <div class="rodape" id="pcRod"></div>`);
   sb.from('orcamentos').select('id,etapa,total').eq('pedido_cigam', numero).maybeSingle().then(o => { if(o.error || !$('#pcRod')) return;
@@ -8336,8 +8336,8 @@ async function verPedCigam(numero){
     else if(typeof podeOrc !== 'function' || podeOrc(x.tipo || 'equipamento')) $('#pcRod').innerHTML = '<button class="btn pri" id="pcTrazer">↪ Trazer para o ERP</button>';
     if($('#pcAbrir')) $('#pcAbrir').onclick = () => { fecharPainel(); formOrc(o.data.id); };
     if($('#pcTrazer')) $('#pcTrazer').onclick = async () => {
-      const pr = modal('Trazer o pedido ' + numero + ' para o ERP', `<p style="margin-top:0">O ERP cria o orçamento <b>nº ${numero}</b> (mesmo número do CIGAM) com o cliente, a condição de pagamento, o tipo de operação, as datas, o desconto e o frete deste pedido.</p>
-        <p>Depois é só escolher os itens no catálogo (o ERP mostra o total do CIGAM para comparar) e, se o cliente já fechou, <b>aprovar</b> como qualquer orçamento: ${x.tipo === 'projeto' ? 'nasce a proposta em Projetos, com as tarefas em "Fechados pelo cliente" e as parcelas' : x.tipo === 'servico' ? 'nasce a atividade na Agenda' : 'nascem os pedidos por sistema, as parcelas e a ida para Compras'}.</p>
+      const pr = modal('Trazer o pedido ' + numero + ' para o ERP', `<p style="margin-top:0">O ERP cria o orçamento <b>nº ${numero}</b> (mesmo número do pedido) com o cliente, a condição de pagamento, o tipo de operação, as datas, o desconto e o frete deste pedido.</p>
+        <p>Depois é só escolher os itens no catálogo (o ERP mostra o total do pedido para comparar) e, se o cliente já fechou, <b>aprovar</b> como qualquer orçamento: ${x.tipo === 'projeto' ? 'nasce a proposta em Projetos, com as tarefas em "Fechados pelo cliente" e as parcelas' : x.tipo === 'servico' ? 'nasce a atividade na Agenda' : 'nascem os pedidos por sistema, as parcelas e a ida para Compras'}.</p>
         <p class="muted" style="font-size:12px">Se este trabalho já foi trazido dos apps antigos para o ERP, não aprove de novo para não duplicar.</p>`, [['Cancelar', false], ['Trazer', true, 'pri']]);
       if(!await pr) return;
       const r = await sb.rpc('cigam_trazer_pedido', { p_numero: numero }); if(r.error) return aviso('Não foi possível trazer', esc(erroBanco(r.error)));
@@ -8355,10 +8355,10 @@ async function pedidosCigamDaEmpresa(pid){
   const m = new Map(); [...(a.data || []), ...(b.data || [])].forEach(x => m.set(x.numero, x)); const l = [...m.values()].sort((x, y) => y.numero - x.numero);
   if(!l.length) return;
   const fat = l.filter(x => ['L','F'].includes(x.situacao)).reduce((s, x) => s + Number(x.total || 0), 0);
-  box.innerHTML = `<details style="margin-top:14px"><summary style="cursor:pointer"><b>Pedidos no CIGAM (${l.length})</b> <span class="muted">· liberados/faturados ${R$(fat)}</span></summary>
+  box.innerHTML = `<details style="margin-top:14px"><summary style="cursor:pointer"><b>Pedidos (${l.length})</b> <span class="muted">· liberados/faturados ${R$(fat)}</span></summary>
     <table class="reg" style="margin-top:8px"><thead><tr><th>Pedido</th><th>Data</th><th>Sistema</th><th>Situação</th><th style="text-align:right">Total</th></tr></thead><tbody>
     ${l.slice(0, 100).map(x => `<tr data-pce="${x.numero}" style="cursor:pointer"><td>${x.numero}</td><td>${dataBR(x.data_pedido)}</td><td>${esc(x.sistema || '')}</td><td>${tagSitCigam(x.situacao)}</td><td style="text-align:right;white-space:nowrap">${R$(x.total)}</td></tr>`).join('')}
-    </tbody></table>${l.length > 100 ? `<p class="muted" style="font-size:12px">Mostrando 100 de ${l.length}. Veja todos em Orçamentos → Pedidos do CIGAM.</p>` : ''}</details>`;
+    </tbody></table>${l.length > 100 ? `<p class="muted" style="font-size:12px">Mostrando 100 de ${l.length}. Veja todos em Vendas → Pedidos.</p>` : ''}</details>`;
   box.querySelectorAll('[data-pce]').forEach(x => x.onclick = () => verPedCigam(+x.dataset.pce));
 }
 
@@ -8373,9 +8373,9 @@ Object.assign(TELAS, { ped_cigam: telaPedCigam });
     const dif = Number(o.data.total || 0) - Number(x.total || 0), ok = Math.abs(dif) < 0.01;
     const box = document.createElement('div'); box.className = 'card'; box.id = 'ocCigam';
     box.style.cssText = `font-size:13px;background:${ok ? '#f0fdf4' : '#fff7ed'};border-color:${ok ? '#16a34a55' : '#f59e0b55'}`;
-    box.innerHTML = `<b>Trazido do CIGAM</b> · pedido ${o.data.pedido_cigam} ${tagSitCigam(x.situacao)} · total no CIGAM <b>${R$(x.total)}</b>${x.itens ? ` (${x.itens} itens)` : ''} · itens escolhidos aqui <b>${R$(o.data.total)}</b>
+    box.innerHTML = `<b>Trazido do pedido</b> · pedido ${o.data.pedido_cigam} ${tagSitCigam(x.situacao)} · total do pedido <b>${R$(x.total)}</b>${x.itens ? ` (${x.itens} itens)` : ''} · itens escolhidos aqui <b>${R$(o.data.total)}</b>
       ${ok ? ' <span class="tag ok">confere</span>' : ` <span class="tag" style="background:#fef3c7;color:#b45309">diferença ${dif > 0 ? '+' : '−'}${R$(Math.abs(dif))}</span>`}
-      ${['elaboracao','enviado'].includes(o.data.etapa) && ['A','L','F'].includes(x.situacao) ? '<div class="muted" style="margin-top:4px">O cliente já fechou no CIGAM: depois de escolher os itens, use "Cliente aprovou".</div>' : ''}`;
+      ${['elaboracao','enviado'].includes(o.data.etapa) && ['A','L','F'].includes(x.situacao) ? '<div class="muted" style="margin-top:4px">O cliente já fechou este pedido: depois de escolher os itens, use "Cliente aprovou".</div>' : ''}`;
     const cab = document.querySelector('#folha .cab'); if(cab && !$('#ocCigam')) cab.after(box);
     return r; };
 })();
@@ -8392,14 +8392,14 @@ Object.assign(TELAS, { ped_cigam: telaPedCigam });
    nº de série, reclamado, solução), serviços executados (técnico, data e horário, valor) e materiais. Só consulta. */
 IC.os_cigam = '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>';
 // 19/11 (Júlio): grupo lateral "Serviços" no Administrativo, com as ordens de serviço (antes de Suprimentos)
-(() => { const i = MENU.findIndex(x => x.area === 'Suprimentos'); MENU.splice(i < 0 ? MENU.length : i, 0, { area: 'Serviços', itens: [['os_cigam', '🧾', 'Ordens de serviço (CIGAM)', 'DAS']] }); })();
+(() => { const i = MENU.findIndex(x => x.area === 'Suprimentos'); MENU.splice(i < 0 ? MENU.length : i, 0, { area: 'Serviços', itens: [['os_cigam', '🧾', 'Ordens de serviço', 'DAS']] }); })();
 ST.osc = { ano: '', serie: '' };
 let _oscCache = null;
 async function telaOSCigam(){
   carregandoTela();
   const seq = ST._oscSeq = (ST._oscSeq || 0) + 1, f = ST.osc;
   if(!_oscCache){ const r = await tudo(() => sb.from('os_cigam').select('numero,situacao,data,cliente_nome,pessoa_id,responsavel,total,conferir').order('numero', { ascending: false }));
-    if(r.error) return $('#conteudo').innerHTML = '<div class="card"><h2>OS do CIGAM</h2><p>Rode o script 79_os_cigam.sql no Supabase.</p></div>';
+    if(r.error) return $('#conteudo').innerHTML = '<div class="card"><h2>Ordens de serviço</h2><p>Rode o script 79_os_cigam.sql no Supabase.</p></div>';
     _oscCache = r.data || []; }
   let porSerie = null;
   if(f.serie.trim().length >= 3){ const r = await sb.from('os_cigam_itens').select('os_numero').ilike('serie', '%' + f.serie.trim() + '%').limit(500); porSerie = new Set((r.data || []).map(x => x.os_numero)); }
@@ -8409,7 +8409,7 @@ async function telaOSCigam(){
   const l = _oscCache.filter(o => (!f.ano || String(o.data || '').startsWith(f.ano)) && (!porSerie || porSerie.has(o.numero))
     && (!q || norm([o.numero, o.cliente_nome, nome(o), o.responsavel].join(' ')).temTudo(q)));
   const MAX = 300, soma = l.reduce((s, o) => s + Number(o.total || 0), 0);
-  $('#conteudo').innerHTML = `<div class="card"><h2>Ordens de serviço (CIGAM) <span class="muted" style="font-weight:400">· ordens de serviço lidas dos PDFs do CIGAM</span></h2>${barraBusca()}
+  $('#conteudo').innerHTML = `<div class="card"><h2>Ordens de serviço <span class="muted" style="font-weight:400">· cliente, itens, serviços executados e materiais de cada OS</span></h2>${barraBusca()}
     <div class="chips" style="margin:-4px 0 10px;align-items:center"><select id="oscAno" style="max-width:130px"><option value="">Todos os anos</option>${anos.map(a => `<option ${f.ano === a ? 'selected' : ''}>${a}</option>`).join('')}</select>
       <input id="oscSerie" placeholder="Nº de série do equipamento" value="${esc(f.serie)}" style="max-width:230px">
       <span class="muted" style="font-size:12px;margin-left:auto">${l.length.toLocaleString('pt-BR')} OS · ${R$(soma)}</span></div>
@@ -8422,7 +8422,7 @@ async function telaOSCigam(){
   $('#oscAno').onchange = e => { f.ano = e.target.value; telaOSCigam(); };
   let t; $('#oscSerie').oninput = e => { clearTimeout(t); t = setTimeout(() => { f.serie = e.target.value; telaOSCigam().then(() => { const i = $('#oscSerie'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 400); };
   document.querySelectorAll('[data-osc]').forEach(tr => tr.onclick = () => verOSCigam(+tr.dataset.osc));
-  expRegistra(() => [expCols('OS do CIGAM', [['OS', o => o.numero], ['Data', o => dataBR(o.data)], ['Cliente', nome], ['Responsável', o => o.responsavel], ['Situação', o => o.situacao], ['Total', o => Number(o.total || 0)], ['Conferir', o => o.conferir]], l)]);
+  expRegistra(() => [expCols('Ordens de serviço', [['OS', o => o.numero], ['Data', o => dataBR(o.data)], ['Cliente', nome], ['Responsável', o => o.responsavel], ['Situação', o => o.situacao], ['Total', o => Number(o.total || 0)], ['Conferir', o => o.conferir]], l)]);
 }
 async function verOSCigam(numero){
   const [o, it, sv, mt] = await Promise.all([sb.from('os_cigam').select('*').eq('numero', numero).maybeSingle(), sb.from('os_cigam_itens').select('*').eq('os_numero', numero).order('item'),
@@ -8440,8 +8440,8 @@ async function verOSCigam(numero){
         ${S.map(s => `<tr><td>${esc(s.atividade || '')}</td><td>${esc(s.tecnico || '')}</td><td>${dia(s.inicio)}</td><td>${hora(s.inicio)}–${hora(s.fim)}</td><td style="text-align:right">${R$(s.total || 0)}</td><td>${s.faturar ? 'sim' : 'não'}</td></tr>`).join('')}</tbody></table></div>` : ''}
       ${M.length ? `<h4 style="margin:12px 0 4px;font-size:13px">Materiais utilizados</h4><div style="overflow-x:auto"><table class="reg"><thead><tr><th>Código</th><th>Material</th><th style="text-align:right">Quant.</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>
         ${M.map(m => `<tr><td>${esc(m.codigo || '')}</td><td>${esc(m.descricao || '')}</td><td style="text-align:right">${Number(m.quantidade || 0).toLocaleString('pt-BR')}</td><td style="text-align:right">${R$(m.valor_unitario || 0)}</td><td style="text-align:right">${R$(m.total || 0)}</td></tr>`).join('')}</tbody></table></div>` : ''}
-      ${i.fonte === 'cigam' && !Number(i.total) ? '<p class="muted" style="margin:8px 0 0;font-size:12px">Item trazido da lista do CIGAM (sem os valores).</p>' : ''}<p style="text-align:right;margin:8px 0 0;font-size:13px${i.fonte === 'cigam' && !Number(i.total) ? ';display:none' : ''}">Peças ${R$(i.total_pecas || 0)} · Mão de obra ${R$(i.total_mao_obra || 0)}${Number(i.desconto) ? ' · Desconto ' + R$(i.desconto) : ''} · <b>Total do item ${R$(i.total || 0)}</b></p></div>`; }).join('');
-  abrirPainel(`<div class="cab"><h2>OS ${O.numero} <span class="muted" style="font-weight:400">· CIGAM</span></h2><span class="tag">${esc(O.situacao || '')}</span><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+      ${i.fonte === 'cigam' && !Number(i.total) ? '<p class="muted" style="margin:8px 0 0;font-size:12px">Item sem os valores (veio só da lista de OS).</p>' : ''}<p style="text-align:right;margin:8px 0 0;font-size:13px${i.fonte === 'cigam' && !Number(i.total) ? ';display:none' : ''}">Peças ${R$(i.total_pecas || 0)} · Mão de obra ${R$(i.total_mao_obra || 0)}${Number(i.desconto) ? ' · Desconto ' + R$(i.desconto) : ''} · <b>Total do item ${R$(i.total || 0)}</b></p></div>`; }).join('');
+  abrirPainel(`<div class="cab"><h2>OS ${O.numero}</h2><span class="tag">${esc(O.situacao || '')}</span><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><div class="grade">
       <div class="campo largo"><span>Cliente</span><b style="font-size:15px">${esc(pe ? pe.nome : O.cliente_nome || '')}</b><span>${pe ? `<a href="#" id="oscEmp">abrir a empresa</a>` : 'não ligado ao cadastro'}${pe && O.cliente_nome && norm(O.cliente_nome) !== norm(pe.nome) ? ' · na OS: ' + esc(O.cliente_nome) : ''}</span></div>
       ${lin('Data', dataBR(O.data))}${lin('Responsável', esc(O.responsavel || ''))}${lin('Endereço', esc(O.endereco || ''))}${lin('Telefone', esc(O.telefone || ''))}
@@ -8476,10 +8476,10 @@ async function telaCigamLanc(){
     f.emp ? null : filtra(sb.from('cigam_lancamentos').select('lancamento', { count: 'exact', head: true })).eq('empresa', 'Equiper') ]);
   const porEmp = f.emp ? { [f.emp]: cnt.count || 0 } : { Equiper: cntEq?.count || 0, EQP: (cnt.count || 0) - (cntEq?.count || 0) };
   if(seq !== ST._clSeq || ST.lancVis !== 'cigam') return;   // já pediram outra busca
-  if(r.error) return $('#conteudo').innerHTML = '<div class="card"><h2>Lançamentos do CIGAM</h2><p>Rode o script 55_cigam_lancamentos.sql no Supabase.</p></div>';
+  if(r.error) return $('#conteudo').innerHTML = '<div class="card"><h2>Lançamentos anteriores</h2><p>Rode o script 55_cigam_lancamentos.sql no Supabase.</p></div>';
   const l = r.data || [], total = cnt.count || 0;
   const ent = l.filter(x => x.tipo === 'Entrada').reduce((s, x) => s + Number(x.valor), 0), sai = l.filter(x => x.tipo === 'Saída').reduce((s, x) => s + Number(x.valor), 0);
-  $('#conteudo').innerHTML = `${abasLanc()}<div class="card"><h2>Lançamentos do CIGAM <span class="muted" style="font-weight:400">· histórico financeiro da Equiper e da EQP, só consulta</span></h2>
+  $('#conteudo').innerHTML = `${abasLanc()}<div class="card"><h2>Lançamentos anteriores <span class="muted" style="font-weight:400">· Equiper e EQP, só consulta</span></h2>
     <div class="barra" style="flex-wrap:wrap">
       <input type="search" id="busca" placeholder="Nome, histórico, conta… ou nº do lançamento / NF / pedido" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <select id="clEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper','EQP'].map(e => `<option ${f.emp === e ? 'selected' : ''}>${e}</option>`).join('')}</select>
@@ -8487,17 +8487,17 @@ async function telaCigamLanc(){
       <select id="clSit" style="max-width:170px"><option value="">Toda situação</option>${['Aberto','Liquidado','Vale/Adiantamento','Juros/Multa','Transferência','Bonif/Desc/Tarifa','Saldo Inicial'].map(s => `<option ${f.sit === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
       <label class="muted" style="font-size:12px">de <input type="date" id="clDe" value="${f.de}" style="width:auto"></label><label class="muted" style="font-size:12px">até <input type="date" id="clAte" value="${f.ate}" style="width:auto"></label>
       ${f.pessoa ? `<span class="tag" style="padding:6px 10px">Empresa: ${esc(pessoa(f.pessoa)?.nome || '')} <a href="#" id="clTiraP" title="Ver todas">✕</a></span>` : ''}
-      ${nivelTela('fn_cigam_lanc') === 4 ? '<button class="btn" id="clImp">📥 Importar relatório do CIGAM</button>' : ''}</div>
+      ${nivelTela('fn_cigam_lanc') === 4 ? '<button class="btn" id="clImp">📥 Importar relatório</button>' : ''}</div>
     <p class="muted" style="font-size:12px;margin:4px 0 8px">${total.toLocaleString('pt-BR')} lançamento(s) com estes filtros: ${Object.entries(porEmp).filter(([, n]) => n).map(([e, n]) => `${tagEmp(e)} ${n.toLocaleString('pt-BR')}`).join(' · ') || '—'}${total > por ? ` · mostrando ${f.pagina * por + 1} a ${Math.min(total, (f.pagina + 1) * por)}` : ''} · nesta página: entradas <b style="color:var(--verde)">${R$(ent)}</b> · saídas <b style="color:var(--verm)">${R$(-sai)}</b></p>
     <div style="overflow:auto"><table class="reg"><thead><tr><th>Empresa</th><th>Lanç.</th><th>Data</th><th>Empresa / cliente / fornecedor</th><th>Histórico</th><th>Conta</th><th>Doc.</th><th>Venc.</th><th style="text-align:right">Valor</th><th>Situação</th><th>Portador</th></tr></thead><tbody>
     ${l.map(x => `<tr data-cl="${x.lancamento}" style="cursor:pointer"><td>${tagEmp(x.empresa)}</td><td><b>${x.lancamento}</b></td><td>${dataBR(x.data)}</td>
-      <td>${x.pessoa_id ? `<a href="#" data-clp="${x.pessoa_id}">${esc(x.cliente_nome || '')}</a>` : esc(x.cliente_nome || '')}<div class="muted" style="font-size:11px">CIGAM ${esc(x.cliente_codigo || '')}</div></td>
+      <td>${x.pessoa_id ? `<a href="#" data-clp="${x.pessoa_id}">${esc(x.cliente_nome || '')}</a>` : esc(x.cliente_nome || '')}<div class="muted" style="font-size:11px">cód. ${esc(x.cliente_codigo || '')}</div></td>
       <td style="font-size:12px">${esc(x.historico || '')}<div class="muted">${esc(x.tipo || '')}</div></td><td style="font-size:12px">${esc(x.conta || '')}<div class="muted">${esc(x.conta_nome || '')}</div></td>
       <td style="font-size:12px">${[x.nf && x.nf !== '0' ? 'NF ' + esc(x.nf) + (x.parcela ? '/' + esc(x.parcela) : '') : '', x.documento && x.documento !== '0' ? (x.tipo_documento === 'Ordem' ? 'OC ' : x.tipo_documento === 'Pedido' ? 'Ped. ' : 'Doc. ') + esc(x.documento) : ''].filter(Boolean).join('<br>')}</td>
       <td style="font-size:12px">${x.vencimento ? dataBR(x.vencimento) : '—'}</td>
       <td style="text-align:right;white-space:nowrap;color:${clCor(x.valor)}">${R$(x.valor)}${x.situacao === 'Aberto' && Number(x.saldo) !== Number(x.valor) ? `<div class="muted" style="font-size:11px">saldo ${R$(x.saldo)}</div>` : ''}</td>
       <td style="font-size:12px">${x.situacao === 'Aberto' ? '<span class="tag" style="background:#fef3c7;color:#b45309">aberto</span>' : esc(x.situacao || '')}${x.previsao ? '<div class="muted">previsão</div>' : ''}</td>
-      <td style="font-size:12px">${esc(x.portador_nome || '')}</td></tr>`).join('') || '<tr><td colspan="11" class="vazio">Nada com estes filtros. Se ainda não importou, use "Importar relatório do CIGAM".</td></tr>'}</tbody></table></div>
+      <td style="font-size:12px">${esc(x.portador_nome || '')}</td></tr>`).join('') || '<tr><td colspan="11" class="vazio">Nada com estes filtros. Se ainda não importou, use "Importar relatório".</td></tr>'}</tbody></table></div>
     ${total > por ? `<div style="display:flex;gap:8px;justify-content:center;margin-top:10px"><button class="btn peq" id="clAnt" ${f.pagina ? '' : 'disabled'}>◀ Anteriores</button><button class="btn peq" id="clProx" ${(f.pagina + 1) * por < total ? '' : 'disabled'}>Próximos ▶</button></div>` : ''}</div>`;
   ligaBarra(null); ligaAbasLanc();
   const muda = (k, v) => { f[k] = v; f.pagina = 0; telaCigamLanc(); };
@@ -8515,9 +8515,9 @@ async function verLancCigam(n){
   const x = r.data;
   const lig = await sb.from('cigam_lancamentos').select('lancamento,data,tipo,situacao,valor,historico').or(`vinculado.eq.${n}${x.vinculado ? ',lancamento.eq.' + x.vinculado : ''}`).neq('lancamento', n).order('data');
   const C = (r, v) => v || v === 0 ? `<div class="campo"><span>${r}</span><b>${v}</b></div>` : '';
-  abrirPainel(`<div class="cab"><h2>Lançamento ${n} · CIGAM</h2>${tagEmp(x.empresa)}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+  abrirPainel(`<div class="cab"><h2>Lançamento ${n}</h2>${tagEmp(x.empresa)}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><div class="grade">
-      <div class="campo largo"><span>Empresa / cliente / fornecedor</span><b>${esc(x.cliente_nome || '')}</b><small class="muted">CIGAM ${esc(x.cliente_codigo || '')}${x.documento_pessoa ? ' · ' + fmtDoc(x.documento_pessoa) : ''}${x.pessoa_id ? ` · <a href="#" id="clAbreP">abrir a empresa</a>` : ' · não ligada a uma empresa do ERP'}</small></div>
+      <div class="campo largo"><span>Empresa / cliente / fornecedor</span><b>${esc(x.cliente_nome || '')}</b><small class="muted">cód. ${esc(x.cliente_codigo || '')}${x.documento_pessoa ? ' · ' + fmtDoc(x.documento_pessoa) : ''}${x.pessoa_id ? ` · <a href="#" id="clAbreP">abrir a empresa</a>` : ' · não ligada a uma empresa do ERP'}</small></div>
       ${C('Tipo', esc(x.tipo))}${C('Situação', esc(x.situacao) + (x.previsao ? ' (previsão)' : ''))}
       ${C('Data', dataBR(x.data))}${C('Vencimento', x.vencimento ? dataBR(x.vencimento) : '—')}${C('Emissão', x.emissao ? dataBR(x.emissao) : '')}
       ${C('Valor', `<span style="color:${clCor(x.valor)}">${R$(x.valor)}</span>`)}${C('Saldo', R$(x.saldo))}
@@ -8535,7 +8535,7 @@ async function verLancCigam(n){
       ${C('Incluído', esc([x.usuario_criacao ? 'por ' + x.usuario_criacao : '', x.data_inclusao ? 'em ' + dataBR(x.data_inclusao) : ''].filter(Boolean).join(' ')))}
       ${C('Alterado', esc([x.usuario_modificacao ? 'por ' + x.usuario_modificacao : '', x.data_modificacao ? 'em ' + dataBR(x.data_modificacao) : ''].filter(Boolean).join(' ')))}</div></div>
     ${(lig.data || []).length ? `<div class="card"><h2 style="font-size:15px">Lançamentos ligados</h2>${lig.data.map(y => `<div style="font-size:13px;padding:4px 0;border-bottom:1px solid var(--borda);cursor:pointer" data-cl2="${y.lancamento}"><b>${y.lancamento}</b> · ${dataBR(y.data)} · ${esc(y.tipo)} · ${esc(y.situacao)} · <span style="color:${clCor(y.valor)}">${R$(y.valor)}</span> · ${esc(y.historico || '')}</div>`).join('')}</div>` : ''}
-    <p class="muted" style="font-size:12px">Histórico importado do CIGAM — só consulta, não entra no Caixa nem na Cobrança do ERP.</p>`);
+    <p class="muted" style="font-size:12px">Lançamento anterior, importado — só consulta, não entra no Caixa nem na Cobrança do ERP.</p>`);
   if($('#clAbreP')) $('#clAbreP').onclick = e => { e.preventDefault(); formPessoa(pessoa(x.pessoa_id)); };
   if($('#clAbrePed')) $('#clAbrePed').onclick = e => { e.preventDefault(); verPedCigam(+x.documento); };
   if($('#clAbreCP')) $('#clAbreCP').onclick = e => { e.preventDefault(); verLancCigam(+x.contra_partida); };
@@ -8599,7 +8599,7 @@ async function importarLancCigam(){
       $('#clProg').textContent = 'Ligando às empresas do ERP…';
       const g = await sb.rpc('cigam_lanc_religar');
       $('#clProg').innerHTML = `✅ ${nov.toLocaleString('pt-BR')} novos · ${atu.toLocaleString('pt-BR')} atualizados` + (g.data ? ` · ligados às empresas: ${(g.data.pelo_codigo + g.data.pelo_documento).toLocaleString('pt-BR')} · sem empresa no ERP: ${Number(g.data.sem_empresa).toLocaleString('pt-BR')}` : '');
-      toast('Histórico do CIGAM importado.'); if(ST.aba === 'fn_pagar' && ST.lancVis !== 'erp') desenhar();
+      toast('Lançamentos importados.'); if(ST.aba === 'fn_pagar' && ST.lancVis !== 'erp') desenhar();
     };
   };
 }
@@ -8610,7 +8610,7 @@ async function lancCigamDaEmpresa(pid, alvo){
   const [s, l] = await Promise.all([ sb.rpc('cigam_lanc_resumo', { p_pessoa: pid }), sb.from('cigam_lancamentos').select('lancamento,data,tipo,situacao,valor,historico,nf,documento,empresa').eq('pessoa_id', pid).order('data', { ascending: false }).limit(15) ]);
   if(s.error || !s.data || !s.data[0] || !Number(s.data[0].linhas)) return;
   const t = s.data[0];
-  alvo.innerHTML = `<div class="secao-sens"><h3>Financeiro no CIGAM <span class="muted" style="font-weight:400;font-size:12px">· ${Number(t.linhas).toLocaleString('pt-BR')} lançamento(s), histórico</span></h3>
+  alvo.innerHTML = `<div class="secao-sens"><h3>Financeiro · lançamentos anteriores <span class="muted" style="font-weight:400;font-size:12px">· ${Number(t.linhas).toLocaleString('pt-BR')} lançamento(s), histórico</span></h3>
     <div style="font-size:13px;margin-bottom:6px">Entradas <b style="color:var(--verde)">${R$(t.entradas)}</b> · Saídas <b style="color:var(--verm)">${R$(t.saidas)}</b>${Number(t.a_pagar) ? ` · A pagar em aberto ${R$(t.a_pagar)}` : ''}</div>
     ${(l.data || []).map(x => `<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--borda);cursor:pointer" data-clf="${x.lancamento}">${dataBR(x.data)} · ${esc(x.empresa || '')} · ${esc(x.historico || x.tipo)} · <span style="color:${clCor(x.valor)}">${R$(x.valor)}</span> · ${esc(x.situacao || '')}</div>`).join('')}
     <button class="btn peq" type="button" id="clVerTodos" style="margin-top:6px">Ver todos</button></div>`;
@@ -8623,7 +8623,7 @@ function tagEmp(e){ return e ? `<span class="tagEmp ${e === 'EQP' ? 'eqp' : 'eqr
 const temCigamLanc = () => nivelTela('fn_cigam_lanc') >= 1;
 function abasLanc(){
   if(!temCigamLanc()) return '';
-  return `<div class="abasLanc">${[['erp', 'Novos (ERP)'], ['cigam', 'CIGAM (histórico)'], ['juntos', 'Juntos']].map(([k, r]) => `<button class="${ST.lancVis === k ? 'ativo' : ''}" data-lv="${k}">${r}</button>`).join('')}</div>`;
+  return `<div class="abasLanc">${[['erp', 'Lançamentos'], ['cigam', 'Anteriores'], ['juntos', 'Todos']].map(([k, r]) => `<button class="${ST.lancVis === k ? 'ativo' : ''}" data-lv="${k}">${r}</button>`).join('')}</div>`;
 }
 function ligaAbasLanc(){ document.querySelectorAll('[data-lv]').forEach(b => b.onclick = () => { if(ST.lancVis === b.dataset.lv) return; ST.lancVis = b.dataset.lv; ST.busca = ''; ST.cl.pessoa = ''; desenhar(); }); }
 (function(){ const orig = window.telaPagar; if(typeof orig !== 'function') return;
@@ -8657,17 +8657,17 @@ async function telaLancJuntos(){
         valor: Number(x.valor), sit: x.situacao, emp: x.empresa, pid: x.pessoa_id, doc: [x.nf && x.nf !== '0' ? 'NF ' + x.nf : '', x.documento && x.documento !== '0' ? (x.tipo_documento === 'Ordem' ? 'OC ' : x.tipo_documento === 'Pedido' ? 'Ped. ' : 'Doc. ') + x.documento : ''].filter(Boolean).join(' · ') }))]
     .sort((a, b2) => String(b2.data || '').localeCompare(String(a.data || '')) || (b2.n || 0) - (a.n || 0));
   const sai = L.filter(x => x.valor < 0).reduce((s, x) => s + x.valor, 0), ent = L.filter(x => x.valor > 0).reduce((s, x) => s + x.valor, 0);
-  $('#conteudo').innerHTML = `${abasLanc()}<div class="card"><h2>Lançamentos <span class="muted" style="font-weight:400">· novos do ERP e histórico do CIGAM juntos</span></h2>
+  $('#conteudo').innerHTML = `${abasLanc()}<div class="card"><h2>Lançamentos <span class="muted" style="font-weight:400">· todos os lançamentos, novos e anteriores</span></h2>
     <div class="barra" style="flex-wrap:wrap"><input type="search" id="busca" placeholder="Empresa, descrição… ou nº do lançamento / NF" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <select id="ljEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper','EQP'].map(x => `<option ${f.emp === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
-      <select id="ljTipo" style="max-width:240px"><option value="pagar" ${f.tipo === 'pagar' ? 'selected' : ''}>CIGAM: só saídas e contas a pagar</option><option value="tudo" ${f.tipo === 'tudo' ? 'selected' : ''}>CIGAM: tudo (entradas também)</option></select>
+      <select id="ljTipo" style="max-width:240px"><option value="pagar" ${f.tipo === 'pagar' ? 'selected' : ''}>Anteriores: só saídas e contas a pagar</option><option value="tudo" ${f.tipo === 'tudo' ? 'selected' : ''}>Anteriores: tudo (entradas também)</option></select>
       <select id="ljSit" style="max-width:150px"><option value="">Toda situação</option><option value="aberto" ${f.sit === 'aberto' ? 'selected' : ''}>Em aberto</option><option value="pago" ${f.sit === 'pago' ? 'selected' : ''}>Pagos / baixados</option></select>
       <label class="muted" style="font-size:12px">de <input type="date" id="ljDe" value="${f.de}" style="width:auto"></label><label class="muted" style="font-size:12px">até <input type="date" id="ljAte" value="${f.ate}" style="width:auto"></label></div>
     <p class="muted" style="font-size:12px;margin:4px 0 8px">${L.length.toLocaleString('pt-BR')} lançamento(s)${(e.data || []).length >= lim || (c.data || []).length >= lim ? ` (os ${lim} mais recentes de cada lado — use os filtros para achar os antigos)` : ''} · saídas <b style="color:var(--verm)">${R$(-sai)}</b>${ent ? ` · entradas <b style="color:var(--verde)">${R$(ent)}</b>` : ''}</p>
     <div class="ljEmp">${['Equiper', 'EQP', ''].map(e => { const M = L.filter(x => (x.emp || '') === e); if(!M.length) return ''; const sa = M.filter(x => x.valor < 0).reduce((s, x) => s + x.valor, 0), en = M.filter(x => x.valor > 0).reduce((s, x) => s + x.valor, 0);
       return `<div>${e ? tagEmp(e) : '<span class="tagEmp">sem empresa</span>'} <b>${M.length.toLocaleString('pt-BR')}</b> lançamento(s) · saídas <b style="color:var(--verm)">${R$(-sa)}</b>${en ? ` · entradas <b style="color:var(--verde)">${R$(en)}</b>` : ''}</div>`; }).join('')}</div>
     <div style="overflow:auto"><table class="reg"><thead><tr><th>Origem</th><th>Empresa</th><th>Lanç.</th><th>Data</th><th>Empresa / favorecido</th><th>Histórico</th><th>Doc.</th><th>Venc.</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>
-    ${L.map(x => `<tr data-lj="${x.o}|${x.id}" style="cursor:pointer"><td><span class="tag ${x.o === 'ERP' ? 'ok' : ''}">${x.o}</span></td><td>${tagEmp(x.emp)}</td><td>${x.n || '—'}</td><td>${dataBR(x.data)}</td>
+    ${L.map(x => `<tr data-lj="${x.o}|${x.id}" style="cursor:pointer"><td><span class="tag ${x.o === 'ERP' ? 'ok' : ''}">${x.o === 'ERP' ? 'novo' : 'anterior'}</span></td><td>${tagEmp(x.emp)}</td><td>${x.n || '—'}</td><td>${dataBR(x.data)}</td>
       <td>${esc(x.nome || '')}</td><td style="font-size:12px">${esc(x.hist || '')}</td><td style="font-size:12px">${esc(x.doc || '')}</td><td style="font-size:12px">${x.venc ? dataBR(x.venc) : '—'}</td>
       <td style="text-align:right;white-space:nowrap;color:${clCor(x.valor)}">${R$(x.valor)}</td><td style="font-size:12px">${x.sit === 'Aberto' ? '<span class="tag" style="background:#fef3c7;color:#b45309">aberto</span>' : esc(x.sit || '')}</td></tr>`).join('') || '<tr><td colspan="10" class="vazio">Nada com estes filtros.</td></tr>'}</tbody></table></div></div>`;
   ligaBarra(null); ligaAbasLanc();
@@ -8683,11 +8683,15 @@ async function telaLancJuntos(){
      es_mov_cigam   = Movimentos de estoque (histórico): abas Saldos (visão cigam_saldo_estoque) e Movimentos (cigam_movimentos)
    Nada aqui grava no banco. */
 IC.fs_notas_cigam = '<path d="M6 3h12v18l-2.4-1.4L13 21l-2.4-1.4L8.2 21 6 19.7z"/><path d="M9 8h6M9 11.5h6"/><path d="M9.5 15.5l1.5 1.5 3-3"/>';
+IC.fn_notas_entrada = '<path d="M6 3h12v18l-2.4-1.4L13 21l-2.4-1.4L8.2 21 6 19.7z"/><path d="M12 8v7M9 12l3 3 3-3"/>';
+IC.fn_notas_saida = '<path d="M6 3h12v18l-2.4-1.4L13 21l-2.4-1.4L8.2 21 6 19.7z"/><path d="M12 15V8M9 11l3-3 3 3"/>';
 IC.es_mov_cigam = '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/><path d="M8 5.2l8 4.6"/>';
 (() => { const poe = (area, depois, item) => { const g = MENU.find(x => x.area === area) || MENU[MENU.length - 1]; if(MENU.some(x => x.itens.some(i => i[0] === item[0]))) return;
     const i = g.itens.findIndex(x => x[0] === depois); g.itens.splice(i < 0 ? g.itens.length : i + 1, 0, item); };
-  poe('Financeiro', 'fn_notas', ['fs_notas_cigam', '🧾', 'Notas fiscais (histórico)', 'DA']);
-  poe('Suprimentos', 'sv_estoque', ['es_mov_cigam', '📦', 'Movimentos de estoque (histórico)', 'DAPS']); })();
+  poe('Financeiro', 'fn_notas', ['fs_notas_cigam', '🧾', 'Notas fiscais (entrada e saída)', 'DA']);
+  poe('Financeiro', 'fs_notas_cigam', ['fn_notas_entrada', '📥', 'Notas de entrada', 'DA']);
+  poe('Financeiro', 'fn_notas_entrada', ['fn_notas_saida', '📤', 'Notas de saída', 'DA']);
+  poe('Suprimentos', 'sv_estoque', ['es_mov_cigam', '📦', 'Estoque e movimentos', 'DAPS']); })();
 
 const ncLike = s => String(s).replace(/[,()"\\%*]/g, '_');                 // texto de busca dentro de .or()/.ilike() sem quebrar o filtro
 const ncEmpUn = u => Number(u) === 2 ? 'EQP' : Number(u) === 1 ? 'Equiper' : '';
@@ -8695,7 +8699,7 @@ const ncQtd = v => v === null || v === undefined || v === '' ? '' : Number(v).to
 const ncPreco = v => v === null || v === undefined || v === '' ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const ncTagTipo = t => t === 'saida' || t === 'S' ? '<span class="tag" style="background:#fee2e2;color:#b91c1c">saída</span>' : '<span class="tag" style="background:#dcfce7;color:#15803d">entrada</span>';
 const ncPessoaCod = c => { const k = String(c || '').trim(); return k ? (ST.pessoas || []).find(p => (p.codigos_cigam || []).includes(k)) : null; };
-const ncNomeCod = c => { const p = ncPessoaCod(c); return p ? `${esc(p.nome)} <span class="muted">(CIGAM ${esc(c)})</span>` : esc(c || ''); };
+const ncNomeCod = c => { const p = ncPessoaCod(c); return p ? `${esc(p.nome)} <span class="muted">(cód. ${esc(c)})</span>` : esc(c || ''); };
 const ncNumSerie = x => `${x.numero}${x.serie && String(x.serie).trim() ? ' / ' + esc(x.serie) : ''}`;
 const ncSemScript = t => `<div class="card"><h2>${t}</h2><p>Rode os scripts 83_cigam_tudo_campos.sql e 84_telas_cigam_notas.sql no Supabase.</p></div>`;
 
@@ -8704,6 +8708,10 @@ ST.nc = { tipo: '', emp: '', de: '', ate: '', pagina: 0, pessoa: '' };
 const NC_COLS = 'id,tipo,empresa,unidade,serie,numero,pessoa_id,pessoa_nome,pessoa_codigo,emissao,tipo_operacao,cfop,total_nf,pedido,itens';
 async function telaNotasCigam(){
   carregandoTela();
+  /* 25/11: Financeiro → Notas de entrada / Notas de saída são esta mesma tela, já presa no tipo */
+  const abaNC = ST.aba, preso = abaNC === 'fn_notas_entrada' ? 'entrada' : abaNC === 'fn_notas_saida' ? 'saida' : '', titNC = preso === 'entrada' ? 'Notas de entrada' : preso === 'saida' ? 'Notas de saída' : 'Notas fiscais';
+  if(ST._ncAba !== abaNC){ if(ST._ncAba && ST.nc) Object.assign(ST.nc, { pagina: 0, pessoa: preso ? '' : ST.nc.pessoa }); ST._ncAba = abaNC; if(!preso && ST.nc._preso) ST.nc.tipo = ''; }
+  if(preso){ ST.nc.tipo = preso; ST.nc._preso = true; } else ST.nc._preso = false;
   const seq = ST._ncSeq = (ST._ncSeq || 0) + 1, f = ST.nc, por = 200, b = (ST.busca || '').trim(); if(ST._ncBusca !== b){ ST._ncBusca = b; f.pagina = 0; }
   const filtra = q => { if(f.pessoa) q = q.eq('pessoa_id', f.pessoa); if(f.tipo) q = q.eq('tipo', f.tipo); if(f.emp) q = q.eq('empresa', f.emp);
     if(f.de) q = q.gte('emissao', f.de); if(f.ate) q = q.lte('emissao', f.ate);
@@ -8712,29 +8720,29 @@ async function telaNotasCigam(){
   const ordena = q => q.order('emissao', { ascending: false, nullsFirst: false }).order('id', { ascending: false });
   const [r, cnt] = await Promise.all([ ordena(filtra(sb.from('notas_cigam').select(NC_COLS))).range(f.pagina * por, f.pagina * por + por - 1),
     filtra(sb.from('notas_cigam').select('id', { count: 'exact', head: true })) ]);
-  if(seq !== ST._ncSeq || ST.aba !== 'fs_notas_cigam') return;   // já pediram outra busca
-  if(r.error) return $('#conteudo').innerHTML = ncSemScript('Notas fiscais (histórico)');
+  if(seq !== ST._ncSeq || ST.aba !== abaNC) return;   // já pediram outra busca
+  if(r.error) return $('#conteudo').innerHTML = ncSemScript(titNC);
   const l = r.data || [], total = cnt.count || 0, soma = l.reduce((s, x) => s + Number(x.total_nf || 0), 0);
   const rotP = f.tipo === 'saida' ? 'Cliente' : f.tipo === 'entrada' ? 'Fornecedor' : 'Cliente / fornecedor';
-  $('#conteudo').innerHTML = `<div class="card"><h2>Notas fiscais (histórico) <span class="muted" style="font-weight:400">· notas de saída e de entrada que vieram do CIGAM, só consulta</span></h2>
+  $('#conteudo').innerHTML = `<div class="card"><h2>${titNC} <span class="muted" style="font-weight:400">· ${preso === 'entrada' ? 'notas de compra e outras entradas' : preso === 'saida' ? 'notas de venda e outras saídas' : 'notas de saída e de entrada'}</span></h2>
     <div class="barra" style="flex-wrap:wrap">
       <input type="search" id="busca" placeholder="Nº da nota, nº do pedido / ordem de compra, ou nome do cliente / fornecedor" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
-      <select id="ncTipo" style="max-width:170px"><option value="">Saída e entrada</option><option value="saida" ${f.tipo === 'saida' ? 'selected' : ''}>Só saída (vendas)</option><option value="entrada" ${f.tipo === 'entrada' ? 'selected' : ''}>Só entrada (compras)</option></select>
+      <select id="ncTipo" style="max-width:170px${preso ? ';display:none' : ''}"><option value="">Saída e entrada</option><option value="saida" ${f.tipo === 'saida' ? 'selected' : ''}>Só saída (vendas)</option><option value="entrada" ${f.tipo === 'entrada' ? 'selected' : ''}>Só entrada (compras)</option></select>
       <select id="ncEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper', 'EQP'].map(e => `<option ${f.emp === e ? 'selected' : ''}>${e}</option>`).join('')}</select>
       <label class="muted" style="font-size:12px">de <input type="date" id="ncDe" value="${f.de}" style="width:auto"></label><label class="muted" style="font-size:12px">até <input type="date" id="ncAte" value="${f.ate}" style="width:auto"></label>
       ${f.pessoa ? `<span class="tag" style="padding:6px 10px">Empresa: ${esc(pessoa(f.pessoa)?.nome || '')} <a href="#" id="ncTiraP" title="Ver todas">✕</a></span>` : ''}</div>
     <p class="muted" style="font-size:12px;margin:4px 0 8px">${total.toLocaleString('pt-BR')} nota(s) com estes filtros${total > por ? ` · mostrando ${f.pagina * por + 1} a ${Math.min(total, (f.pagina + 1) * por)}` : ''} · total das notas desta página: <b>${R$(soma)}</b></p>
     <div style="overflow:auto"><table class="reg"><thead><tr><th>Data</th><th>Nº / série</th><th>Empresa</th><th>${rotP}</th><th>Operação / CFOP</th><th style="text-align:right">Total</th></tr></thead><tbody>
     ${l.map(x => `<tr data-nc="${x.id}" style="cursor:pointer"><td>${dataBR(x.emissao)}</td><td><b>${ncNumSerie(x)}</b>${f.tipo ? '' : ' ' + ncTagTipo(x.tipo)}</td><td>${tagEmp(x.empresa)}</td>
-      <td>${esc(x.pessoa_nome || (pessoa(x.pessoa_id) || {}).nome || '')}<div class="muted" style="font-size:11px">CIGAM ${esc(x.pessoa_codigo || '')}${x.pedido ? ` · ${x.tipo === 'saida' ? 'pedido' : 'ordem de compra'} ${x.pedido}` : ''}</div></td>
+      <td>${esc(x.pessoa_nome || (pessoa(x.pessoa_id) || {}).nome || '')}<div class="muted" style="font-size:11px">cód. ${esc(x.pessoa_codigo || '')}${x.pedido ? ` · ${x.tipo === 'saida' ? 'pedido' : 'ordem de compra'} ${x.pedido}` : ''}</div></td>
       <td style="font-size:12px">${esc(x.tipo_operacao || '')}<div class="muted">${esc(x.cfop || '')}</div></td>
       <td style="text-align:right;white-space:nowrap">${x.total_nf === null ? '—' : R$(x.total_nf)}</td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhuma nota com estes filtros.</td></tr>'}</tbody></table></div>
     ${total > por ? `<div style="display:flex;gap:8px;justify-content:center;margin-top:10px"><button class="btn peq" id="ncAnt" ${f.pagina ? '' : 'disabled'}>◀ Anteriores</button><button class="btn peq" id="ncProx" ${(f.pagina + 1) * por < total ? '' : 'disabled'}>Próximas ▶</button></div>
       <p class="muted" style="font-size:12px;text-align:center">O Relatório e o Excel saem com todas as notas dos filtros (até 5.000).</p>` : ''}</div>`;
   ligaBarra(null);
   expRegistra(async () => { const t = await ordena(filtra(sb.from('notas_cigam').select(NC_COLS))).limit(5000); const L = t.data || l;
-    return [expCols('Notas fiscais (histórico do CIGAM)', [['Data', x => dataBR(x.emissao)], ['Tipo', x => x.tipo === 'saida' ? 'Saída' : 'Entrada'], ['Nº', x => x.numero], ['Série', x => x.serie], ['Empresa', x => x.empresa],
-      [rotP, x => x.pessoa_nome], ['Código CIGAM', x => x.pessoa_codigo], ['Operação', x => x.tipo_operacao], ['CFOP', x => x.cfop], ['Pedido / OC', x => x.pedido], ['Total', x => x.total_nf === null ? '' : R$(x.total_nf)]], L,
+    return [expCols(titNC, [['Data', x => dataBR(x.emissao)], ['Tipo', x => x.tipo === 'saida' ? 'Saída' : 'Entrada'], ['Nº', x => x.numero], ['Série', x => x.serie], ['Empresa', x => x.empresa],
+      [rotP, x => x.pessoa_nome], ['Código', x => x.pessoa_codigo], ['Operação', x => x.tipo_operacao], ['CFOP', x => x.cfop], ['Pedido / OC', x => x.pedido], ['Total', x => x.total_nf === null ? '' : R$(x.total_nf)]], L,
       [['Total', '', '', '', '', '', '', '', '', '', R$(L.reduce((s, x) => s + Number(x.total_nf || 0), 0))]])]; });
   const muda = (k, v) => { f[k] = v; f.pagina = 0; telaNotasCigam(); };
   $('#ncTipo').onchange = e => muda('tipo', e.target.value); $('#ncEmp').onchange = e => muda('emp', e.target.value);
@@ -8753,7 +8761,7 @@ function ncItensDaNota(x){
 }
 const NC_FRETE = { '1': 'por conta do emitente', '2': 'por conta do destinatário' };
 async function verNotaCigam(id){
-  const r = await sb.from('notas_cigam').select('*').eq('id', id).maybeSingle(); if(r.error || !r.data) return aviso('Não encontrada', 'Esta nota não está no histórico do CIGAM.');
+  const r = await sb.from('notas_cigam').select('*').eq('id', id).maybeSingle(); if(r.error || !r.data) return aviso('Não encontrada', 'Esta nota não está no cadastro de notas.');
   const x = r.data, sai = x.tipo === 'saida', it = x.unidade === null ? { data: [] } : await ncItensDaNota(x), IT = it.error ? [] : (it.data || []);
   const C = (rot, v) => v || v === 0 ? `<div class="campo"><span>${rot}</span><b style="color:var(--preto);font-weight:500">${v}</b></div>` : '';
   const V = (rot, v) => Number(v) ? C(rot, R$(v)) : '';
@@ -8761,10 +8769,10 @@ async function verNotaCigam(id){
   // campos do CIGAM que vieram a mais (dados): mostra os curtos; os que vieram embaralhados na exportação ficam de fora
   const extras = Object.entries(x.dados || {}).filter(([, v]) => v !== null && String(v).trim() !== ''), ok = extras.filter(([, v]) => String(v).length <= 80 && !/[\r\n]/.test(String(v))).sort((a, b) => a[0].localeCompare(b[0]));
   const totItens = IT.reduce((s, i) => s + Number(i.total || 0), 0);
-  abrirPainel(`<div class="cab"><h2>Nota ${ncNumSerie(x)} <span class="muted" style="font-weight:400">· CIGAM</span></h2>${ncTagTipo(x.tipo)} ${tagEmp(x.empresa)}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+  abrirPainel(`<div class="cab"><h2>Nota ${ncNumSerie(x)}</h2>${ncTagTipo(x.tipo)} ${tagEmp(x.empresa)}<button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><div class="grade">
       <div class="campo largo"><span>${sai ? 'Cliente' : 'Fornecedor'}</span><b style="color:var(--preto);font-size:15px">${esc(x.pessoa_nome || (pe || {}).nome || '')}</b>
-        <span>CIGAM ${esc(x.pessoa_codigo || '')}${pe ? ` · <a href="#" id="ncAbreP">abrir a empresa</a>` : ' · não ligada a uma empresa do ERP'}</span></div>
+        <span>cód. ${esc(x.pessoa_codigo || '')}${pe ? ` · <a href="#" id="ncAbreP">abrir a empresa</a>` : ' · não ligada a uma empresa do ERP'}</span></div>
       ${C('Emissão', dataBR(x.emissao))}${C(sai ? 'Saída' : 'Entrada', dataBR(x.entrada_saida))}${C('Documento', esc(x.documento_fiscal || ''))}
       ${C('Tipo de operação', esc(x.tipo_operacao || ''))}${C('CFOP', esc(x.cfop || ''))}${C('Condição de pagamento', esc(x.condicao || ''))}
       <div class="campo" id="ncLig"${x.pedido ? '' : ' style="display:none"'}><span>${sai ? 'Pedido' : 'Ordem de compra'}</span><b style="color:var(--preto);font-weight:500">${x.pedido || ''}</b></div>
@@ -8780,15 +8788,15 @@ async function verNotaCigam(id){
       ${C('Transportadora', ncNomeCod(x.transportadora))}${C('Frete', x.tipo_frete ? esc(NC_FRETE[x.tipo_frete] ? `${x.tipo_frete} · ${NC_FRETE[x.tipo_frete]}` : x.tipo_frete) : '')}
       ${C('Volumes', ncQtd(x.volume))}${C('Espécie', esc(x.especie || ''))}${Number(x.peso_liquido) ? C('Peso líquido', ncQtd(x.peso_liquido)) : ''}${Number(x.peso_bruto) ? C('Peso bruto', ncQtd(x.peso_bruto)) : ''}
       ${C('Placa', esc(x.placa || ''))}${C('UF', esc(x.uf || ''))}</div></div>` : ''}
-    <div class="card"><h2 style="font-size:15px">Itens da nota <span class="muted" style="font-weight:400;font-size:12px">· ${IT.length} ${x.itens && x.itens !== IT.length ? `de ${x.itens} ` : ''}· pelos movimentos de estoque do CIGAM</span></h2>
+    <div class="card"><h2 style="font-size:15px">Itens da nota <span class="muted" style="font-weight:400;font-size:12px">· ${IT.length} ${x.itens && x.itens !== IT.length ? `de ${x.itens} ` : ''}· pelos movimentos de estoque</span></h2>
       ${IT.length ? `<div style="overflow-x:auto"><table class="reg"><thead><tr><th>Código</th><th>Descrição</th><th style="text-align:right">Quant.</th><th>Un.</th><th style="text-align:right">Preço unit.</th><th style="text-align:right">Total</th></tr></thead><tbody>
         ${IT.map(i => `<tr><td>${esc(i.codigo || '')}</td><td>${esc(i.descricao || '')}${i.ncm || i.cfop ? `<div class="muted" style="font-size:11px">${[i.ncm ? 'NCM ' + esc(i.ncm) : '', i.cfop ? 'CFOP ' + esc(i.cfop) : ''].filter(Boolean).join(' · ')}</div>` : ''}</td>
           <td style="text-align:right">${ncQtd(i.quantidade)}</td><td>${esc(i.unidade_medida || '')}</td><td style="text-align:right;white-space:nowrap">${ncPreco(i.preco_unitario)}</td><td style="text-align:right;white-space:nowrap">${R$(i.total || 0)}</td></tr>`).join('')}
         <tr><td colspan="5" style="text-align:right"><b>Total dos itens</b></td><td style="text-align:right;white-space:nowrap"><b>${R$(totItens)}</b></td></tr></tbody></table></div>`
-        : '<p class="muted" style="font-size:13px;margin:0">Esta nota não tem itens no histórico de movimentos do CIGAM (notas só de serviço e algumas antigas não têm).</p>'}</div>
-    ${ok.length ? `<details class="card"><summary style="cursor:pointer"><b>Outros campos do CIGAM</b> <span class="muted">(${ok.length})</span></summary><div class="grade" style="margin-top:10px">${ok.map(([k, v]) => C(esc(k), esc(v))).join('')}</div>
-      ${extras.length > ok.length ? `<p class="muted" style="font-size:12px">${extras.length - ok.length} campo(s) longo(s) não aparecem aqui (vieram embaralhados na exportação do CIGAM).</p>` : ''}</details>` : ''}
-    <p class="muted" style="font-size:12px">Histórico importado do CIGAM — só consulta.${x.usuario_criacao ? ' Criada por ' + esc(x.usuario_criacao) + '.' : ''}${x.usuario_modificacao || x.data_modificacao ? ` Alterada${x.usuario_modificacao ? ' por ' + esc(x.usuario_modificacao) : ''}${x.data_modificacao ? ' em ' + dataBR(x.data_modificacao) : ''}.` : ''}</p>`);
+        : '<p class="muted" style="font-size:13px;margin:0">Esta nota não tem itens nos movimentos de estoque (notas só de serviço e algumas antigas não têm).</p>'}</div>
+    ${ok.length ? `<details class="card"><summary style="cursor:pointer"><b>Outros campos</b> <span class="muted">(${ok.length})</span></summary><div class="grade" style="margin-top:10px">${ok.map(([k, v]) => C(esc(k), esc(v))).join('')}</div>
+      ${extras.length > ok.length ? `<p class="muted" style="font-size:12px">${extras.length - ok.length} campo(s) longo(s) não aparecem aqui (vieram embaralhados na importação).</p>` : ''}</details>` : ''}
+    <p class="muted" style="font-size:12px">Nota importada — só consulta.${x.usuario_criacao ? ' Criada por ' + esc(x.usuario_criacao) + '.' : ''}${x.usuario_modificacao || x.data_modificacao ? ` Alterada${x.usuario_modificacao ? ' por ' + esc(x.usuario_modificacao) : ''}${x.data_modificacao ? ' em ' + dataBR(x.data_modificacao) : ''}.` : ''}</p>`);
   if($('#ncAbreP')) $('#ncAbreP').onclick = e => { e.preventDefault(); fecharPainel(); formPessoa(pe); };
   if(x.pedido) ncLigacao(x);
 }
@@ -8798,7 +8806,7 @@ async function ncLigacao(x){
   if(x.tipo === 'saida'){
     const [p, o] = await Promise.all([ nivelTela('ped_cigam') >= 1 ? sb.from('pedidos_cigam').select('numero').eq('numero', n).maybeSingle() : { data: null },
       nivelTela('orc') >= 1 ? sb.from('orcamentos').select('id').eq('pedido_cigam', n).maybeSingle() : { data: null } ]);
-    if(p.data && typeof verPedCigam === 'function') links.push(['ncAbrePed', 'abrir o pedido do CIGAM', () => verPedCigam(n)]);
+    if(p.data && typeof verPedCigam === 'function') links.push(['ncAbrePed', 'abrir o pedido', () => verPedCigam(n)]);
     if(o.data && typeof formOrc === 'function') links.push(['ncAbreOrc', 'abrir o orçamento no ERP', () => { fecharPainel(); formOrc(o.data.id); }]);
   } else {
     const o = nivelTela('cp_compras') >= 1 ? await sb.from('compras_ordens').select('id').eq('numero', n).eq('origem', 'cigam').limit(1) : { data: [] };
@@ -8816,7 +8824,7 @@ async function notasCigamDaEmpresa(pid, alvo){
     sb.from('notas_cigam').select('id', { count: 'exact', head: true }).eq('pessoa_id', pid) ]);
   if(l.error || !(l.data || []).length) return;
   const total = c.count || l.data.length;
-  alvo.innerHTML = `<div class="secao-sens"><h3>Notas fiscais no CIGAM <span class="muted" style="font-weight:400;font-size:12px">· ${total.toLocaleString('pt-BR')} nota(s), histórico</span></h3>
+  alvo.innerHTML = `<div class="secao-sens"><h3>Notas fiscais <span class="muted" style="font-weight:400;font-size:12px">· ${total.toLocaleString('pt-BR')} nota(s), histórico</span></h3>
     ${l.data.map(x => `<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--borda);cursor:pointer" data-ncf="${x.id}">${dataBR(x.emissao)} · ${esc(x.empresa || '')} · ${x.tipo === 'saida' ? 'saída' : 'entrada'} · nota ${ncNumSerie(x)} · ${esc(x.tipo_operacao || '')} · <b>${x.total_nf === null ? '—' : R$(x.total_nf)}</b></div>`).join('')}
     ${nivelTela('fs_notas_cigam') >= 1 ? `<button class="btn peq" type="button" id="ncVerTodas" style="margin-top:6px">Ver todas</button>` : ''}</div>`;
   alvo.querySelectorAll('[data-ncf]').forEach(d => d.onclick = () => verNotaCigam(+d.dataset.ncf));
@@ -8826,7 +8834,7 @@ async function notasCigamDaEmpresa(pid, alvo){
 /* ---------- Movimentos de estoque (histórico) ---------- */
 ST.mc = { aba: 'saldos', emp: '', soSaldo: true, tipo: '', de: '', ate: '', codigo: '', pagina: 0 };
 let _mcSaldos = null;
-const mcAviso = '<p class="muted" style="font-size:12px;margin:0 0 8px">⚠ Saldo <b>histórico do CIGAM</b>, calculado pelos movimentos — serve para conferência. O CIGAM tem ajustes artificiais, então pode não bater com a contagem física.</p>';
+const mcAviso = '<p class="muted" style="font-size:12px;margin:0 0 8px">⚠ Saldo calculado pelos movimentos importados — serve para conferência. Há ajustes artificiais antigos, então pode não bater com a contagem física.</p>';
 const mcAbas = () => `<div class="abasLanc">${[['saldos', 'Saldos'], ['movimentos', 'Movimentos']].map(([k, r]) => `<button class="${ST.mc.aba === k ? 'ativo' : ''}" data-mcv="${k}">${r}</button>`).join('')}</div>`;
 const mcLigaAbas = () => document.querySelectorAll('[data-mcv]').forEach(b => b.onclick = () => { if(ST.mc.aba === b.dataset.mcv) return; ST.mc.aba = b.dataset.mcv; ST.mc.pagina = 0; ST.mc.codigo = ''; ST.busca = ''; desenhar(); });
 function telaMovCigam(){ return ST.mc.aba === 'movimentos' ? telaMovCigamMov() : telaMovCigamSaldos(); }
@@ -8836,13 +8844,13 @@ async function telaMovCigamSaldos(){
   const seq = ST._mcSeq = (ST._mcSeq || 0) + 1, f = ST.mc;
   if(!_mcSaldos){ const r = await tudo(() => sb.from('cigam_saldo_estoque').select('unidade,codigo,descricao,unidade_medida,saldo,ultima_entrada,ultima_saida').order('codigo').order('unidade'));
     if(seq !== ST._mcSeq || ST.aba !== 'es_mov_cigam' || f.aba !== 'saldos') return;
-    if(r.error) return $('#conteudo').innerHTML = ncSemScript('Movimentos de estoque (histórico)');
+    if(r.error) return $('#conteudo').innerHTML = ncSemScript('Estoque e movimentos');
     _mcSaldos = r.data || []; }
   if(seq !== ST._mcSeq || ST.aba !== 'es_mov_cigam' || f.aba !== 'saldos') return;
   const b = norm(ST.busca || '').split(/\s+/).filter(Boolean), un = f.emp === 'EQP' ? 2 : f.emp === 'Equiper' ? 1 : 0;
   const l = _mcSaldos.filter(x => (!un || Number(x.unidade) === un) && (!f.soSaldo || Number(x.saldo)) && (!b.length || b.every(w => (x._b || (x._b = norm((x.codigo || '') + ' ' + (x.descricao || '')))).includes(w))));
   const MAX = 300, neg = l.filter(x => Number(x.saldo) < 0).length;
-  $('#conteudo').innerHTML = `${mcAbas()}<div class="card"><h2>Saldos de estoque no CIGAM <span class="muted" style="font-weight:400">· histórico, só consulta</span></h2>
+  $('#conteudo').innerHTML = `${mcAbas()}<div class="card"><h2>Saldos de estoque <span class="muted" style="font-weight:400">· pelos movimentos</span></h2>
     <div class="barra" style="flex-wrap:wrap"><input type="search" id="busca" placeholder="Código ou descrição do material" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <select id="mcEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper', 'EQP'].map(e => `<option ${f.emp === e ? 'selected' : ''}>${e}</option>`).join('')}</select>
       <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" id="mcSo" style="width:auto" ${f.soSaldo ? 'checked' : ''}> só com saldo</label></div>
@@ -8854,7 +8862,7 @@ async function telaMovCigamSaldos(){
       || '<tr><td colspan="7" class="vazio">Nenhum material com estes filtros.</td></tr>'}</tbody></table></div>
     ${l.length > MAX ? `<p class="muted" style="font-size:12px">Mostrando ${MAX} de ${l.length.toLocaleString('pt-BR')} — use a busca ou os filtros. (O Relatório e o Excel saem com todos.)</p>` : ''}</div>`;
   ligaBarra(null); mcLigaAbas();
-  expRegistra(() => [expCols('Saldos de estoque (histórico do CIGAM)', [['Código', x => x.codigo], ['Descrição', x => x.descricao], ['Empresa', x => ncEmpUn(x.unidade)], ['Un.', x => x.unidade_medida], ['Saldo', x => ncQtd(x.saldo)],
+  expRegistra(() => [expCols('Saldos de estoque', [['Código', x => x.codigo], ['Descrição', x => x.descricao], ['Empresa', x => ncEmpUn(x.unidade)], ['Un.', x => x.unidade_medida], ['Saldo', x => ncQtd(x.saldo)],
     ['Última entrada', x => dataBR(x.ultima_entrada)], ['Última saída', x => dataBR(x.ultima_saida)]], l)]);
   $('#mcEmp').onchange = e => { f.emp = e.target.value; telaMovCigamSaldos(); }; $('#mcSo').onchange = e => { f.soSaldo = e.target.checked; telaMovCigamSaldos(); };
   document.querySelectorAll('[data-mcs]').forEach(t => t.onclick = () => { if(!t.dataset.mcs) return; Object.assign(f, { aba: 'movimentos', codigo: t.dataset.mcs, emp: ncEmpUn(t.dataset.un), tipo: '', de: '', ate: '', pagina: 0 }); ST.busca = ''; desenhar(); });
@@ -8872,21 +8880,21 @@ async function telaMovCigamMov(){
   const [r, cnt] = await Promise.all([ ordena(filtra(sb.from('cigam_movimentos').select(MC_COLS))).range(f.pagina * por, f.pagina * por + por - 1),
     filtra(sb.from('cigam_movimentos').select('movimento', { count: 'exact', head: true })) ]);
   if(seq !== ST._mcSeq || ST.aba !== 'es_mov_cigam' || f.aba !== 'movimentos') return;
-  if(r.error) return $('#conteudo').innerHTML = ncSemScript('Movimentos de estoque (histórico)');
+  if(r.error) return $('#conteudo').innerHTML = ncSemScript('Estoque e movimentos');
   const l = r.data || [], total = cnt.count || 0;
   const sd = f.codigo && _mcSaldos ? _mcSaldos.filter(x => x.codigo === f.codigo && (!f.emp || ncEmpUn(x.unidade) === f.emp)) : [];
-  const nomeP = x => { const p = pessoa(x.pessoa_id); return p ? p.nome : x.pessoa_codigo ? 'CIGAM ' + x.pessoa_codigo : ''; };
+  const nomeP = x => { const p = pessoa(x.pessoa_id); return p ? p.nome : x.pessoa_codigo ? 'cód. ' + x.pessoa_codigo : ''; };
   const docTxt = x => [x.nf ? 'NF ' + x.nf + (x.serie && String(x.serie).trim() ? ' / ' + x.serie : '') : '', x.pedido_oc && !/^0*$/.test(x.pedido_oc) ? (x.tipo === 'S' ? 'Ped. ' : 'OC ') + x.pedido_oc.replace(/^0+/, '') : ''].filter(Boolean).join(' · ');
-  $('#conteudo').innerHTML = `${mcAbas()}<div class="card"><h2>Movimentos de estoque no CIGAM <span class="muted" style="font-weight:400">· histórico, só consulta</span></h2>
+  $('#conteudo').innerHTML = `${mcAbas()}<div class="card"><h2>Movimentos de estoque <span class="muted" style="font-weight:400">· entradas e saídas</span></h2>
     <div class="barra" style="flex-wrap:wrap"><input type="search" id="busca" placeholder="Código, descrição do material ou nº da nota" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <select id="mcEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper', 'EQP'].map(e => `<option ${f.emp === e ? 'selected' : ''}>${e}</option>`).join('')}</select>
       <select id="mcTipo" style="max-width:150px"><option value="">Entradas e saídas</option><option value="E" ${f.tipo === 'E' ? 'selected' : ''}>Só entradas</option><option value="S" ${f.tipo === 'S' ? 'selected' : ''}>Só saídas</option></select>
       <label class="muted" style="font-size:12px">de <input type="date" id="mcDe" value="${f.de}" style="width:auto"></label><label class="muted" style="font-size:12px">até <input type="date" id="mcAte" value="${f.ate}" style="width:auto"></label>
       ${f.codigo ? `<span class="tag" style="padding:6px 10px">Material: ${esc(f.codigo)} <a href="#" id="mcTiraC" title="Ver todos">✕</a></span>` : ''}</div>
-    ${sd.length ? `<p style="font-size:13px;margin:0 0 6px"><b>${esc(sd[0].descricao || '')}</b> · saldo no CIGAM: ${sd.map(x => `${tagEmp(ncEmpUn(x.unidade))} <b>${ncQtd(x.saldo)}</b> ${esc(x.unidade_medida || '')}`).join(' · ')}</p>${mcAviso}` : ''}
+    ${sd.length ? `<p style="font-size:13px;margin:0 0 6px"><b>${esc(sd[0].descricao || '')}</b> · saldo: ${sd.map(x => `${tagEmp(ncEmpUn(x.unidade))} <b>${ncQtd(x.saldo)}</b> ${esc(x.unidade_medida || '')}`).join(' · ')}</p>${mcAviso}` : ''}
     <p class="muted" style="font-size:12px;margin:4px 0 8px">${total.toLocaleString('pt-BR')} movimento(s) com estes filtros${total > por ? ` · mostrando ${f.pagina * por + 1} a ${Math.min(total, (f.pagina + 1) * por)}` : ''} · clique num movimento com nota para abrir a nota</p>
     <div style="overflow:auto"><table class="reg"><thead><tr><th>Data</th><th>Empresa</th><th>Tipo</th><th>Código</th><th>Descrição</th><th style="text-align:right">Quant.</th><th>Un.</th><th style="text-align:right">Preço unit.</th><th style="text-align:right">Total</th><th>Nota / pedido</th><th>Cliente / fornecedor</th></tr></thead><tbody>
-    ${l.map(x => `<tr data-mcm="${x.unidade}|${x.movimento}" ${x.nf ? 'style="cursor:pointer"' : ''}><td>${dataBR(x.data)}</td><td>${tagEmp(ncEmpUn(x.unidade))}</td><td>${ncTagTipo(x.tipo)}${x.atualiza === 'A' ? '' : '<div class="muted" style="font-size:11px" title="Este movimento não alterou o saldo no CIGAM">não mexeu no saldo</div>'}</td>
+    ${l.map(x => `<tr data-mcm="${x.unidade}|${x.movimento}" ${x.nf ? 'style="cursor:pointer"' : ''}><td>${dataBR(x.data)}</td><td>${tagEmp(ncEmpUn(x.unidade))}</td><td>${ncTagTipo(x.tipo)}${x.atualiza === 'A' ? '' : '<div class="muted" style="font-size:11px" title="Este movimento não alterou o saldo">não mexeu no saldo</div>'}</td>
       <td>${esc(x.codigo || '')}</td><td style="font-size:12px">${esc(x.descricao || '')}${x.historico ? `<div class="muted">${esc(x.historico)}</div>` : ''}</td>
       <td style="text-align:right;white-space:nowrap">${ncQtd(x.quantidade)}</td><td>${esc(x.unidade_medida || '')}</td><td style="text-align:right;white-space:nowrap">${ncPreco(x.preco_unitario)}</td><td style="text-align:right;white-space:nowrap">${x.total === null ? '' : R$(x.total)}</td>
       <td style="font-size:12px">${esc(docTxt(x))}<div class="muted">${esc([x.tipo_operacao, x.cfop].filter(Boolean).join(' · '))}</div></td><td style="font-size:12px">${esc(nomeP(x))}</td></tr>`).join('')
@@ -8895,7 +8903,7 @@ async function telaMovCigamMov(){
       <p class="muted" style="font-size:12px;text-align:center">O Relatório e o Excel saem com todos os movimentos dos filtros (até 5.000).</p>` : ''}</div>`;
   ligaBarra(null); mcLigaAbas();
   expRegistra(async () => { const t = await ordena(filtra(sb.from('cigam_movimentos').select(MC_COLS))).limit(5000); const L = t.data || l;
-    return [expCols('Movimentos de estoque (histórico do CIGAM)', [['Data', x => dataBR(x.data)], ['Empresa', x => ncEmpUn(x.unidade)], ['Tipo', x => x.tipo === 'S' ? 'Saída' : 'Entrada'], ['Código', x => x.codigo], ['Descrição', x => x.descricao],
+    return [expCols('Movimentos de estoque', [['Data', x => dataBR(x.data)], ['Empresa', x => ncEmpUn(x.unidade)], ['Tipo', x => x.tipo === 'S' ? 'Saída' : 'Entrada'], ['Código', x => x.codigo], ['Descrição', x => x.descricao],
       ['Quant.', x => ncQtd(x.quantidade)], ['Un.', x => x.unidade_medida], ['Preço unit.', x => ncPreco(x.preco_unitario)], ['Total', x => x.total === null ? '' : R$(x.total)], ['Nota / pedido', docTxt], ['Cliente / fornecedor', nomeP],
       ['Mexeu no saldo', x => x.atualiza === 'A' ? 'sim' : 'não']], L)]; });
   const muda = (k, v) => { f[k] = v; f.pagina = 0; telaMovCigamMov(); };
@@ -8906,10 +8914,10 @@ async function telaMovCigamMov(){
   document.querySelectorAll('[data-mcm]').forEach(t => t.onclick = async () => { const [un, mv] = t.dataset.mcm.split('|'), x = l.find(y => String(y.unidade) === un && String(y.movimento) === mv); if(!x || !x.nf) return;
     let q = sb.from('notas_cigam').select('id').eq('unidade', x.unidade).eq('numero', x.nf).eq('tipo', x.tipo === 'S' ? 'saida' : 'entrada').eq('serie', x.serie || '');
     if(x.pessoa_codigo) q = q.eq('pessoa_codigo', x.pessoa_codigo);
-    const n = await q.limit(1); if(n.error || !(n.data || []).length) return toast('A nota ' + x.nf + ' não está no histórico de notas do CIGAM.'); verNotaCigam(n.data[0].id); });
+    const n = await q.limit(1); if(n.error || !(n.data || []).length) return toast('A nota ' + x.nf + ' não está no cadastro de notas.'); verNotaCigam(n.data[0].id); });
 }
 
-Object.assign(TELAS, { fs_notas_cigam: telaNotasCigam, es_mov_cigam: telaMovCigam });
+Object.assign(TELAS, { fs_notas_cigam: telaNotasCigam, fn_notas_entrada: telaNotasCigam, fn_notas_saida: telaNotasCigam, es_mov_cigam: telaMovCigam });
 
 /* 47b — CRM do CIGAM (histórico): oportunidade e anotações de contato no painel do pedido do CIGAM e na ficha da empresa.
    Dados: cigam_oportunidades e cigam_acompanhamentos (script 85; importar_crm_os_cigam.py). Só consulta. */
@@ -8918,7 +8926,7 @@ Object.assign(TELAS, { fs_notas_cigam: telaNotasCigam, es_mov_cigam: telaMovCiga
   const tagOp = s => s ? `<span class="tag ${SIT_COR[s] || ''}">${esc(s)}</span>` : '';
   const anot = a => `<div style="font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--borda);white-space:pre-wrap"><span class="muted">${[dataBR(a.data_oportunidade), a.contatante, a.contato].filter(Boolean).map(esc).join(' · ')}${a.proximo_contato ? ' · próximo contato ' + dataBR(a.proximo_contato) : ''}</span>\n${esc(a.texto || '')}</div>`;
   const lin = (rot, val) => val || val === 0 ? `<div class="campo"><span>${rot}</span><b style="color:var(--preto);font-weight:500">${val}</b></div>` : '';
-  const cartaoOp = (o, AC) => `<div class="card" data-crm-cigam><h3 style="margin:0 0 8px">CRM do CIGAM · oportunidade ${o.numero} ${tagOp(o.situacao)}</h3><div class="grade">
+  const cartaoOp = (o, AC) => `<div class="card" data-crm-cigam><h3 style="margin:0 0 8px">CRM · oportunidade ${o.numero} ${tagOp(o.situacao)}</h3><div class="grade">
       ${lin('Aberta em', dataBR(o.data) + (o.hora ? ' ' + esc(o.hora) : ''))}${lin('Pessoa de contato', esc(o.pessoa_contato || ''))}${lin('Primeiro contato', esc(o.primeiro_contato || ''))}
       ${lin('Próximo contato', o.proximo_contato ? dataBR(o.proximo_contato) + (o.hora_proximo_contato ? ' ' + esc(o.hora_proximo_contato) : '') : '')}${lin('Previsão de venda', dataBR(o.previsao_venda))}
       ${lin('Validade da proposta', dataBR(o.validade_proposta))}${lin('Prazo de entrega', dataBR(o.prazo_entrega))}${Number(o.total_venda) ? lin('Total da venda', R$(o.total_venda)) : ''}
@@ -8953,7 +8961,7 @@ Object.assign(TELAS, { fs_notas_cigam: telaNotasCigam, es_mov_cigam: telaMovCiga
           sb.from('cigam_acompanhamentos').select('*').eq('pessoa_id', pid).order('data_oportunidade', { ascending: false }) ]);
         const O = o.error ? [] : (o.data || []), A = a.error ? [] : (a.data || []); if(!O.length && !A.length) return;
         const conta = s => O.filter(x => x.situacao === s).length, vend = O.filter(x => x.situacao === 'Vendida').reduce((t, x) => t + Number(x.total_venda || 0), 0);
-        alvo.insertAdjacentHTML('beforeend', `<div class="secao-sens"><h3>CRM do CIGAM <span class="muted" style="font-weight:400;font-size:12px">· ${O.length} oportunidade(s): ${conta('Vendida')} vendida(s) (${R$(vend)}), ${conta('Em andamento')} em andamento, ${conta('Perdida')} perdida(s)</span></h3>
+        alvo.insertAdjacentHTML('beforeend', `<div class="secao-sens"><h3>CRM · histórico <span class="muted" style="font-weight:400;font-size:12px">· ${O.length} oportunidade(s): ${conta('Vendida')} vendida(s) (${R$(vend)}), ${conta('Em andamento')} em andamento, ${conta('Perdida')} perdida(s)</span></h3>
           ${O.slice(0, 12).map(x => `<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--borda);${x.pedido ? 'cursor:pointer' : ''}" ${x.pedido ? `data-crmped="${x.pedido}"` : ''}>${dataBR(x.data)} · oportunidade ${x.numero}${x.pedido ? ' · pedido ' + x.pedido : ''}${x.pessoa_contato ? ' · ' + esc(x.pessoa_contato) : ''} · ${esc(x.situacao || '')} · <b>${Number(x.total_venda) ? R$(x.total_venda) : '—'}</b></div>`).join('')}
           ${O.length > 12 ? `<p class="muted" style="font-size:11px;margin:4px 0 0">Mostrando as 12 mais recentes.</p>` : ''}
           ${A.length ? `<h4 style="margin:10px 0 2px;font-size:13px">Anotações de contato (${A.length})</h4>${A.map(anot).join('')}` : ''}</div>`);
@@ -9389,7 +9397,7 @@ async function formNota(pre){
       <label class="campo">Perfil de tributação<select id="nfPerfil">${opPerfis()}</select></label>
       <div class="campo largo muted" id="nfEmitInfo" style="font-size:12px"></div></div></div>
     <div class="card"><h2 style="font-size:15px">${nfe ? 'Destinatário' : 'Tomador do serviço'} (cliente)</h2>
-      <div class="campo largo">Cliente *<div style="position:relative"><input id="nfTom" autocomplete="off" placeholder="Digite o nome, apelido ou código do CIGAM…" value="${esc(T ? T.nome : '')}"><div id="nfTomSug" class="sugestoes"></div></div></div>
+      <div class="campo largo">Cliente *<div style="position:relative"><input id="nfTom" autocomplete="off" placeholder="Digite o nome, apelido ou código…" value="${esc(T ? T.nome : '')}"><div id="nfTomSug" class="sugestoes"></div></div></div>
       <div id="nfTomInfo" style="margin-top:8px"></div></div>
     ${nfe ? `<div class="card"><h2 style="font-size:15px">Produtos</h2><div style="overflow:auto"><table class="reg" id="nfItens"></table></div>
         <div class="barra" style="margin-top:8px"><div style="position:relative;flex:1"><input id="nfBuscaProd" autocomplete="off" placeholder="+ Incluir produto do catálogo (nome ou código)…"><div id="nfProdSug" class="sugestoes"></div></div><button class="btn" id="nfItemLivre">+ Linha em branco</button></div>
@@ -9435,7 +9443,7 @@ async function formNota(pre){
   const inpT = $('#nfTom'), boxT = $('#nfTomSug');
   inpT.oninput = () => { const q = inpT.value.trim(); if(q.length < 2){ boxT.innerHTML = ''; return; }
     const l = buscaPessoasNF(q);
-    boxT.innerHTML = l.map(p => `<div class="sug" data-tom="${p.id}"><b>${esc(p.nome)}</b>${p.apelido ? ' · ' + esc(p.apelido) : ''}${(p.codigos_cigam || []).length ? ` <span class="muted">· CIGAM ${esc(p.codigos_cigam.join(', '))}</span>` : ''}</div>`).join('') || '<div class="sug muted" style="cursor:default">Nenhuma empresa com esse nome (cadastre em Empresas).</div>';
+    boxT.innerHTML = l.map(p => `<div class="sug" data-tom="${p.id}"><b>${esc(p.nome)}</b>${p.apelido ? ' · ' + esc(p.apelido) : ''}${(p.codigos_cigam || []).length ? ` <span class="muted">· cód. ${esc(p.codigos_cigam.join(', '))}</span>` : ''}</div>`).join('') || '<div class="sug muted" style="cursor:default">Nenhuma empresa com esse nome (cadastre em Empresas).</div>';
     boxT.querySelectorAll('[data-tom]').forEach(x => x.onclick = async () => { boxT.innerHTML = ''; F.tomador_id = x.dataset.tom; inpT.value = 'carregando…'; T = await dadosTomador(F.tomador_id); inpT.value = T ? T.nome : ''; desenhaTom(); confere(); if(typeof aplicaRegras === 'function') aplicaRegras(true); }); };
   function desenhaTom(){
     const el = $('#nfTomInfo'); if(!T){ el.innerHTML = '<span class="muted" style="font-size:12px">Escolha o cliente na lista.</span>'; return; }
@@ -10476,7 +10484,7 @@ async function telaCompras(){
       : `<div class="barra"><input type="search" id="busca" placeholder="Fornecedor, pedido, obra, nº da OC ou da nota…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
           <select id="cpSit" style="max-width:170px">${[['abertas','Em aberto'],['atrasadas','Atrasadas'],['recebidas','Recebidas'],['todas','Todas']].map(([k, t]) => `<option value="${k}" ${f.sit === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
         <table class="reg"><thead><tr><th>OC</th><th>Fornecedor</th><th>Pedido / obra</th><th>Previsão</th><th style="text-align:right">Total</th><th>Situação</th><th>Notas</th></tr></thead><tbody>
-        ${lo.slice(0, 400).map(o => `<tr data-oc="${o.id}" style="cursor:pointer"><td><b>${o.numero}</b> <span class="muted">${o.empresa}</span>${o.origem === 'cigam' ? ' <span class="tag" style="font-size:10px">CIGAM</span>' : ''}${o.conferir ? ' <span title="Conferir" style="color:var(--amar)">⚠</span>' : ''}</td><td>${esc(o.fornecedor || '—')}</td><td>${o.pedido_numero ? esc(o.pedido_numero) + ' · ' + esc(o.obra || '') : o.finalidade === 'estoque' ? '<span class="tag">estoque</span>' : o.cliente ? esc(o.cliente) : '<span class="muted">a definir</span>'}</td>
+        ${lo.slice(0, 400).map(o => `<tr data-oc="${o.id}" style="cursor:pointer"><td><b>${o.numero}</b> <span class="muted">${o.empresa}</span>${o.origem === 'cigam' ? ' <span class="tag" style="font-size:10px">importada</span>' : ''}${o.conferir ? ' <span title="Conferir" style="color:var(--amar)">⚠</span>' : ''}</td><td>${esc(o.fornecedor || '—')}</td><td>${o.pedido_numero ? esc(o.pedido_numero) + ' · ' + esc(o.obra || '') : o.finalidade === 'estoque' ? '<span class="tag">estoque</span>' : o.cliente ? esc(o.cliente) : '<span class="muted">a definir</span>'}</td>
           <td style="${o.atrasada ? 'color:var(--verm);font-weight:600' : ''}">${o.previsao_entrega ? dataBR(o.previsao_entrega) : '—'}</td><td style="text-align:right">${R$(o.total)}${o.valor_inicial && Number(o.valor_inicial) > Number(o.total) ? `<div style="font-size:11px;color:var(--verde)">economia ${R$(o.valor_inicial - o.total)}</div>` : ''}</td><td>${tagOC(o.situacao)}</td><td>${esc(o.notas || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhuma OC.</td></tr>'}</tbody></table>
         <p class="muted" style="font-size:12px">${lo.length.toLocaleString('pt-BR')} OC(s)${lo.length > 400 ? ' · mostrando as 400 mais novas — use a busca (fornecedor, nº, obra) ou a situação' : ''}</p>`}</div>`;
   if($('#busca')) ligaBarra(null);
@@ -10552,7 +10560,7 @@ async function verOC(id){
   const fdoc = O.fornecedor_id ? ((await priv().from('pessoas_dados').select('documento').eq('pessoa_id', O.fornecedor_id).maybeSingle()).data || {}).documento : null;
   const pend = fdoc ? ((await sb.from('notas_recebidas').select('id,numero,valor,data_emissao,ordem_id,conferida_em,situacao').eq('emitente_doc', fdoc).is('conferida_em', null)).data || []).filter(n => n.situacao === 'autorizada') : [];
   const cig = O.origem === 'cigam', vNum = v => numFmt(v || 0);
-  abrirPainel(`<div class="cab"><h2>OC ${O.numero} · ${esc(O.fornecedor || '')} ${tagOC(O.situacao)}${cig ? ' <span class="tag" title="Veio do CIGAM">CIGAM · ' + esc(O.cigam_situacao || '') + '</span>' : ''}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+  abrirPainel(`<div class="cab"><h2>OC ${O.numero} · ${esc(O.fornecedor || '')} ${tagOC(O.situacao)}${cig ? ' <span class="tag" title="Ordem de compra importada">importada · ' + esc(O.cigam_situacao || '') + '</span>' : ''}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><div class="grade">
       <div class="campo"><span>Empresa</span><b>${O.empresa}</b></div><div class="campo"><span>Pedido</span><b>${O.pedido_numero ? esc(O.pedido_numero) + ' · ' + esc(O.obra || '') : esc(O.destino || 'estoque próprio')}</b></div>
       <label class="campo">Previsão de entrega<input id="voPrev" type="date" value="${O.previsao_entrega || ''}"></label><label class="campo">Condição<input id="voCond" value="${esc(O.condicao || '')}"></label>
@@ -10572,7 +10580,7 @@ async function verOC(id){
       ${O.contato || O.contato_email ? `<div class="campo"><span>Contato no fornecedor</span><b>${esc([O.contato, O.contato_email].filter(Boolean).join(' · '))}</b></div>` : ''}
       ${O.cfop ? `<div class="campo"><span>Tipo de operação / CFOP</span><b>${esc(O.cfop)}</b></div>` : ''}
       ${O.conferir ? `<div class="campo largo"><span style="color:var(--amar)">⚠ Conferir</span><b style="font-weight:500">${esc(O.conferir)}</b></div>` : ''}
-      ${cig && !its.length ? `<div class="campo largo"><span>Itens</span><b style="font-weight:500">sem PDF desta OC — total do CIGAM: ${R$(O.total_cigam)}</b></div>` : ''}
+      ${cig && !its.length ? `<div class="campo largo"><span>Itens</span><b style="font-weight:500">sem PDF desta OC — total da ordem: ${R$(O.total_cigam)}</b></div>` : ''}
       ${O.pdf_arquivo ? `<div class="campo largo"><span>Documento</span><b style="font-weight:400;font-size:12px">${esc(O.pdf_arquivo)}</b></div>` : ''}</div>
       ${O.valor_inicial && Number(O.valor_inicial) > Number(O.total) ? `<p style="color:var(--verde);margin:6px 0 0">Economia na negociação: <b>${R$(O.valor_inicial - O.total)}</b></p>` : ''}</div>
     <div class="card"><table class="reg"><thead><tr><th>Produto</th><th>Cód. fornecedor</th><th style="text-align:right">Qtd</th><th style="text-align:right">Recebido</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>
@@ -10734,7 +10742,7 @@ async function telaPrecosCompra(){
     $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de compra <span class="muted" style="font-weight:400">· tabela de cada fornecedor</span></h2>${topo}
       <div class="barra"><select id="pcForn" style="max-width:100%;flex:1 1 280px">${lf.map(x => `<option value="${esc(x.k)}"${x.k === ST.pcForn ? ' selected' : ''}>${esc(x.nome)} · ${x.n} ${x.n === 1 ? 'item' : 'itens'}${x.id ? '' : ' (sem ligação no cadastro)'}</option>`).join('')}</select>
         <input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}" style="flex:1 1 180px"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
-      ${f ? `<p class="muted" style="font-size:12px">${lf.length} fornecedores · <b>${esc(f.nome)}</b>: ${f.n} produtos, última compra ${dataBR(f.ult.slice(0, 10))}. Preço = último preço unitário (nota do CIGAM ou tabela colada); ▲▼ = mudança sobre o preço anterior. Toque na linha para ver o histórico.</p>` : ''}
+      ${f ? `<p class="muted" style="font-size:12px">${lf.length} fornecedores · <b>${esc(f.nome)}</b>: ${f.n} produtos, última compra ${dataBR(f.ult.slice(0, 10))}. Preço = último preço unitário (nota de compra ou tabela colada); ▲▼ = mudança sobre o preço anterior. Toque na linha para ver o histórico.</p>` : ''}
       <div style="overflow-x:auto"><table class="reg"><thead><tr><th>Produto (ERP)</th><th>Como o fornecedor chama</th><th style="text-align:right">Último preço</th><th>Data</th><th style="text-align:right">Anterior</th><th style="text-align:right">Menor · maior</th><th style="text-align:right">Compras</th><th style="text-align:right">Venda hoje</th></tr></thead><tbody>
       ${l.slice(0, 600).map(x => `<tr data-ph="${esc(x.ultimo_id)}" style="cursor:pointer"><td>${pNome(x)}</td><td style="font-size:12px">${esc(x.descricao || '')}${x.codigo_fornecedor ? ` <span class="muted">· ${esc(x.codigo_fornecedor)}</span>` : ''}</td>
         <td style="text-align:right;white-space:nowrap"><b>${R$(x.preco)}</b> ${vTxt(varia(x))}</td><td>${dt(x)}</td><td style="text-align:right">${x.preco_anterior ? R$(x.preco_anterior) : ''}</td>
@@ -10767,7 +10775,7 @@ async function historicoPrecoCompra(x, pm, fNome){
   abrirPainel(`<div class="cab"><h2>Histórico de preço</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><p><b>${esc(fNome(x))}</b><br>${p ? `${esc(p.codigo)} ${esc(p.descricao)}` : esc(x.descricao || '')}</p>
     <div style="overflow-x:auto"><table class="reg"><thead><tr><th>Data</th><th style="text-align:right">Preço</th><th>Origem</th><th>Texto da nota</th></tr></thead><tbody>
-    ${l.map(y => `<tr><td>${dataBR(String(y.atualizado_em).slice(0, 10))}</td><td style="text-align:right">${R$(y.preco)}</td><td style="font-size:12px">${y.fonte === 'cigam_compras' ? 'Compra (CIGAM' + (y.tipo_operacao ? ' · ' + esc(y.tipo_operacao) : '') + ')' : 'Tabela colada'}</td><td style="font-size:12px">${esc(y.obs || y.descricao || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Sem registros.</td></tr>'}</tbody></table></div></div>`);
+    ${l.map(y => `<tr><td>${dataBR(String(y.atualizado_em).slice(0, 10))}</td><td style="text-align:right">${R$(y.preco)}</td><td style="font-size:12px">${y.fonte === 'cigam_compras' ? 'Compra (nota' + (y.tipo_operacao ? ' · ' + esc(y.tipo_operacao) : '') + ')' : 'Tabela colada'}</td><td style="font-size:12px">${esc(y.obs || y.descricao || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Sem registros.</td></tr>'}</tbody></table></div></div>`);
 }
 async function telaPrecosCompraLista(topo, liga){
   carregandoTela();
@@ -10955,11 +10963,11 @@ async function telaPrecosVenda(){
         ${mTr(G, true)}${D.linhas.map(L => mTr(L, false)).join('')}</tbody></table></div>
       <p class="muted" style="font-size:12px">Preço de venda = custo final × (1 + margem). O custo final vem de Compras → Tabela de preços de compra (preço do fornecedor + impostos, taxa financeira e frete); as linhas são criadas lá.
         Nada muda nos produtos até tocar em "Aplicar nos produtos" — aí o produto recebe custo, margem e preço de venda novos (valem para os orçamentos feitos depois).
-        Os itens marcados <b>tabela CIGAM</b> já estão com o preço de venda da tabela do CIGAM e ficam fora do "Aplicar".</p>` : ''}
+        Os itens marcados <b>tabela de preços</b> já estão com o preço de venda da tabela de preços e ficam fora do "Aplicar".</p>` : ''}
       <div style="overflow-x:auto"><table class="reg" id="pvTab"><thead><tr><th>Produto (ERP)</th><th>Linha</th><th style="text-align:right">Custo final</th><th style="text-align:right">Margem</th><th style="text-align:right">Venda calculada</th><th style="text-align:right">Venda hoje</th><th style="text-align:right">Diferença</th></tr></thead><tbody>
       ${l.slice(0, 600).map(x => { const d = dif(x); return `<tr><td>${pcNome(x)}</td><td style="font-size:12px">${esc(x.linha || 'Geral')}</td><td style="text-align:right;white-space:nowrap">${R$(x.custo_final)}</td>
         <td style="text-align:right">${x.margem != null ? pct(x.margem) + '%' : '<span class="muted">—</span>'}</td><td style="text-align:right;white-space:nowrap"><b>${x.venda_calc ? R$(x.venda_calc) : '—'}</b></td>
-        <td style="text-align:right;white-space:nowrap">${hoje(x) != null ? R$(hoje(x)) + (doCigam(x) ? ' <span class="tag" data-pvcigam title="Preço de venda igual ao da tabela do CIGAM. O botão Aplicar nos produtos não muda este item." style="background:#e8f1fb;color:#1f5fa8;font-size:10px">tabela CIGAM</span>' : '') : '<span class="muted" style="font-size:11px">sem produto</span>'}</td>
+        <td style="text-align:right;white-space:nowrap">${hoje(x) != null ? R$(hoje(x)) + (doCigam(x) ? ' <span class="tag" data-pvcigam title="Preço de venda igual ao da tabela de preços. O botão Aplicar nos produtos não muda este item." style="background:#e8f1fb;color:#1f5fa8;font-size:10px">tabela de preços</span>' : '') : '<span class="muted" style="font-size:11px">sem produto</span>'}</td>
         <td style="text-align:right;white-space:nowrap">${d == null || Math.abs(d) < 0.05 ? '' : `<span style="color:${d > 0 ? '#1e8449' : '#c0392b'}">${d > 0 ? '▲' : '▼'} ${pct(Math.abs(d))}%</span>`}</td></tr>`; }).join('') || '<tr><td colspan="7" class="vazio">Nenhum preço deste fornecedor.</td></tr>'}</tbody></table></div>
       ${l.length > 600 ? `<p class="muted">Mostrando 600 de ${l.length}. Use a busca.</p>` : ''}</div>`;
   ligaBarra(null); pvLiga();
@@ -10988,7 +10996,7 @@ async function telaTabelaPrecos(modo, topo, liga){
     const [r, e] = await Promise.all([tudo(() => sb.from('produtos').select('id,codigo,descricao,unidade,preco,custo,margem,custo_tabela,preco_cigam,preco_cigam_data').not('preco_cigam', 'is', null).order('codigo')),
       sb.from('cigam_tabela_precos').select('importado_em').limit(1)]);
     if(seq !== ST._tpSeq) return;
-    if(r.error || e.error){ $('#conteudo').innerHTML = `<div class="card"><h2>${titulo}</h2>${topo}<p class="vazio">Falta rodar os scripts <b>97</b> e <b>98</b> (tabelas de preço do CIGAM).</p></div>`; return liga(); }
+    if(r.error || e.error){ $('#conteudo').innerHTML = `<div class="card"><h2>${titulo}</h2>${topo}<p class="vazio">Falta rodar os scripts <b>97</b> e <b>98</b> (tabelas de preço).</p></div>`; return liga(); }
     TPX.rows = r.data || []; TPX.lido = Date.now(); TPX.em = e.data && e.data[0] ? e.data[0].importado_em : null;
   }
   const tabDe = p => p.custo_tabela ? String(p.custo_tabela).split(' · ')[0] : '', nomeTab = {};
@@ -11002,14 +11010,14 @@ async function telaTabelaPrecos(modo, topo, liga){
         cVenda = p => `<td style="text-align:right;white-space:nowrap">${compra ? R$(p.preco_cigam) : '<b>' + R$(p.preco_cigam) + '</b>'}${Math.abs(Number(p.preco) - Number(p.preco_cigam)) >= 0.005 ? ` <span class="tag" title="No cadastro do ERP o preço de venda deste item foi posto à mão: ${R$(p.preco)}" style="background:#fdf1dc;color:#9a6700;font-size:10px">ERP ${R$(p.preco)}</span>` : ''}</td>`,
         cTab = p => `<td style="font-size:12px">${p.custo_tabela ? `<b>${esc(tabDe(p))}</b> <span class="muted">${esc(nomeTab[tabDe(p)] || '')}</span>` : '<span class="muted">sem tabela de compra</span>'}</td>`,
         cMarg = p => `<td style="text-align:right">${fator(p) ? '× ' + fx(fator(p)) : '<span class="muted">—</span>'}</td>`;
-  $('#conteudo').innerHTML = `<div class="card"><h2>${titulo} <span class="muted" style="font-weight:400">· tabela do CIGAM</span></h2>${topo}
+  $('#conteudo').innerHTML = `<div class="card"><h2>${titulo}</h2>${topo}
       <div class="barra"><select id="tpTab" style="max-width:100%;flex:1 1 280px">
           <option value="">${compra ? 'Todas as tabelas de compra' : 'Todos os itens da tabela de venda'} · ${compra ? TPX.rows.filter(p => p.custo_tabela).length : TPX.rows.length} itens</option>
           ${tabs.map(t => `<option value="${esc(t)}"${sel === t ? ' selected' : ''}>${esc(t)} · ${esc(nomeTab[t])} · ${conta[t]} itens</option>`).join('')}
           ${compra ? '' : `<option value="-"${sel === '-' ? ' selected' : ''}>Sem tabela de compra (só preço de venda) · ${conta['-'] || 0} itens</option>`}</select>
         <input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}" style="flex:1 1 180px"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
-      <p class="muted" style="font-size:12px">${compra ? 'Preço de compra de cada item na tabela do CIGAM (a tabela é a do ICMS do item) e o preço de venda que sai dele (compra × margem da tabela).' : 'Preço de venda da tabela PADRAO do CIGAM — é o que entra nos orçamentos e no Express.'}
-        Item que não está na tabela fica <b>sem preço</b> no cadastro.${TPX.em ? ' Tabela trazida do CIGAM em ' + dataBR(String(TPX.em).slice(0, 10)) + '.' : ''}</p>
+      <p class="muted" style="font-size:12px">${compra ? 'Preço de compra de cada item na tabela (a do ICMS do item) e o preço de venda que sai dele (compra × margem da tabela).' : 'Preço de venda da tabela PADRAO — é o que entra nos orçamentos e no Express.'}
+        Item que não está na tabela fica <b>sem preço</b> no cadastro.${TPX.em ? ' Tabela atualizada em ' + dataBR(String(TPX.em).slice(0, 10)) + '.' : ''}</p>
       <div style="overflow-x:auto"><table class="reg" id="tpLista"><thead><tr><th>Cód.</th><th>Produto</th>${compra ? '<th>Tabela de compra</th><th style="text-align:right">Preço de compra</th><th style="text-align:right">Margem</th><th style="text-align:right">Preço de venda</th>'
         : '<th style="text-align:right">Preço de venda</th><th style="text-align:right">Preço de compra</th><th>Tabela de compra</th><th style="text-align:right">Margem</th>'}<th>Desde</th></tr></thead><tbody>
       ${l.slice(0, 600).map(p => `<tr data-tp="${p.id}" style="cursor:pointer"><td><b>${esc(p.codigo)}</b></td><td>${esc(p.descricao)}</td>${compra ? cTab(p) + cCompra(p) + cMarg(p) + cVenda(p) : cVenda(p) + cCompra(p) + cTab(p) + cMarg(p)}
@@ -11018,7 +11026,7 @@ async function telaTabelaPrecos(modo, topo, liga){
   liga(); ligaBarra(null);
   $('#tpTab').onchange = e => { ST.tpTab = e.target.value; desenhar(); };
   if(typeof formProduto === 'function') document.querySelectorAll('#tpLista [data-tp]').forEach(tr => tr.onclick = () => formProduto(tr.dataset.tp));
-  expRegistra(() => [expCols(titulo + ' · tabela do CIGAM', [['Código', p => p.codigo], ['Produto', p => p.descricao], ['Un.', p => p.unidade || ''], ['Tabela de compra', p => p.custo_tabela || ''],
+  expRegistra(() => [expCols(titulo, [['Código', p => p.codigo], ['Produto', p => p.descricao], ['Un.', p => p.unidade || ''], ['Tabela de compra', p => p.custo_tabela || ''],
     ['Preço de compra', p => p.custo != null ? R$(p.custo) : ''], ['Margem', p => fator(p) ? fx(fator(p)) : ''], ['Preço de venda (tabela)', p => R$(p.preco_cigam)], ['Preço de venda no ERP', p => R$(p.preco)], ['Desde', p => p.preco_cigam_data ? dataBR(p.preco_cigam_data) : '']], l)]);
 }
 
@@ -11045,7 +11053,7 @@ async function telaStatusOC(){
     ['cancelada', '✕ Cancelada', '#9aa0a6', o => o.situacao === 'cancelada' && recente(o)]
   ];
   const cartao = o => `<div class="card" data-oc="${o.id}" style="padding:10px 12px;margin:0 0 8px;cursor:pointer">
-      <div style="display:flex;gap:6px;align-items:baseline"><b>OC ${o.numero}</b><span class="muted" style="font-size:12px">${esc(o.empresa || '')}</span>${o.origem === 'cigam' ? ' <span class="tag" style="font-size:10px">CIGAM</span>' : ''}<b style="margin-left:auto">${R$(o.total || 0)}</b></div>
+      <div style="display:flex;gap:6px;align-items:baseline"><b>OC ${o.numero}</b><span class="muted" style="font-size:12px">${esc(o.empresa || '')}</span>${o.origem === 'cigam' ? ' <span class="tag" style="font-size:10px">importada</span>' : ''}<b style="margin-left:auto">${R$(o.total || 0)}</b></div>
       <div style="font-size:13px">${esc(o.fornecedor || o.fornecedor_nome || '—')}</div>
       <div class="muted" style="font-size:12px">${[o.pedido_numero ? 'pedido ' + o.pedido_numero : '', o.obra || o.destino, o.previsao_entrega ? 'previsão ' + dataBR(o.previsao_entrega) : '', o.qtd ? `${Number(o.qtd_recebida || 0).toLocaleString('pt-BR')} de ${Number(o.qtd).toLocaleString('pt-BR')} recebidos` : ''].filter(Boolean).map(esc).join(' · ')}</div></div>`;
   $('#conteudo').innerHTML = `<div class="card"><h2>Status das ordens de compra <span class="muted" style="font-weight:400">· onde está cada OC</span></h2>${barraBusca()}
@@ -11110,7 +11118,7 @@ async function telaControleOC(){
       <div class="chips" style="margin:-4px 0 6px">${chip('sit', f.sit, [['abertas', 'Em aberto'], ['atrasadas', 'Atrasadas'], ['parcial', 'Chegou em parte'], ['recebidas', 'Recebidas'], ['todas', 'Todas']])}
         <span style="width:10px"></span>${chip('para', f.para, [['todos', 'Para todos'], ['cliente', '👤 Cliente'], ['estoque', '📦 Estoque'], ['indef', 'A definir']])}
         <span style="width:10px"></span>${chip('per', f.per, [['ano', 'Pedidas em ' + ano], ['m12', 'Últimos 12 meses'], ['tudo', 'Desde sempre']])}</div>
-      ${velhas && f.sit === 'abertas' ? `<p class="muted" style="font-size:12px;margin:0 0 6px">Há mais ${velhas} OC(s) antigas que o CIGAM ainda mostra em aberto — veja em "Desde sempre".</p>` : ''}
+      ${velhas && f.sit === 'abertas' ? `<p class="muted" style="font-size:12px;margin:0 0 6px">Há mais ${velhas} OC(s) antigas que ainda constam em aberto — veja em "Desde sempre".</p>` : ''}
       <div style="overflow-x:auto"><table class="reg" id="cocTab"><thead><tr><th>OC</th><th>Pedido em</th><th>Fornecedor</th><th>Para quem</th><th>Previsão</th><th>Chegou?</th><th style="text-align:right">Total</th><th>Situação</th></tr></thead><tbody>
       ${l.slice(0, 500).map(o => { const d = pedidoEm(o), n = dias(d); return `<tr data-oc="${o.id}" style="cursor:pointer"><td><b>${o.numero}</b> <span class="muted">${esc(o.empresa || '')}</span></td>
         <td style="white-space:nowrap">${d ? dataBR(d) : '—'}${aberta(o) && n != null ? `<div class="muted" style="font-size:11px">há ${n} dia(s)</div>` : ''}</td><td>${esc(o.fornecedor || '—')}</td><td>${para(o)}</td>
@@ -11148,7 +11156,7 @@ function botoesCompras(){
 }
 async function limiteAprovacao(){
   const c = (await sb.from('compras_config').select('*').eq('id', 1).maybeSingle()).data || {};
-  const pr = modal('Aprovação de compras', `<p style="margin-top:0;font-size:13px">OC com valor acima deste limite só vai para o fornecedor depois de aprovada pela diretoria (como a "Liberação de alçadas" do CIGAM). Deixe vazio para não exigir aprovação.</p>
+  const pr = modal('Aprovação de compras', `<p style="margin-top:0;font-size:13px">OC com valor acima deste limite só vai para o fornecedor depois de aprovada pela diretoria. Deixe vazio para não exigir aprovação.</p>
     <label class="campo">Limite (R$)<input id="lmV" inputmode="decimal" value="${c.limite_aprovacao ? numFmt(c.limite_aprovacao) : ''}"></label>`, [['Cancelar', false], ['Salvar', true, 'pri']]);
   if(!await pr) return;
   try{ await exec(sb.from('compras_config').update({ limite_aprovacao: $('#lmV').value.trim() ? num($('#lmV').value) : null, atualizado_em: new Date().toISOString() }).eq('id', 1), 'Limite salvo.'); }catch(e){}
@@ -11456,7 +11464,7 @@ async function telaRegrasFiscais(){
   const ordem = Object.keys(OPER_FISC);
   const l = regras.filter(r => !['remessa_conserto','retorno_conserto','devolucao','servico'].includes(r.operacao) || r.tipo_fiscal === 'normal').sort((a, b) => ordem.indexOf(a.operacao) - ordem.indexOf(b.operacao) || a.tipo_fiscal.localeCompare(b.tipo_fiscal) || a.destino.localeCompare(b.destino) || a.destinatario.localeCompare(b.destinatario));
   $('#conteudo').innerHTML = `<div class="card"><h2>Regras fiscais <span class="muted" style="font-weight:400">· qual CFOP cada nota de saída usa</span></h2>
-    <p class="muted" style="font-size:12px">Sugestão montada a partir da lista de CFOP do CIGAM (a mesma da EQP e da Equiper). <b>Conferir com o Alex</b> e marcar "conferido". Na nota, o ERP escolhe o CFOP de cada produto por esta tabela; dá para trocar na própria nota.</p>
+    <p class="muted" style="font-size:12px">Sugestão montada a partir da lista de CFOP (a mesma da EQP e da Equiper). <b>Conferir com o Alex</b> e marcar "conferido". Na nota, o ERP escolhe o CFOP de cada produto por esta tabela; dá para trocar na própria nota.</p>
     <div style="overflow:auto"><table class="reg"><thead><tr><th>Operação</th><th>Produto</th><th>Destino</th><th>Destinatário</th><th>Código (CFOP)</th><th>Conferido</th></tr></thead><tbody>
     ${l.map(r => `<tr data-rg="${r.operacao}|${r.tipo_fiscal}|${r.destino}|${r.destinatario}"><td>${OPER_FISC[r.operacao]}</td><td>${['remessa_conserto','retorno_conserto','devolucao','servico'].includes(r.operacao) ? 'todos' : { normal:'normal', st:'com ST', isento:'isento' }[r.tipo_fiscal]}</td>
       <td>${r.destino === 'dentro' ? 'RJ' : 'fora do RJ'}</td><td>${r.destinatario === 'contribuinte' ? 'contribuinte' : 'não contribuinte / PF'}</td>
@@ -11644,7 +11652,7 @@ async function pdfOrdemCompra(id){
   const nomeForn = forn.p ? forn.p.nome : (O.fornecedor || O.fornecedor_nome || '');
   const corpo = DOC_CSS + `<div class="dgr">
       ${docCaixa('Comprador e local de entrega', [['Empresa', esc(comp && comp.p ? comp.p.nome : O.empresa)], ['CNPJ', esc(docFmtDoc(comp && comp.d && comp.d.documento))], ['Insc. est.', esc(comp && comp.d && comp.d.ie)], ['Endereço', esc(comp && comp.d ? docEnd(comp.d) : '')], ['Telefone', esc(docTel(comp && comp.d))]])}
-      ${docCaixa('Fornecedor', [['Nome', esc(nomeForn)], ['CNPJ', esc(docFmtDoc(forn.d && forn.d.documento))], ['Insc. est.', esc(forn.d && forn.d.ie)], ['Endereço', esc(forn.d ? docEnd(forn.d) : '')], ['Telefone', esc(docTel(forn.d))], ['Código CIGAM', esc(forn.p && (forn.p.codigos_cigam || []).join(', '))]])}
+      ${docCaixa('Fornecedor', [['Nome', esc(nomeForn)], ['CNPJ', esc(docFmtDoc(forn.d && forn.d.documento))], ['Insc. est.', esc(forn.d && forn.d.ie)], ['Endereço', esc(forn.d ? docEnd(forn.d) : '')], ['Telefone', esc(docTel(forn.d))], ['Código', esc(forn.p && (forn.p.codigos_cigam || []).join(', '))]])}
       ${docCaixa('Ordem de compra', [['Situação', esc(SITOC[O.situacao] || O.situacao)], ['Responsável', esc(resp)], ['Pedido do cliente', O.pedido_numero ? esc(O.pedido_numero) + (O.obra ? ' · ' + esc(O.obra) : '') : 'estoque próprio'], ['Previsão de entrega', O.previsao_entrega ? dataBR(O.previsao_entrega) : 'a combinar'], ['Enviada em', O.enviada_em ? docDia(O.enviada_em) : '']])}</div>
     <h2>Itens</h2>
     <div class="dtab"><table><thead><tr><th style="width:30px">Item</th><th style="width:96px">Cód. fornecedor</th><th style="width:58px">Nosso cód.</th><th>Especificação</th><th class="num" style="width:76px">Quant.</th><th class="num" style="width:82px">Unitário</th><th class="num" style="width:92px">Total</th></tr></thead><tbody>
@@ -12677,23 +12685,23 @@ async function acCopiarDe(u){
    Os grupos "Projetos" e "Serviços (apps)" (telas internas, escondidas pelos setores) ficam como estão. */
 window.MENU_GUARDADAS = {};
 (() => {
-  const ROTULO = { cp_precos: 'Tabela de preços de compra', fn_pagar: 'A pagar e lançamentos', ped_cigam: 'Pedidos (CIGAM)', os_cigam: 'Ordens de serviço (CIGAM)', fs_notas_cigam: 'Notas fiscais (CIGAM)',
-    es_mov_cigam: 'Estoque e movimentos (CIGAM)', vinculos: 'Vínculos com os apps' };
+  const ROTULO = { cp_precos: 'Tabela de preços de compra', fn_pagar: 'A pagar e lançamentos', ped_cigam: 'Pedidos', os_cigam: 'Ordens de serviço', fs_notas_cigam: 'Notas fiscais (entrada e saída)',
+    es_mov_cigam: 'Estoque e movimentos', vinculos: 'Vínculos com os apps' };
   const GRUPOS = [
     ['', ['inicio', 'chat']],
     ['Cadastros', ['pessoas', 'produtos']],
-    ['Vendas', ['orc', 'vd_express', 'pv_precos', 'vd_express_cfg']],
-    ['Compras', ['cp_compras', 'cp_controle', 'cp_precos']],
-    ['Financeiro', ['fn_receber', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fin_servicos', 'fin_projetos']],
+    ['Vendas', ['orc', 'vd_express', 'ped_cigam', 'pv_precos', 'vd_express_cfg']],
+    ['Compras', ['cp_compras', 'cp_controle', 'cp_precos', 'es_mov_cigam']],
+    ['Serviços', ['os_cigam']],   // 25/11 (Júlio): nada de "Histórico do CIGAM" à parte — as telas fazem parte do ERP
+    ['Financeiro', ['fn_receber', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fn_notas_entrada', 'fn_notas_saida', 'fin_servicos', 'fin_projetos']],
     ['Fiscal', ['fn_notas', 'fn_recebidas', 'fn_contabil', 'adm_fiscal', 'adm_cert', 'adm_regras']],
     ['Relatórios', ['fn_painel', 'fn_gerencial', 'fn_cnpj']],
-    ['Histórico do CIGAM', ['ped_cigam', 'os_cigam', 'fs_notas_cigam', 'es_mov_cigam']],
     ['Administração', ['adm_usuarios', 'adm_menu', 'fn_plano', 'registro', 'adm_backup', 'vinculos', 'projetos', 'servicos']]
   ];
   /* fora do menu: Contatos (vazia; o contato fica na ficha da empresa) · Cobrança e Posição do cliente (estão dentro de A receber:
      "Precisa de você" e "Por cliente"; a posição também abre pela ficha da empresa) · Status das ordens de compra (mesmos dados de
      Ordens de compra) · Estoque antigo do ERP (vazio; o estoque em uso é o do app de Serviços) */
-  const GUARDAR = ['contatos', 'fn_cobranca', 'fn_posicao', 'cp_status', 'sv_estoque', 'obras', 'fila', 'cp_requisicoes'];   // 25/11: Obras e Aprovação saíram do menu (abrem por link, sino e busca)
+  const GUARDAR = ['contatos', 'fn_cobranca', 'fn_posicao', 'cp_status', 'sv_estoque', 'obras', 'fila', 'cp_requisicoes', 'fs_notas_cigam'];   // notas juntas: abre pela ficha da empresa; no menu ficam Notas de entrada e Notas de saída   // 25/11: Obras e Aprovação saíram do menu (abrem por link, sino e busca)
   const INTERNOS = ['Projetos', 'Serviços (apps)'];
   const item = new Map(MENU.flatMap(g => g.itens.map(i => [i[0], i])));
   Object.entries(ROTULO).forEach(([k, r]) => { if(item.has(k)) item.get(k)[2] = r; });
