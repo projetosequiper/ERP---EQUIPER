@@ -10692,12 +10692,13 @@ async function inventario(){
 /* (18/11, script 73) Tabela de preços de cada fornecedor: compras_precos guarda cada preço (compras do CIGAM e tabelas coladas);
    a visão compras_precos_tabela dá, por fornecedor × produto, o último preço, o anterior, menor/maior e quantas compras.
    Abas: Por fornecedor · Comparar fornecedores (por produto) · Todos os preços (a lista de antes, com "aplicar margem"). */
-ST.pcVis = ST.pcVis || 'forn';
+ST.pcVis = ST.pcVis || 'tab';
 async function telaPrecosCompra(){
   carregandoTela();
-  const vis = ST.pcVis, abas = [['forn', 'Por fornecedor'], ['prod', 'Comparar fornecedores'], ['lista', 'Todos os preços']];
+  const vis = ST.pcVis, abas = [['tab', 'Tabela de preços'], ['forn', 'Notas de compra · por fornecedor'], ['prod', 'Notas · comparar fornecedores'], ['lista', 'Notas · todos os preços']];
   const topo = `<div class="chips" id="pcAbas" style="margin:4px 0 10px">${abas.map(([k, t]) => `<span class="chip${vis === k ? ' on' : ''}" data-pv="${k}">${t}</span>`).join('')}</div>`;
   const liga = () => document.querySelectorAll('[data-pv]').forEach(c => c.onclick = () => { ST.pcVis = c.dataset.pv; telaPrecosCompra(); });
+  if(vis === 'tab' && typeof telaTabelaPrecos === 'function') return telaTabelaPrecos('compra', topo, liga);   // 25/11: a tabela do CIGAM (56q)
   if(vis === 'lista') return telaPrecosCompraLista(topo, liga);
   if(vis === 'forn' && typeof telaPrecosForn === 'function') return telaPrecosForn(topo, liga);   // 25/11: condições por fornecedor e linha (56p)
   const [t, pr] = await Promise.all([tudo(() => sb.from('compras_precos_tabela').select('*').order('data', { ascending:false })), tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,unidade'))]);
@@ -10915,6 +10916,9 @@ async function telaPrecosForn(topo, liga){
 
 /* ---------- VENDA: margem por fornecedor / linha → preço de venda ---------- */
 async function telaPrecosVenda(){
+  const pvVis = ST.pvVis || 'tab', pvTopo = `<div class="chips" id="pvAbas" style="margin:4px 0 10px">${[['tab', 'Tabela de preços'], ['marg', 'Margem por fornecedor (notas de compra)']].map(([k, t]) => `<span class="chip${pvVis === k ? ' on' : ''}" data-pvv="${k}">${t}</span>`).join('')}</div>`;
+  const pvLiga = () => document.querySelectorAll('[data-pvv]').forEach(c => c.onclick = () => { ST.pvVis = c.dataset.pvv; ST.busca = ''; telaPrecosVenda(); });
+  if(pvVis === 'tab' && typeof telaTabelaPrecos === 'function') return telaTabelaPrecos('venda', pvTopo, pvLiga);   // 25/11: tabela PADRAO do CIGAM (56q)
   carregandoTela();
   const seq = ST._pvSeq = (ST._pvSeq || 0) + 1;
   const B = await pcBase(); if(seq !== ST._pvSeq) return;
@@ -10931,7 +10935,7 @@ async function telaPrecosVenda(){
       <td><input data-mg inputmode="decimal" value="${(geral ? G.margem : L.margem) != null ? pct(geral ? G.margem : L.margem) : ''}" placeholder="${geral ? 'ex.: 35' : (G.margem != null ? 'usa a geral (' + pct(G.margem) + ')' : 'usa a geral')}" style="width:150px;text-align:right" ${edita ? '' : 'disabled'}> %</td>
       <td style="text-align:right">${rs.length}</td><td style="text-align:right">${efet != null ? mudam(rs) : '—'}</td>
       <td>${edita && efet != null && mudam(rs) ? `<button class="btn peq pri" data-apl="${geral ? 'geral' : L.id}">Aplicar nos produtos</button>` : ''}</td></tr>`; };
-  $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de venda <span class="muted" style="font-weight:400">· margem de cada fornecedor → preço de venda</span></h2>
+  $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de venda <span class="muted" style="font-weight:400">· margem de cada fornecedor → preço de venda</span></h2>${pvTopo}
       <div class="barra">${pcSel(B)}</div>
       ${B.f ? `<h3 style="font-size:14px;margin:6px 0 4px">Margem de venda · ${esc(B.f.nome)}</h3>
       <div style="overflow-x:auto"><table class="reg" id="pvMarg"><thead><tr><th>Linha do fornecedor</th><th>Margem sobre o custo</th><th style="text-align:right">Itens</th><th style="text-align:right">Preços que mudam</th><th></th></tr></thead><tbody>
@@ -10945,7 +10949,7 @@ async function telaPrecosVenda(){
         <td style="text-align:right;white-space:nowrap">${hoje(x) != null ? R$(hoje(x)) + (doCigam(x) ? ' <span class="tag" data-pvcigam title="Preço de venda igual ao da tabela do CIGAM. O botão Aplicar nos produtos não muda este item." style="background:#e8f1fb;color:#1f5fa8;font-size:10px">tabela CIGAM</span>' : '') : '<span class="muted" style="font-size:11px">sem produto</span>'}</td>
         <td style="text-align:right;white-space:nowrap">${d == null || Math.abs(d) < 0.05 ? '' : `<span style="color:${d > 0 ? '#1e8449' : '#c0392b'}">${d > 0 ? '▲' : '▼'} ${pct(Math.abs(d))}%</span>`}</td></tr>`; }).join('') || '<tr><td colspan="7" class="vazio">Nenhum preço deste fornecedor.</td></tr>'}</tbody></table></div>
       ${l.length > 600 ? `<p class="muted">Mostrando 600 de ${l.length}. Use a busca.</p>` : ''}</div>`;
-  ligaBarra(null);
+  ligaBarra(null); pvLiga();
   $('#pcForn').onchange = e => { ST.pcForn = e.target.value; ST.busca = ''; telaPrecosVenda(); };
   document.querySelectorAll('#pvMarg [data-mg]').forEach(i => i.onchange = async () => { if(await pcGrava(k, i.closest('tr').dataset.ln, 'margem', i.value.trim())){ toast('Margem gravada.'); telaPrecosVenda(); } });
   document.querySelectorAll('[data-apl]').forEach(b => b.onclick = async () => { const geral = b.dataset.apl === 'geral', L = geral ? null : D.linhas.find(x => x.id === b.dataset.apl);
@@ -10957,6 +10961,53 @@ async function telaPrecosVenda(){
     ['Custo final', x => R$(x.custo_final)], ['Margem %', x => x.margem != null ? pct(x.margem) : ''], ['Venda calculada', x => x.venda_calc ? R$(x.venda_calc) : ''], ['Venda hoje', x => hoje(x) != null ? R$(hoje(x)) : '']], l)]);
 }
 Object.assign(TELAS, { pv_precos: telaPrecosVenda });
+
+/* ============ Tabela de preços (compra e venda) = as tabelas do CIGAM (script 98, 25/11 — Júlio) ============
+   "deixa em tabela de preços mesmo, com os preços certos": a primeira aba de Compras → Tabela de preços de compra e de
+   Vendas → Tabela de preços de venda mostra o que veio da tela Preços do CIGAM (importar_tabela_cigam.py):
+   venda = PADRAO; compra = a tabela do ICMS do item (IMPOR2, NACION, SUBST1…) ou de custo de kit (KITS, QUADRO, MONT1).
+   Item fora da tabela não aparece e fica sem preço no cadastro. As abas antigas (notas de compra, margem por fornecedor) continuam ao lado. */
+const TPX = { rows: null, em: null, lido: 0 };
+async function telaTabelaPrecos(modo, topo, liga){
+  carregandoTela();
+  const seq = ST._tpSeq = (ST._tpSeq || 0) + 1, compra = modo === 'compra', titulo = compra ? 'Tabela de preços de compra' : 'Tabela de preços de venda';
+  if(!TPX.rows || Date.now() - TPX.lido > 60000){   // relê a cada minuto (a ficha do material pode ter mudado um preço)
+    const [r, e] = await Promise.all([tudo(() => sb.from('produtos').select('id,codigo,descricao,unidade,preco,custo,margem,custo_tabela,preco_cigam,preco_cigam_data').not('preco_cigam', 'is', null).order('codigo')),
+      sb.from('cigam_tabela_precos').select('importado_em').limit(1)]);
+    if(seq !== ST._tpSeq) return;
+    if(r.error || e.error){ $('#conteudo').innerHTML = `<div class="card"><h2>${titulo}</h2>${topo}<p class="vazio">Falta rodar os scripts <b>97</b> e <b>98</b> (tabelas de preço do CIGAM).</p></div>`; return liga(); }
+    TPX.rows = r.data || []; TPX.lido = Date.now(); TPX.em = e.data && e.data[0] ? e.data[0].importado_em : null;
+  }
+  const tabDe = p => p.custo_tabela ? String(p.custo_tabela).split(' · ')[0] : '', nomeTab = {};
+  TPX.rows.forEach(p => { if(p.custo_tabela) nomeTab[tabDe(p)] = String(p.custo_tabela).split(' · ').slice(1).join(' · '); });
+  const conta = {}; TPX.rows.forEach(p => { const t = tabDe(p) || '-'; conta[t] = (conta[t] || 0) + 1; });
+  const tabs = Object.keys(nomeTab).sort((a, b) => conta[b] - conta[a]), sel = ST.tpTab || '';
+  const base = TPX.rows.filter(p => sel === '-' ? !p.custo_tabela : sel ? tabDe(p) === sel : (compra ? !!p.custo_tabela : true));
+  const b = norm(ST.busca), l = base.filter(p => !b || norm(p.codigo + ' ' + p.descricao + ' ' + (p.custo_tabela || '')).temTudo(b));
+  const fator = p => p.custo > 0 && p.preco_cigam > 0 ? (Number(p.preco_cigam) / Number(p.custo)) : null, fx = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const cCompra = p => `<td style="text-align:right;white-space:nowrap">${p.custo != null ? '<b>' + R$(p.custo) + '</b>' : '<span class="muted">—</span>'}</td>`,
+        cVenda = p => `<td style="text-align:right;white-space:nowrap">${compra ? R$(p.preco_cigam) : '<b>' + R$(p.preco_cigam) + '</b>'}${Math.abs(Number(p.preco) - Number(p.preco_cigam)) >= 0.005 ? ` <span class="tag" title="No cadastro do ERP o preço de venda deste item foi posto à mão: ${R$(p.preco)}" style="background:#fdf1dc;color:#9a6700;font-size:10px">ERP ${R$(p.preco)}</span>` : ''}</td>`,
+        cTab = p => `<td style="font-size:12px">${p.custo_tabela ? `<b>${esc(tabDe(p))}</b> <span class="muted">${esc(nomeTab[tabDe(p)] || '')}</span>` : '<span class="muted">sem tabela de compra</span>'}</td>`,
+        cMarg = p => `<td style="text-align:right">${fator(p) ? '× ' + fx(fator(p)) : '<span class="muted">—</span>'}</td>`;
+  $('#conteudo').innerHTML = `<div class="card"><h2>${titulo} <span class="muted" style="font-weight:400">· tabela do CIGAM</span></h2>${topo}
+      <div class="barra"><select id="tpTab" style="max-width:100%;flex:1 1 280px">
+          <option value="">${compra ? 'Todas as tabelas de compra' : 'Todos os itens da tabela de venda'} · ${compra ? TPX.rows.filter(p => p.custo_tabela).length : TPX.rows.length} itens</option>
+          ${tabs.map(t => `<option value="${esc(t)}"${sel === t ? ' selected' : ''}>${esc(t)} · ${esc(nomeTab[t])} · ${conta[t]} itens</option>`).join('')}
+          ${compra ? '' : `<option value="-"${sel === '-' ? ' selected' : ''}>Sem tabela de compra (só preço de venda) · ${conta['-'] || 0} itens</option>`}</select>
+        <input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}" style="flex:1 1 180px"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
+      <p class="muted" style="font-size:12px">${compra ? 'Preço de compra de cada item na tabela do CIGAM (a tabela é a do ICMS do item) e o preço de venda que sai dele (compra × margem da tabela).' : 'Preço de venda da tabela PADRAO do CIGAM — é o que entra nos orçamentos e no Express.'}
+        Item que não está na tabela fica <b>sem preço</b> no cadastro.${TPX.em ? ' Tabela trazida do CIGAM em ' + dataBR(String(TPX.em).slice(0, 10)) + '.' : ''}</p>
+      <div style="overflow-x:auto"><table class="reg" id="tpLista"><thead><tr><th>Cód.</th><th>Produto</th>${compra ? '<th>Tabela de compra</th><th style="text-align:right">Preço de compra</th><th style="text-align:right">Margem</th><th style="text-align:right">Preço de venda</th>'
+        : '<th style="text-align:right">Preço de venda</th><th style="text-align:right">Preço de compra</th><th>Tabela de compra</th><th style="text-align:right">Margem</th>'}<th>Desde</th></tr></thead><tbody>
+      ${l.slice(0, 600).map(p => `<tr data-tp="${p.id}" style="cursor:pointer"><td><b>${esc(p.codigo)}</b></td><td>${esc(p.descricao)}</td>${compra ? cTab(p) + cCompra(p) + cMarg(p) + cVenda(p) : cVenda(p) + cCompra(p) + cTab(p) + cMarg(p)}
+        <td style="font-size:12px;white-space:nowrap">${p.preco_cigam_data ? dataBR(p.preco_cigam_data) : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum item da tabela com esse filtro.</td></tr>'}</tbody></table></div>
+      ${l.length > 600 ? `<p class="muted">Mostrando 600 de ${l.length}. Use a busca ou escolha uma tabela.</p>` : `<p class="muted" style="font-size:12px">${l.length} ${l.length === 1 ? 'item' : 'itens'}.</p>`}</div>`;
+  liga(); ligaBarra(null);
+  $('#tpTab').onchange = e => { ST.tpTab = e.target.value; desenhar(); };
+  if(typeof formProduto === 'function') document.querySelectorAll('#tpLista [data-tp]').forEach(tr => tr.onclick = () => formProduto(tr.dataset.tp));
+  expRegistra(() => [expCols(titulo + ' · tabela do CIGAM', [['Código', p => p.codigo], ['Produto', p => p.descricao], ['Un.', p => p.unidade || ''], ['Tabela de compra', p => p.custo_tabela || ''],
+    ['Preço de compra', p => p.custo != null ? R$(p.custo) : ''], ['Margem', p => fator(p) ? fx(fator(p)) : ''], ['Preço de venda (tabela)', p => R$(p.preco_cigam)], ['Preço de venda no ERP', p => R$(p.preco)], ['Desde', p => p.preco_cigam_data ? dataBR(p.preco_cigam_data) : '']], l)]);
+}
 
 /* ============ Status das ordens de compra (script 77, 19/11 — pedido do Júlio) ============
    Um quadro com as OCs separadas pela situação: em preparação, enviadas ao fornecedor (no prazo / atrasadas),
