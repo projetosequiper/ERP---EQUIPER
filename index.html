@@ -7637,13 +7637,15 @@ function expQtd(q, n){ const v = Number(q && q.v) || 1; return !q || q.tipo === 
    Preço: o do cadastro de materiais, ou o "preço fixo" do item que vem junto (ex.: quadro calculado à parte). */
 function expItens(cfg, inst){
   const out = [], secs = [], fixo = v => v === null || v === undefined || v === '' || isNaN(Number(v)) ? null : Number(v);
-  const soma = (sec, codigo, nome, q, preco, abre) => { if(!(q > 0)) return;
-    /* kit com itens cadastrados: entra aberto se a opção "Explodir todos os kits" estiver marcada, ou se o item está marcado
-       "abrir kit" na Configuração (como o kit boiler); senão entra fechado e pode ser explodido depois, dentro do orçamento */
-    const pk = EXP.prod[codigo], comps = preco == null && EXP.kits && pk && (EXP.explodir === true || abre) ? EXP.kits[pk.id] : null;
-    if(comps && comps.length){ comps.forEach(c => { const p = EXP.porId[c.componente_id]; if(p) soma(sec, p.codigo, p.descricao, q * (Number(c.quantidade) || 1), null); }); return; }
+  const KA = inst.kits || {}, PM = inst.precos || {};
+  /* kit com itens cadastrados: abre ou fecha POR KIT — vale a escolha feita na tela (inst.kits[código]); sem escolha, abre só o que
+     está marcado "abrir kit" na Configuração (como o kit boiler). Os itens de um kit aberto levam doKit = código do kit. */
+  const soma = (sec, codigo, nome, q, preco, abre, doKit) => { if(!(q > 0)) return;
+    const pk = EXP.prod[codigo], cs = EXP.kits && pk ? EXP.kits[pk.id] : null, ehKit = !!(cs && cs.length);
+    const aberto = ehKit && (codigo in KA ? !!KA[codigo] : (preco == null && !!abre));
+    if(aberto){ cs.forEach(c => { const p = EXP.porId[c.componente_id]; if(p) soma(sec, p.codigo, p.descricao, q * (Number(c.quantidade) || 1), null, false, codigo); }); return; }
     if(!secs.includes(sec)) secs.push(sec);
-    const x = out.find(i => i.codigo === codigo && i.sec === sec && i.precoFixo === preco); if(x) x.quantidade += q; else out.push({ sec, codigo, nome, quantidade: q, precoFixo: preco }); };
+    const x = out.find(i => i.codigo === codigo && i.sec === sec && i.precoFixo === preco && i.doKit === (doKit || null)); if(x) x.quantidade += q; else out.push({ sec, codigo, nome, quantidade: q, precoFixo: preco, doKit: doKit || null, ehKit }); };
   (cfg.grupos || []).forEach(g => { const e = inst.esc[g.id]; if(!e || !e.eq || !(e.n > 0)) return;
     const eq = (g.equipamentos || []).find(x => x.id === e.eq); if(!eq || !expSe(eq.se, inst.resp)) return;
     const sec = String(g.nome || '').split(' · ')[0].trim() || 'Itens';
@@ -7652,7 +7654,8 @@ function expItens(cfg, inst){
   // ordem das seções: primeiro as subdivisões (na ordem da configuração), depois as seções escritas nos itens; "Material auxiliar" por último
   const dosGrupos = [...new Set((cfg.grupos || []).map(g => String(g.nome || '').split(' · ')[0].trim() || 'Itens'))];
   const peso = sx => /^material/i.test(sx) && !dosGrupos.includes(sx) ? 9000 : dosGrupos.includes(sx) ? dosGrupos.indexOf(sx) : 1000 + secs.indexOf(sx);
-  return out.map((x, i) => ({ x, i })).sort((a, b) => peso(a.x.sec) - peso(b.x.sec) || a.i - b.i).map(o => o.x).map(i => { const p = EXP.prod[i.codigo]; return { ...i, p, preco: i.precoFixo != null ? i.precoFixo : (p ? Number(p.preco) || 0 : 0) }; });
+  return out.map((x, i) => ({ x, i })).sort((a, b) => peso(a.x.sec) - peso(b.x.sec) || a.i - b.i).map(o => o.x).map(i => { const p = EXP.prod[i.codigo], chave = [i.sec, i.codigo, i.doKit || ''].join('|'), m = fixo(PM[chave]);   // preço: o trocado à mão > o fixo da Configuração > o do cadastro
+    return { ...i, p, chave, precoManual: m, preco: m != null ? m : i.precoFixo != null ? i.precoFixo : (p ? Number(p.preco) || 0 : 0) }; });
 }
 const expSecs = its => [...new Set(its.map(i => i.sec))];
 
@@ -7666,7 +7669,6 @@ async function telaExpress(){
   const RASC = rq.error ? null : (rq.data || []);   // null = falta o script 95
   if(EXP.erro) return $('#conteudo').innerHTML = expSemScript('Orçamento Express');
   const X = ST.express, ativos = EXP.sis.filter(s => s.ativo);
-  EXP.explodir = !!X.explodirKits;
   const novaInst = s => { const cfg = s.config || {}, resp = {}; (cfg.perguntas || []).forEach(p => resp[p.id] = p.padrao || (p.opcoes || [])[0] || '');
     return { id: expId('i'), sis: s.id, titulo: s.nome, resp, esc: {} }; };
   const sisDe = i => EXP.sis.find(s => s.id === i.sis);
@@ -7679,8 +7681,8 @@ async function telaExpress(){
         return `<div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;flex-wrap:wrap"><label class="campo" style="flex:1 1 260px;margin:0">${esc(g.rotulo || g.nome)}<select data-xg="${k}:${esc(g.id)}"><option value="">— não tem —</option>${ops.map(o => `<option value="${esc(o.id)}" ${e.eq === o.id ? 'selected' : ''}>${esc(o.nome)}${EXP.prod[o.codigo] ? '' : ' (código ' + esc(o.codigo) + ' não achado)'}</option>`).join('')}</select></label>
           <label class="campo" style="width:110px;margin:0">Quantidade<input data-xn="${k}:${esc(g.id)}" type="number" min="1" step="1" value="${e.n || 1}"></label></div>`; }).join('')}
       ${its.length ? `<div style="overflow-x:auto;margin-top:12px"><table class="reg"><thead><tr><th>Código</th><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>
-        ${its.map((x, xi) => `${expSecs(its).length > 1 && (xi === 0 || its[xi - 1].sec !== x.sec) ? `<tr style="background:#f0f0f2"><td colspan="5" style="font-weight:700;font-size:12px;letter-spacing:.3px;text-transform:uppercase">${esc(x.sec)}</td></tr>` : ''}<tr><td>${esc(x.codigo)}</td><td>${x.p ? esc(x.p.descricao) : `<span style="color:var(--verm)">não está no cadastro de materiais</span> · ${esc(x.nome || '')}`}${x.p && TIPOS_PROD[x.p.tipo] && x.p.tipo !== 'equipamento' ? ` <span class="muted" style="font-size:11px">${TIPOS_PROD[x.p.tipo].toLowerCase()}</span>` : ''}</td>
-          <td style="text-align:right">${x.quantidade.toLocaleString('pt-BR')}</td><td style="text-align:right">${x.preco ? R$(x.preco) + (x.precoFixo != null ? ' <span class="muted" style="font-size:11px" title="Preço fixo definido na Configuração do Express">fixo</span>' : '') : '<span style="color:#b45309">sem preço</span>'}</td><td style="text-align:right">${R$(x.quantidade * x.preco)}</td></tr>`).join('')}</tbody>
+        ${its.map((x, xi) => `${expSecs(its).length > 1 && (xi === 0 || its[xi - 1].sec !== x.sec) ? `<tr style="background:#f0f0f2"><td colspan="5" style="font-weight:700;font-size:12px;letter-spacing:.3px;text-transform:uppercase">${esc(x.sec)}</td></tr>` : ''}${x.doKit && (xi === 0 || its[xi - 1].doKit !== x.doKit || its[xi - 1].sec !== x.sec) ? `<tr><td colspan="5" style="font-size:12px;padding:4px 8px;background:#fafafa"><span class="muted">Kit aberto:</span> <b>${esc(x.doKit)}</b> ${esc((EXP.prod[x.doKit] || {}).descricao || '')} <button class="btn peq" data-xkf="${k}:${esc(x.doKit)}" title="Voltar a mostrar este kit como um item só">⤴ fechar kit</button></td></tr>` : ''}<tr><td>${esc(x.codigo)}</td><td>${x.doKit ? '<span class="muted">↳</span> ' : ''}${x.p ? esc(x.p.descricao) : `<span style="color:var(--verm)">não está no cadastro de materiais</span> · ${esc(x.nome || '')}`}${x.p && TIPOS_PROD[x.p.tipo] && x.p.tipo !== 'equipamento' ? ` <span class="muted" style="font-size:11px">${TIPOS_PROD[x.p.tipo].toLowerCase()}</span>` : ''}${x.ehKit ? ` <button class="btn peq" data-xka="${k}:${esc(x.codigo)}" title="Explodir só este kit: troca a linha pelos itens de dentro dele">⤵ abrir kit</button>` : ''}</td>
+          <td style="text-align:right">${x.quantidade.toLocaleString('pt-BR')}</td><td style="text-align:right;white-space:nowrap"><input data-xv="${k}:${esc(x.chave)}" inputmode="decimal" value="${x.preco ? numFmt(x.preco) : ''}" placeholder="sem preço" title="Valor unitário: digite para trocar só neste orçamento. Apague para voltar ao ${x.precoFixo != null ? 'preço fixo da Configuração' : 'preço do cadastro'}." style="width:108px;text-align:right;${x.precoManual != null ? 'border-color:#b45309;color:#b45309;font-weight:600' : x.preco ? '' : 'border-color:#b45309'}">${x.precoManual != null ? '<div style="font-size:10.5px;color:#b45309">trocado à mão</div>' : x.precoFixo != null ? '<div class="muted" style="font-size:10.5px">preço fixo</div>' : ''}</td><td style="text-align:right">${R$(x.quantidade * x.preco)}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td colspan="4" style="text-align:right"><b>Total do pedido</b></td><td style="text-align:right"><b>${R$(tot)}</b></td></tr></tfoot></table></div>` : '<p class="muted" style="font-size:13px;margin:10px 0 0">Escolha o equipamento para ver os itens.</p>'}</div>`; };
   const mexeu = () => { X.sujo = true; };
   const geral = X.inst.reduce((a, i) => a + expItens(sisDe(i).config || {}, i).reduce((b, x) => b + x.quantidade * x.preco, 0), 0);
@@ -7692,10 +7694,13 @@ async function telaExpress(){
       <div style="margin-top:14px"><span style="font-size:13px"><b>2.</b> O que este orçamento vai ter? Toque para acrescentar um sistema (pode repetir):</span>
         <div class="chips" style="margin-top:6px">${ativos.map(s => `<button class="chip" data-xadd="${s.id}">+ ${esc(s.nome)}</button>`).join('') || '<span class="muted">Nenhum sistema cadastrado. Cadastre em Configuração do Express.</span>'}</div></div></div>
     ${X.inst.map(cartao).join('')}
-    <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1"><b>3.</b> ${X.inst.length} pedido(s) · total <b style="font-size:17px">${R$(geral)}</b><div class="muted" style="font-size:12px">Abre o orçamento pronto para conferir, ajustar e salvar. Preços do cadastro de materiais.</div></span>
-      <label style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap" title="Desmarcado: cada kit entra como um item só (dá para explodir depois, dentro do orçamento, no botão kit), menos os marcados 'abrir kit' na Configuração do Express. Marcado: todos os kits entram abertos, item por item, com o preço de cada item"><input type="checkbox" id="xKits" style="width:auto" ${X.explodirKits ? 'checked' : ''}> Explodir todos os kits nos itens</label>
+    <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1"><b>3.</b> ${X.inst.length} pedido(s) · total <b style="font-size:17px">${R$(geral)}</b><div class="muted" style="font-size:12px">Abre o orçamento pronto para conferir, ajustar e salvar. Em cada pedido: troque o valor de qualquer item digitando no campo, e use ⤵ abrir kit para explodir só aquele kit.</div></span>
       ${X.inst.length ? '<button class="btn" id="xLimpa">Limpar</button>' : ''}<button class="btn pri" id="xGerar">⚡ Gerar orçamento</button></div>`;
-  $('#xKits').onchange = e => { X.explodirKits = e.target.checked; X.sujo = true; telaExpress(); };
+  /* 25/11 (Júlio): explodir cada kit separadamente e trocar o valor à mão, item por item */
+  const marcaKit = (v) => b => b.onclick = () => { const d = b.dataset.xka || b.dataset.xkf, k = d.slice(0, d.indexOf(':')), cod = d.slice(d.indexOf(':') + 1), i = X.inst[+k]; (i.kits = i.kits || {})[cod] = v; mexeu(); telaExpress(); };
+  document.querySelectorAll('[data-xka]').forEach(marcaKit(true)); document.querySelectorAll('[data-xkf]').forEach(marcaKit(false));
+  document.querySelectorAll('[data-xv]').forEach(inp => inp.onchange = () => { const d = inp.dataset.xv, k = d.slice(0, d.indexOf(':')), chave = d.slice(d.indexOf(':') + 1), i = X.inst[+k]; i.precos = i.precos || {};
+    if(inp.value.trim() === '') delete i.precos[chave]; else i.precos[chave] = num(inp.value) || 0; mexeu(); telaExpress(); });
   const pega = pickEmpresa($('#xCli'), X.cliente, pid => { X.cliente = pid; mexeu(); telaExpress(); }, { papel: 'cliente', rotulo: 'cliente' });
   document.querySelectorAll('[data-xadd]').forEach(b => b.onclick = () => { X.inst.push(novaInst(EXP.sis.find(s => s.id === b.dataset.xadd))); mexeu(); telaExpress(); });
   document.querySelectorAll('[data-xrem]').forEach(b => b.onclick = () => { X.inst.splice(+b.dataset.xrem, 1); mexeu(); telaExpress(); });
