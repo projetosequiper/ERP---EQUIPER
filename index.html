@@ -7661,7 +7661,7 @@ const expSecs = its => [...new Set(its.map(i => i.sec))];
 
 /* ================= Orçamento Express ================= */
 /* estado: { id (rascunho salvo ou null), nome, cliente, inst: [sistemas escolhidos], sujo, salvoEm } — script 95 guarda os rascunhos */
-const expNovo = () => ({ id: null, nome: '', cliente: '', inst: [], sujo: false, salvoEm: null });
+const expNovo = () => ({ id: null, nome: '', cliente: '', inst: [], gerados: [], sujo: false, salvoEm: null });
 ST.express = expNovo();
 async function telaExpress(){
   carregandoTela(); await expCarrega(true);
@@ -7675,7 +7675,7 @@ async function telaExpress(){
   X.inst = X.inst.filter(sisDe);
   const cartao = (i, k) => { const s = sisDe(i), cfg = s.config || {}, its = expItens(cfg, i), tot = its.reduce((a, x) => a + x.quantidade * x.preco, 0);
     return `<div class="card" data-xi="${k}" style="border-left:4px solid var(--verm)">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><b class="muted" style="font-size:12px">PEDIDO ${k + 1}</b><input data-xt="${k}" value="${esc(i.titulo)}" style="font-weight:700;flex:1" title="Título do pedido"><button class="btn peq" data-xrem="${k}" title="Tirar este sistema">✕</button></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><b class="muted" style="font-size:12px">SISTEMA ${k + 1}</b><input data-xt="${k}" value="${esc(i.titulo)}" style="font-weight:700;flex:1" title="Título do pedido"><button class="btn peq" data-xrem="${k}" title="Tirar este sistema">✕</button></div>
       <div class="grade">${(cfg.perguntas || []).map(p => `<label class="campo">${esc(p.rotulo)}<select data-xp="${k}:${esc(p.id)}">${(p.opcoes || []).map(o => `<option ${i.resp[p.id] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`).join('')}</div>
       ${(cfg.grupos || []).map(g => { const ops = (g.equipamentos || []).filter(e => expSe(e.se, i.resp)), e = i.esc[g.id] || {};
         return `<div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;flex-wrap:wrap"><label class="campo" style="flex:1 1 260px;margin:0">${esc(g.rotulo || g.nome)}<select data-xg="${k}:${esc(g.id)}"><option value="">— não tem —</option>${ops.map(o => `<option value="${esc(o.id)}" ${e.eq === o.id ? 'selected' : ''}>${esc(o.nome)}${EXP.prod[o.codigo] ? '' : ' (código ' + esc(o.codigo) + ' não achado)'}</option>`).join('')}</select></label>
@@ -7687,15 +7687,15 @@ async function telaExpress(){
   const mexeu = () => { X.sujo = true; };
   const geral = X.inst.reduce((a, i) => a + expItens(sisDe(i).config || {}, i).reduce((b, x) => b + x.quantidade * x.preco, 0), 0);
   const vazio = !X.cliente && !X.inst.length;
-  $('#conteudo').innerHTML = `<div class="card"><h2>Orçamento Express <span class="muted" style="font-weight:400">· escolha o cliente e os sistemas; o ERP monta os pedidos</span></h2>
+  $('#conteudo').innerHTML = `<div class="card"><h2>Orçamento Express <span class="muted" style="font-weight:400">· escolha o cliente e os sistemas; o ERP monta um orçamento numerado para cada sistema</span></h2>
       <div class="barra" style="margin:2px 0 12px;align-items:center"><span style="flex:1;font-size:13px" id="xEstado">${X.id ? `📄 <b>${esc(X.nome)}</b> <span class="muted">· ${X.sujo ? '<b style="color:#b45309">alterado, não salvo</b>' : 'salvo' + (X.salvoEm ? ' em ' + fmtData(X.salvoEm) : '')}</span>` : vazio ? '<span class="muted">Orçamento novo (em branco).</span>' : '<span class="muted">Orçamento novo · <b style="color:#b45309">ainda não salvo</b></span>'}</span>
         <button class="btn" id="xNovo">+ Novo</button>${RASC ? `<button class="btn" id="xSalvar">💾 Salvar</button><button class="btn" id="xAbrir">📂 Salvos${RASC.length ? ' (' + RASC.length + ')' : ''}</button>` : ''}</div>
       <div class="campo largo" data-nao-suja="1"><span><b>1.</b> Cliente</span><div id="xCli"></div></div>
       <div style="margin-top:14px"><span style="font-size:13px"><b>2.</b> O que este orçamento vai ter? Toque para acrescentar um sistema (pode repetir):</span>
         <div class="chips" style="margin-top:6px">${ativos.map(s => `<button class="chip" data-xadd="${s.id}">+ ${esc(s.nome)}</button>`).join('') || '<span class="muted">Nenhum sistema cadastrado. Cadastre em Configuração do Express.</span>'}</div></div></div>
     ${X.inst.map(cartao).join('')}
-    <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1"><b>3.</b> ${X.inst.length} pedido(s) · total <b style="font-size:17px">${R$(geral)}</b><div class="muted" style="font-size:12px">Abre o orçamento pronto para conferir, ajustar e salvar. Em cada pedido: troque o valor de qualquer item digitando no campo, e use ⤵ abrir kit para explodir só aquele kit.</div></span>
-      ${X.inst.length ? '<button class="btn" id="xLimpa">Limpar</button>' : ''}<button class="btn pri" id="xGerar">⚡ Gerar orçamento</button></div>`;
+    <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1"><b>3.</b> ${X.inst.length} sistema(s) · total <b style="font-size:17px">${R$(geral)}</b>${(X.gerados || []).length ? `<div style="font-size:12.5px;margin-top:2px">Já gerado: ${X.gerados.map(g => `<a href="#" data-xorc2="${g.id}"><b>${numOrc(g.numero)}</b></a> <span class="muted">${esc(g.titulo)}</span>`).join(' · ')}</div>` : ''}<div class="muted" style="font-size:12px">Cada sistema vira um orçamento próprio, com o seu número, em Vendas → Orçamentos. Antes de gerar, em cada sistema: troque o valor de qualquer item digitando no campo, e use ⤵ abrir kit para explodir só aquele kit.</div></span>
+      ${X.inst.length ? '<button class="btn" id="xLimpa">Limpar</button>' : ''}<button class="btn pri" id="xGerar">⚡ Gerar orçamentos</button></div>`;
   /* 25/11 (Júlio): explodir cada kit separadamente e trocar o valor à mão, item por item */
   const marcaKit = (v) => b => b.onclick = () => { const d = b.dataset.xka || b.dataset.xkf, k = d.slice(0, d.indexOf(':')), cod = d.slice(d.indexOf(':') + 1), i = X.inst[+k]; (i.kits = i.kits || {})[cod] = v; mexeu(); telaExpress(); };
   document.querySelectorAll('[data-xka]').forEach(marcaKit(true)); document.querySelectorAll('[data-xkf]').forEach(marcaKit(false));
@@ -7715,7 +7715,7 @@ async function telaExpress(){
     if(vazio){ aviso('Nada para salvar', 'Escolha o cliente ou acrescente um sistema primeiro.'); return false; }
     let nome = X.nome || nomePadrao();
     if(perguntaNome){ const n = await pedirTexto('Salvar orçamento express', 'Nome para achar depois:', nome); if(n === null) return false; nome = n.trim() || nome; }
-    const reg = { nome, pessoa_id: X.cliente || null, dados: { cliente: X.cliente, inst: X.inst, explodirKits: !!X.explodirKits }, total: Math.round(geral * 100) / 100, atualizado_em: new Date().toISOString() };
+    const reg = { nome, pessoa_id: X.cliente || null, dados: { cliente: X.cliente, inst: X.inst, gerados: X.gerados || [] }, total: Math.round(geral * 100) / 100, atualizado_em: new Date().toISOString() };
     const r = X.id ? await sb.from('express_rascunhos').update(reg).eq('id', X.id).select('id,atualizado_em').maybeSingle() : await sb.from('express_rascunhos').insert(reg).select('id,atualizado_em').single();
     if(r.error){ aviso('Erro ao salvar', esc(erroBanco(r.error))); return false; }
     if(!r.data){ const n = await sb.from('express_rascunhos').insert(reg).select('id,atualizado_em').single(); if(n.error){ aviso('Erro ao salvar', esc(erroBanco(n.error))); return false; } r.data = n.data; }   // o salvo foi apagado por outra pessoa: grava de novo
@@ -7738,8 +7738,9 @@ async function telaExpress(){
     document.querySelectorAll('#folha [data-xab]').forEach(b => b.onclick = async ev => { if(ev.target.closest('[data-xdel]')) return; ev.stopPropagation(); const id = b.dataset.xab;
       fecharPainel(); if(id === X.id) return; if(!await podeTrocar()) return;
       const r = await sb.from('express_rascunhos').select('*').eq('id', id).maybeSingle(); if(r.error || !r.data) return aviso('Não achei', 'Este salvo não existe mais.');
-      const d = r.data.dados || {}; ST.express = { id: r.data.id, nome: r.data.nome, cliente: d.cliente || r.data.pessoa_id || '', inst: Array.isArray(d.inst) ? d.inst : [], explodirKits: !!d.explodirKits, sujo: false, salvoEm: r.data.atualizado_em }; telaExpress(); });
+      const d = r.data.dados || {}; ST.express = { id: r.data.id, nome: r.data.nome, cliente: d.cliente || r.data.pessoa_id || '', inst: Array.isArray(d.inst) ? d.inst : [], gerados: Array.isArray(d.gerados) ? d.gerados : [], sujo: false, salvoEm: r.data.atualizado_em }; telaExpress(); });
   };
+  document.querySelectorAll('[data-xorc2]').forEach(a => a.onclick = async e => { e.preventDefault(); if(ST.aba !== 'orc'){ ST.aba = 'orc'; await carregar(); desenhar(); } formOrc(a.dataset.xorc2); });
   $('#xGerar').onclick = async () => {
     const cli = pega(); if(!cli) return aviso('Cliente', 'Escolha o cliente do orçamento.');
     const grupos = X.inst.map(i => ({ titulo: (i.titulo || sisDe(i).nome).toUpperCase(), itens: (its => { const varias = expSecs(its).length > 1, l = []; its.forEach((x, xi) => { if(varias && (xi === 0 || its[xi - 1].sec !== x.sec)) l.push({ descricao: String(x.sec).toUpperCase(), tipo: 'titulo', quantidade: 1, preco_unit: 0 });
@@ -7749,7 +7750,33 @@ async function telaExpress(){
     if(fora.length && !await modal('Itens fora do cadastro', `Os códigos <b>${fora.map(esc).join(', ')}</b> não estão no cadastro de materiais e vão ficar de fora. Gerar assim mesmo?`, [['Cancelar', false], ['Gerar', true, 'pri']])) return;
     if(!podeOrc('equipamento')) return aviso('Sem permissão', 'Seu perfil não monta orçamentos de equipamento.');
     X.cliente = cli; if(RASC && (X.sujo || !X.id)) await salvar(false);   // fica salvo para voltar depois (com o nome padrão, se ainda não tinha)
-    await novoOrcamento('', { tipo: 'equipamento', pagador_id: cli, copiaGrupos: grupos, referencia: grupos.map(g => g.titulo).join(' · ') });
+    /* 25/11 (Júlio): cada sistema vira um ORÇAMENTO PRÓPRIO, com o seu número, gravado em Vendas → Orçamentos como qualquer outro */
+    if((X.gerados || []).length && !await modal('Gerar de novo?', `Este express já gerou ${X.gerados.map(g => '<b>' + numOrc(g.numero) + '</b>').join(', ')}. Gerar de novo cria OUTROS orçamentos, com números novos (os anteriores continuam existindo).`, [['Cancelar', false], ['Gerar de novo', true, 'pri']])) return;
+    if(!await modal('Gerar orçamentos', `Vai ser criado <b>um orçamento para cada sistema</b>, cada um com o seu número:<br><br>${grupos.map(g => '• ' + esc(g.titulo) + ' — ' + R$(g.itens.reduce((a, i) => a + (i.tipo === 'titulo' ? 0 : i.quantidade * i.preco_unit), 0))).join('<br>')}<br><br>Eles ficam em Vendas → Orçamentos, em elaboração, para conferir e enviar.`, [['Cancelar', false], ['Gerar ' + grupos.length + ' orçamento(s)', true, 'pri']])) return;
+    await carregaCadastrosOrc();
+    const obrasCli = [...new Set(ST.pagadores.filter(g => g.pessoa_id === cli).map(g => g.obra_id))], obraId = obrasCli.length === 1 ? obrasCli[0] : null;   // cliente com uma obra só: já vai nela
+    const parc = ((ST.condicoes.find(c => c.codigo === COND_PADRAO.equipamento) || {}).parcelas || PARC_PADRAO.equipamento).map((p, i, l) => ({ ...p, quando: p.quando || quandoPadrao(i, l.length) }));
+    const feitos = [];
+    for(const g of grupos){
+      try{
+        const o = await exec(sb.from('orcamentos').insert({ tipo: 'equipamento', obra_id: obraId, pagador_id: cli, referencia: g.titulo, data_orcamento: hojeISO(), validade: somaDias(hojeISO(), 15),
+          desconto_tipo: 'valor', desconto_valor: 0, desconto_percentual: 0, frete: 0, parcelas: parc, prazo_texto: 'A combinar', vendedor: ST.eu.nome, observacoes: 'Preço reajustável por itens.', textos: {},
+          condicao_pagamento_id: COND_PADRAO.equipamento, tipo_operacao: opPadrao('equipamento', obraId) }).select('id,numero').single());
+        const ng = await exec(sb.from('orcamento_grupos').insert({ orcamento_id: o.id, ordem: 1, titulo: g.titulo }).select('id').single());
+        await exec(sb.from('orcamento_itens').insert(g.itens.map((it, i) => ({ grupo_id: ng.id, ordem: i + 1, produto_id: it.produto_id || null, codigo: it.codigo || null, descricao: it.descricao, tipo: it.tipo || 'equipamento',
+          unidade: it.unidade || null, quantidade: it.tipo === 'titulo' ? 1 : (Number(it.quantidade) || 1), preco_unit: it.tipo === 'titulo' ? 0 : (Number(it.preco_unit) || 0) }))));
+        feitos.push({ id: o.id, numero: o.numero, titulo: g.titulo });
+      }catch(e){ break; }
+    }
+    if(!feitos.length) return;
+    X.gerados = (X.gerados || []).concat(feitos); X.sujo = true; if(RASC) await salvar(false);
+    const abrirOrc = async id => { fecharPainel(); if(ST.aba !== 'orc'){ ST.aba = 'orc'; await carregar(); desenhar(); } formOrc(id); };
+    abrirPainel(`<div class="cab"><h2>${feitos.length} orçamento(s) criado(s)</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+      <div class="card" data-nao-suja="1">${feitos.length < grupos.length ? '<p style="color:var(--verm)">Atenção: nem todos os sistemas foram gravados. Confira e gere de novo os que faltaram.</p>' : ''}
+        <div class="lista">${feitos.map(g => `<div class="item"><div><div class="nome">Orçamento ${numOrc(g.numero)}</div><div class="sub">${esc(g.titulo)}</div></div><div class="acoes"><button class="btn peq pri" data-xorc="${g.id}">Abrir</button></div></div>`).join('')}</div>
+        <p class="muted" style="font-size:12px;margin-top:10px">Estão em Vendas → Orçamentos, em elaboração. Cada um pode ser ajustado, enviado e aprovado separadamente.</p></div>`);
+    document.querySelectorAll('#folha [data-xorc]').forEach(b => b.onclick = () => abrirOrc(b.dataset.xorc));
+    telaExpress();
   };
 }
 
