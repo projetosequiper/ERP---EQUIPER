@@ -6889,9 +6889,11 @@ const podeOrc = t => nivelTela('orc') >= 3 && (nivelTela('orc') === 4 || (t === 
 const ENDERECO_EQUIPER = 'Rua Dr. Agostinho Goulão, 22 – LJ 07 – Corrêas, Petrópolis - RJ – (24) 2221-6789';
 const PARC_PADRAO = {
   projeto: [{ nome:'Sinal', percentual:40, quando:'na contratação' }, { nome:'2ª parcela', percentual:30, quando:'após a entrega dos anteprojetos' }, { nome:'Saldo', percentual:30, quando:'após a entrega dos projetos' }],
-  equipamento: [{ nome:'Sinal', percentual:50, quando:'na aprovação' }, { nome:'2ª parcela', percentual:30, quando:'na entrega dos equipamentos' }, { nome:'3ª parcela', percentual:20, quando:'na conclusão da instalação' }],
+  equipamento: [{ nome:'Sinal', percentual:50, quando:'Na aprovação do pedido' }, { nome:'2ª parcela', percentual:30, quando:'Na entrega dos equipamentos' }, { nome:'Saldo', percentual:20, quando:'Conclusão das instalações' }],
   servico: [{ nome:'Parcela única', percentual:100, quando:'na conclusão do serviço' }]
 };
+/* 25/11 (Júlio): "Quando" já preenchido nas parcelas de equipamento/serviço — sinal, parcelas do meio e saldo */
+const quandoPadrao = (i, n) => n === 1 ? '' : i === 0 ? 'Na aprovação do pedido' : i === n - 1 ? 'Conclusão das instalações' : 'Na entrega dos equipamentos';
 const TEXTOS_PROJETO = {
   apresentacao: 'Estamos apresentando proposta para os Projetos Complementares, conforme solicitado por V.Sas. Os projetos serão apresentados em formato eletrônico conforme os itens abaixo.',
   observacao: 'Nos documentos a serem fornecidos serão atendidos os critérios de projeto estabelecidos pela Associação Brasileira de Normas Técnicas (ABNT), além das determinações municipais.\nSerá realizada uma visita técnica para entrega final dos projetos. Visitas complementares serão acertadas ao final de cada mês no valor de R$ 450,00 (quatrocentos e cinquenta reais) cada.',
@@ -7431,7 +7433,7 @@ async function formOrc(id, pre){
   if($('#ocArea')) $('#ocArea').onchange = () => { lerItens(); const a = num($('#ocArea').value); if(!a) return; let n = 0;
     G.forEach(g => g.itens.forEach(it => { if(String(it.unidade).toUpperCase() === 'M2'){ it.quantidade = a; n++; } })); if(n){ desenhaGrupos(); toast(`${n} item(ns) em m² ajustados para ${a.toLocaleString('pt-BR')} m².`); } };
   $('#ocCond').onchange = () => { const c = ST.condicoes.find(x => String(x.codigo) === $('#ocCond').value); if(!c) return;
-    P.splice(0, P.length, ...(c.parcelas.length ? c.parcelas : [{ nome:'Parcela única', percentual:100, quando:'' }]).map(p => ({ ...p }))); desenhaParc(); parcConf(); };
+    P.splice(0, P.length, ...(c.parcelas.length ? c.parcelas : [{ nome:'Parcela única', percentual:100, quando:'' }]).map((p, i, l) => ({ ...p, quando: p.quando || (T === 'projeto' ? '' : quandoPadrao(i, l.length)) }))); desenhaParc(); parcConf(); };
   $('#ocObra').onchange = ajustaTOp;
   desenhaGrupos(); desenhaParc(); parcConf();
   if(travado) document.querySelectorAll('#folha input,#folha select,#folha textarea').forEach(e => e.disabled = true);

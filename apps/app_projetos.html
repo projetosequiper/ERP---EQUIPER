@@ -785,6 +785,39 @@
   .fin-mais[open] summary{color:var(--ink);}
   .fin-cliente-header .valores .ok{color:var(--green); background:var(--green-soft); padding:3px 9px; border-radius:999px;}
   .fin-cliente-body{padding:4px 14px 14px; border-top:1px solid var(--border);}
+  /* ===== ERP (25/11): Financeiro de Projetos no padrão do Financeiro de Serviços ===== */
+  [data-topico-fin="clientes"]{max-width:1100px; margin-left:auto; margin-right:auto;}
+  .pjf-kpis{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-bottom:14px;}
+  @media (max-width:860px){ .pjf-kpis{grid-template-columns:1fr 1fr;} }
+  .pjf-kpi{padding:12px 14px; border-radius:13px; border:1px solid rgba(0,0,0,.12); color:#fff; background:linear-gradient(180deg,var(--ka) 0%,var(--kb) 100%); box-shadow:inset 0 1px 0 rgba(255,255,255,.18), 0 1px 2px rgba(0,0,0,.12); min-width:0;}
+  .pjf-kpi b{display:block; font-size:21px; font-weight:800; letter-spacing:-.02em; line-height:1; margin-bottom:6px; white-space:nowrap; font-variant-numeric:tabular-nums;}
+  .pjf-kpi span{display:block; font-size:12.5px; font-weight:700;}
+  .pjf-kpi small{display:block; font-size:11px; opacity:.85; margin-top:1px;}
+  .pjf-kpi.neutro{--ka:#2E2F33; --kb:#17181A; border-color:#000;}
+  .pjf-kpi.amarelo{--ka:#F2B50A; --kb:#D99C00; border-color:#B88300; color:#2B1F00; cursor:pointer;}
+  .pjf-kpi.azul{--ka:#3C8CC8; --kb:#2A70A6; border-color:#225C88;}
+  .pjf-kpi.verde{--ka:#3A9D6A; --kb:#257A4E; border-color:#1E6440;}
+  .pjf-kpi.zero{--ka:var(--sheet); --kb:var(--sheet); border-color:var(--border); color:var(--ink-soft); box-shadow:var(--shadow-sm);}
+  .fin-cab-colunas{display:none !important;}
+  .fin-cliente{border-radius:14px; margin-bottom:12px;}
+  .fin-cliente-header{display:block !important; padding:14px 16px 12px !important;}
+  .fin-cliente-header .nome{font-size:16px; font-weight:700; margin-bottom:10px; padding-bottom:8px; border-bottom:1px dashed var(--border);}
+  .pjf-parcs{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin:2px 0 10px;}
+  .pjf-pc{border:1px solid var(--border); border-radius:10px; padding:8px 10px 9px; background:var(--paper); min-width:0;}
+  .pjf-pc.atraso{border-color:var(--red); background:var(--red-soft);}
+  .pjf-pc-n{font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; font-weight:800; color:var(--ink-soft); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .pjf-pc-b{display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;}
+  .pjf-pc-v{font-size:15px; font-weight:800; letter-spacing:-.2px; font-variant-numeric:tabular-nums;}
+  .pjf-pc-d{font-size:11px; color:var(--ink-soft); margin-top:3px;}
+  .pjf-st{display:inline-block; border-radius:999px; padding:2px 9px; font-weight:700; font-size:11.5px; border:1px solid var(--border); background:var(--sheet); color:var(--ink-soft); white-space:nowrap;}
+  .pjf-st.a_cobrar{background:#FFF4D6; color:#8A6400; border-color:#E8C55A;}
+  .pjf-st.enviado{background:rgba(47,111,176,.12); color:#2F6FB0; border-color:rgba(47,111,176,.35);}
+  .pjf-st.recebido{background:#E3F4EA; color:#1E6440; border-color:#3A9D6A;}
+  .pjf-tot{display:flex; gap:6px 22px; flex-wrap:wrap; font-size:12px; color:var(--ink-soft); padding-top:8px; border-top:1px solid var(--border);}
+  .pjf-tot b{font-size:13.5px; color:var(--ink); margin-left:3px; font-variant-numeric:tabular-nums;}
+  .pjf-tot b.verde{color:#1E6440;} .pjf-tot b.ambar{color:#B07A00;} .pjf-tot b.verm{color:var(--red);}
+  .pjf-sem{font-size:12px; color:var(--ink-soft); margin:0 0 10px;}
+
   .fin-secao{margin-top:12px;}
   .fin-secao-titulo{font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--blue-deep); margin-bottom:6px; font-weight:600;}
   .fin-parcela{display:grid; grid-template-columns:100px 110px 130px 120px 1fr; gap:8px; align-items:center; padding:6px 0; border-top:1px solid var(--border); font-size:12px;}
@@ -1492,6 +1525,7 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
       </div>
       <div id="finFormPanel" data-topico-fin="clientes"></div>
       <!-- ERP (18/11, Júlio): subabas do Financeiro — Em aberto × Concluídos (só vai para Concluídos o cliente totalmente quitado) -->
+      <div class="pjf-kpis" id="finKpis" data-topico-fin="clientes"></div>
       <div class="fin-subabas" id="finSubAbas" data-topico-fin="clientes"></div>
       <div class="letra-header" id="lblFinLista" style="cursor:pointer; user-select:none; margin-bottom:8px;" data-topico-fin="clientes">▸ Clientes</div>
       <div id="finLista" style="display:none;" data-topico-fin="clientes"></div>
@@ -8352,6 +8386,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
       Array.prototype.forEach.call(sub.querySelectorAll('[data-finsub]'), function(b){ b.onclick = function(){ finSubAba = b.getAttribute('data-finsub'); colapsadoFinListaGeral = false; renderFinanceiroLista(); }; });
     }
     lista = lista.filter(function(r){ return finSubAba === 'concluidos' ? finQuitado(r) : !finQuitado(r); });
+    pjfKpis(lista);
     if(finFiltro === 'aberto' || finFiltro === 'quitado') finFiltro = '';
     if(finFiltro){
       lista = lista.filter(function(r){
@@ -8396,6 +8431,35 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     el.appendChild(btnInicio);
   }
 
+  /* ===== ERP (25/11): mesmo padrão do Financeiro de Serviços ===== */
+  function pjfSit(p){ return p.status === 'Recebido' ? 'recebido' : p.status === 'Cobrar' ? (p.cobrancaEnviada ? 'enviado' : 'a_cobrar') : 'nao_liberado'; }
+  var PJF_ROT = { recebido:'Recebido', enviado:'Enviado', a_cobrar:'A cobrar', nao_liberado:'Não liberado' };
+  function pjfCurto(v){ return 'R$ ' + Math.round(v || 0).toLocaleString('pt-BR'); }
+  function pjfKpis(lista){
+    var el = document.getElementById('finKpis'); if(!el) return;
+    var contr = 0, rec = 0, ac = 0, en = 0, nAc = 0, nEn = 0, aRec = 0, nSaldo = 0, nl = 0;
+    lista.forEach(function(r){ var rr = 0;
+      (r.parcelas || []).forEach(function(p){ var st = pjfSit(p), v = Number(p.valor) || 0;
+        if(st === 'recebido') rr += v; else if(st === 'a_cobrar'){ ac += v; nAc++; } else if(st === 'enviado'){ en += v; nEn++; } else nl += v; });
+      contr += Number(r.valorTotal) || 0; rec += rr;
+      var saldo = r.quitadoManual ? 0 : Math.max(0, (Number(r.valorTotal) || 0) - rr); aRec += saldo; if(saldo > 0.005) nSaldo++; });
+    var c = function(tom, v, rot, sub){ return '<div class="pjf-kpi ' + tom + (v > 0 ? '' : ' zero') + '"' + (tom === 'amarelo' ? ' data-pjfk="cobrar" title="Mostrar só quem tem parcela a cobrar"' : '') + '><b>' + pjfCurto(v) + '</b><span>' + rot + '</span><small>' + sub + '</small></div>'; };
+    el.innerHTML = c('neutro', contr, 'Contratado', lista.length + (lista.length === 1 ? ' cliente' : ' clientes')) +
+      c('amarelo', ac, 'A cobrar', nAc + (nAc === 1 ? ' parcela liberada' : ' parcelas liberadas')) +
+      c('azul', en, 'Enviado', nEn + (nEn === 1 ? ' parcela aguardando' : ' parcelas aguardando')) +
+      c('verde', rec, 'Recebido', contr > 0 ? Math.round(rec / contr * 100) + '% do contratado' : '—') +
+      c('neutro', aRec, 'A receber', nSaldo + (nSaldo === 1 ? ' cliente com saldo' : ' clientes com saldo') + (nl > 0 ? ' · ' + pjfCurto(nl) + ' não liberado' : ''));
+    var k = el.querySelector('[data-pjfk]'); if(k) k.onclick = function(){ finFiltro = finFiltro === 'cobrar' ? '' : 'cobrar'; var sel = document.getElementById('finFiltroSel'); if(sel) sel.value = finFiltro; renderFinanceiroLista(); };
+  }
+  function pjfParcelasHtml(rec, quitado){
+    var ps = rec.parcelas || []; if(!ps.length) return '<div class="pjf-sem">Sem parcelas cadastradas</div>';
+    var tot = Number(rec.valorTotal) || 0, hoje = todayISO();
+    return '<div class="pjf-parcs">' + ps.map(function(p){ var st = pjfSit(p), v = Number(p.valor) || 0, pc = tot > 0 ? Math.round(v / tot * 100) : null;
+      var atraso = !quitado && st !== 'recebido' && p.data && p.data < hoje, dt = st === 'recebido' ? '' : (p.dataPrevista ? 'pagamento ' + fmtDate(p.dataPrevista) : p.data ? 'vence ' + fmtDate(p.data) : '');
+      return '<div class="pjf-pc' + (atraso ? ' atraso' : '') + '"><div class="pjf-pc-n">' + escapeHtml(p.nome || 'Parcela') + (pc != null ? ' ' + pc + '%' : '') + '</div>' +
+        '<div class="pjf-pc-b"><span class="pjf-pc-v">' + formatarMoeda(v) + '</span><span class="pjf-st ' + st + '">' + PJF_ROT[st] + '</span></div>' + (dt ? '<div class="pjf-pc-d">' + escapeHtml(dt) + '</div>' : '') + '</div>'; }).join('') + '</div>';
+  }
+
   var finAbaCliente = {}, finFiltro = '', finSubAba = 'aberto';
   function renderClienteFinanceiroCard(rec){
     var card = document.createElement('div');
@@ -8427,10 +8491,10 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
         (temPrevisto?' <span style="color:var(--ink);background:var(--amber-soft);border:1px solid var(--amber);font-size:10.5px;font-weight:600;padding:4px 10px;border-radius:999px;margin-left:6px;vertical-align:middle;">📅 paga em '+escapeHtml(fmtDate(temPrevisto))+'</span>':'')+
         (!temArt?' <span style="color:var(--ink);background:var(--amber-soft);border:1px solid var(--amber);font-size:10.5px;font-weight:600;padding:4px 10px;border-radius:999px;margin-left:6px;vertical-align:middle;">📐 ART pendente</span>':'')+
       '</div>'+
-      '<div class="fin-col" data-rot="Contratado">'+formatarMoeda(rec.valorTotal||0)+'</div>'+
-      '<div class="fin-col" data-rot="Recebido" style="color:var(--green);">'+formatarMoeda(recebido)+'</div>'+
-      '<div class="fin-col" data-rot="Falta">'+(quitado?'<span class="cli-tag g">quitado</span>':formatarMoeda(falta))+'</div>'+
-      '<div class="fin-col" data-rot="Próxima parcela">'+(proxParcela ? '<span'+(proxParcela.atrasada?' style="color:var(--red);font-weight:700;"':'')+'>'+escapeHtml(fmtDate(proxParcela.data))+' · '+formatarMoeda(proxParcela.valor||0)+'</span>' : '<span class="mut">—</span>')+'</div>';
+      pjfParcelasHtml(rec, quitado)+
+      '<div class="pjf-tot"><span>Contratado<b>'+formatarMoeda(rec.valorTotal||0)+'</b></span><span>Recebido<b class="verde">'+formatarMoeda(recebido)+'</b></span>'+
+        '<span>Saldo'+(quitado?'<b class="verde">quitado</b>':'<b class="ambar">'+formatarMoeda(falta)+'</b>')+'</span>'+
+        (proxParcela ? '<span>Próxima parcela<b'+(proxParcela.atrasada?' class="verm"':'')+'>'+escapeHtml(fmtDate(proxParcela.data))+' · '+formatarMoeda(proxParcela.valor||0)+'</b></span>' : '')+'</div>';
     header.onclick = function(){ colapsadosFinCliente[rec.id] = (colapsadosFinCliente[rec.id] === false) ? true : false; renderFinanceiroLista(); };
     card.appendChild(header);
 
