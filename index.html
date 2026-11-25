@@ -7685,20 +7685,33 @@ async function telaExpress(){
     const d = r.data.dados || {}; ST.express = { id: r.data.id, nome: r.data.nome, cliente: d.cliente || r.data.pessoa_id || '', inst: Array.isArray(d.inst) ? d.inst : [], gerados: Array.isArray(d.gerados) ? d.gerados : [], sujo: false, salvoEm: r.data.atualizado_em }; return true; };
   if(X._lista && RASC && RASC.length){   // sem nenhum salvo, entra direto num express em branco
     const naTela = !!(X.cliente || X.inst.length);
-    $('#conteudo').innerHTML = `<div class="card"><h2>Orçamento Express <span class="muted" style="font-weight:400">· escolha o cliente e os sistemas; o ERP monta um orçamento numerado para cada sistema</span></h2>
-      <div class="barra" style="margin:6px 0 14px"><button class="btn pri" id="xlNovo">+ Novo orçamento express</button>${naTela && !X.id ? '<button class="btn" id="xlVolta">Continuar o que estava na tela (não salvo)</button>' : ''}</div>
-      <h3 style="font-size:14px;margin:0 0 6px">Salvos${RASC.length ? ' (' + RASC.length + ')' : ''}</h3>
-      ${RASC.length ? `<div class="lista">${RASC.map(r => { const g = ((r.dados || {}).inst || []).filter(i => i.orc).map(i => numOrc(i.orc.numero));
-        return `<div class="item" data-xla="${r.id}" style="cursor:pointer"><div><div class="nome">${esc(r.nome)}${r.id === X.id ? ' <span class="tag">último aberto</span>' : ''}</div>
+    /* 25/11 (Júlio): em cima só o botão de novo; embaixo os mais recentes e a busca de orçamentos express */
+    const RECENTES = 10, numsDe = r => ((r.dados || {}).inst || []).filter(i => i.orc).map(i => numOrc(i.orc.numero));
+    const txtDe = r => norm([r.nome, (pessoa(r.pessoa_id) || {}).nome, ((r.dados || {}).inst || []).map(i => i.titulo).join(' '), numsDe(r).join(' '), numsDe(r).map(n => String(Number(n))).join(' ')].join(' '));
+    const linha = r => { const g = numsDe(r);
+      return `<div class="item" data-xla="${r.id}" style="cursor:pointer"><div><div class="nome">${esc(r.nome)}${r.id === X.id ? ' <span class="tag">último aberto</span>' : ''}</div>
           <div class="sub">${[(pessoa(r.pessoa_id) || {}).nome, Number(r.total) ? R$(r.total) : '', g.length ? 'orçamentos ' + g.join(', ') : 'ainda sem orçamento gerado', 'salvo em ' + fmtData(r.atualizado_em)].filter(Boolean).map(esc).join(' · ')}</div></div>
-          <div class="acoes"><button class="btn peq pri" data-xla="${r.id}">Abrir</button><button class="btn peq" data-xld="${r.id}" title="Excluir este salvo (os orçamentos gerados não são apagados)">✕</button></div></div>`; }).join('')}</div>`
-        : '<p class="vazio">Nenhum orçamento express salvo ainda. Toque em "+ Novo orçamento express".</p>'}</div>`;
-    $('#xlNovo').onclick = () => { ST.express = expNovo(); telaExpress(); };
-    if($('#xlVolta')) $('#xlVolta').onclick = () => { X._lista = false; telaExpress(); };
+          <div class="acoes"><button class="btn peq pri" data-xla="${r.id}">Abrir</button><button class="btn peq" data-xld="${r.id}" title="Excluir este salvo (os orçamentos gerados não são apagados)">✕</button></div></div>`; };
+    $('#conteudo').innerHTML = `<div class="card"><h2>Orçamento Express <span class="muted" style="font-weight:400">· escolha o cliente e os sistemas; o ERP monta um orçamento numerado para cada sistema</span></h2>
+      <div class="barra" style="margin:6px 0 2px"><button class="btn pri" id="xlNovo">+ Novo orçamento express</button></div></div>
+      <div class="card"><h2 id="xlTit">Orçamentos express</h2>
+      <div class="barra" style="margin:4px 0 10px"><input type="search" id="xlBusca" placeholder="Buscar por cliente, sistema ou número do orçamento…" value="${esc(ST.xlBusca || '')}" style="flex:1 1 320px">${naTela && !X.id ? '<button class="btn" id="xlVolta">Continuar o que estava na tela (não salvo)</button>' : ''}</div>
+      <div id="xlLista"></div></div>`;
+    const ligaLista = () => {
     document.querySelectorAll('[data-xld]').forEach(b => b.onclick = async ev => { ev.stopPropagation(); const r = RASC.find(x => x.id === b.dataset.xld);
       if(!await modal('Excluir?', `Excluir o salvo <b>${esc(r.nome)}</b>? Os orçamentos já gerados a partir dele continuam em Orçamentos.`, [['Cancelar', false], ['Excluir', true, 'pri']])) return;
       const d = await sb.from('express_rascunhos').delete().eq('id', r.id); if(d.error) return aviso('Erro', esc(erroBanco(d.error))); if(X.id === r.id) ST.express = Object.assign(expNovo(), { _lista: true }); toast('Excluído.'); telaExpress(); });
     document.querySelectorAll('[data-xla]').forEach(b => b.onclick = async ev => { if(ev.target.closest('[data-xld]')) return; ev.stopPropagation(); if(await abreSalvo(b.dataset.xla)) telaExpress(); });
+    };
+    const desenhaLista = () => { const b = norm(ST.xlBusca || '').trim(), l = b ? RASC.filter(r => txtDe(r).temTudo(b)) : RASC.slice(0, RECENTES);
+      $('#xlTit').innerHTML = b ? `Orçamentos express <span class="muted" style="font-weight:400">· ${l.length} encontrado${l.length === 1 ? '' : 's'}</span>` : `Orçamentos express <span class="muted" style="font-weight:400">· mais recentes</span>`;
+      $('#xlLista').innerHTML = l.length ? `<div class="lista">${l.slice(0, 100).map(linha).join('')}</div>${b ? (l.length > 100 ? '<p class="muted">Mostrando 100. Refine a busca.</p>' : '') : (RASC.length > RECENTES ? `<p class="muted" style="font-size:12px;margin-top:8px">Mostrando os ${RECENTES} mais recentes de ${RASC.length}. Use a busca para achar os outros.</p>` : '')}`
+        : `<p class="vazio">Nenhum orçamento express com "${esc(ST.xlBusca || '')}".</p>`;
+      ligaLista(); };
+    desenhaLista();
+    $('#xlBusca').oninput = e => { ST.xlBusca = e.target.value; clearTimeout(e.target._t); e.target._t = setTimeout(desenhaLista, 200); };
+    $('#xlNovo').onclick = () => { ST.express = expNovo(); telaExpress(); };
+    if($('#xlVolta')) $('#xlVolta').onclick = () => { X._lista = false; telaExpress(); };
     return;
   }
   X._lista = false;
