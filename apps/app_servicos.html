@@ -62,7 +62,8 @@ window.__ponteCfg={sobDemanda:true,tabela:'app_servicos_nos',prefixo:'ERPTESTE-S
   function noDe(p){ return String(p||'').split('/').filter(Boolean)[0] || ''; }
   function asp(v){ return '"' + String(v).split('"').join('').split(String.fromCharCode(92)).join('') + '"'; }
   function aplicarLinha(l){ if(!pendentes[l.caminho] && !frescos[l.caminho]) porNaArvore(l.caminho, l.valor); }
-  function erroLer(e){ console.error(e); faixa('ERP TESTE · erro ao ler o banco do ERP: '+((e&&e.message)||e), '#d0151b'); }
+  var leituraFalhou = false;   /* 24/11: depois de uma leitura que falhou nada é gravado (um nó lido pela metade seria salvo por cima do inteiro) */
+  function erroLer(e){ leituraFalhou = true; console.error(e); faixa('ERP TESTE · erro ao ler o banco do ERP: '+((e&&e.message)||e), '#d0151b'); }
   // lê um grupo de linhas: a primeira página sozinha; se vier cheia, as seguintes de 3 em 3 ao mesmo tempo
   async function grupo(filtro, aplicar){
     var passo=1000;
@@ -136,6 +137,7 @@ window.__ponteCfg={sobDemanda:true,tabela:'app_servicos_nos',prefixo:'ERPTESTE-S
   function marcar(chave){ pendentes[chave]=true; clearTimeout(timer); timer=setTimeout(enviar, 250); }
   function enviar(){
     var ks=Object.keys(pendentes); pendentes={}; if(!ks.length || !sb) return;
+    if(leituraFalhou){ faixa('ERP TESTE · uma leitura do banco falhou — nada está sendo salvo. Recarregue a página.', '#d0151b'); return; }
     var up=[], del=[];
     ks.forEach(function(k){ var v=ler(k); if(v==null) del.push(k); else up.push({ caminho:k, valor:v }); });
     gravando = gravando.then(async function(){

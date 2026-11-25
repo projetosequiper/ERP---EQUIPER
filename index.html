@@ -807,7 +807,7 @@ function desenhar(){
   if(ST._abaAtual !== ST.aba){ ST.formAberto = null; const c = $('#conteudo'); if(c) c.dataset.tela = ''; }
   ST._voltando = false; ST._abaAtual = ST.aba; atualizaVoltar(); if(window.__lembrarLigado) lembrarTelaGrava();
   const vis = itensVisiveis(), todos = vis.flatMap(g => g.itens);
-  if(!todos.some(i => i[0] === ST.aba)) ST.aba = todos[0][0];
+  if(!todos.some(i => i[0] === ST.aba) && !(window.MENU_GUARDADAS && MENU_GUARDADAS[ST.aba] && menuVe(MENU_GUARDADAS[ST.aba]))) ST.aba = todos[0][0];   // telas guardadas (fora do menu) continuam abrindo por link
   document.body.classList.add('comMenu');
   const fechados = menuFechados();
   $('#menu').innerHTML = vis.map(g => { const fch = g.area && fechados.includes(g.area);
@@ -2169,7 +2169,7 @@ function telaInicio(){
   $('#conteudo').innerHTML = `<div class="ini">
     <section class="ini-hero"><div class="txt"><h1>Olá, <span>${esc(primeiroNome(ST.eu.nome))}!</span></h1>
       <p>Bem-vindo ao ERP Equiper. Aqui você encontra um resumo do seu dia e acessa todas as funcionalidades.</p><i></i></div></section>
-    <div class="ini-kpis">${kpi('pessoas','pessoas','Empresas',n(ativos(ST.pessoas)))}${kpi('obras','obras','Obras',n(ativos(ST.obras)))}${kpi('contatos','contatos','Contatos',n(ativos(ST.contatos)))}${kpi('fila','fila','Esperando aprovação',n(ST.fila.length), ST.fila.length > 0)}</div>
+    <div class="ini-kpis">${kpi('pessoas','pessoas','Empresas',n(ativos(ST.pessoas)))}${kpi('obras','obras','Obras',n(ativos(ST.obras)))}${kpi('fila','fila','Esperando aprovação',n(ST.fila.length), ST.fila.length > 0)}</div>
     ${typeof fluxoInicio === 'function' ? fluxoInicio() : ''}
     <div class="ini-grid" id="iniGrid"></div>
     <div class="card"><div class="cx-cab"><h2>Menu Rápido</h2><span class="muted" style="font-size:12px">${sugere ? 'sugestões — toque na ☆ de qualquer função para montar o seu' : 'seus favoritos · arraste para mudar a ordem'}</span></div>
@@ -2617,7 +2617,7 @@ const FLX = [
   { k:'proj',    ang:270, aba:'pj_projetos', ic:'pj_projetos', t:'Projetos',     s:'propostas e tarefas' },
   { k:'equip',   ang:330, aba:'cp_compras',  ic:'cp_compras',  t:'Equipamentos', s:'compras e estoque' },
   { k:'serv',    ang:30,  aba:'sv_agenda',   ic:'sv_agenda',   t:'Serviços',     s:'agenda, OS e instalação' },
-  { k:'fin',     ang:90,  aba:'fn_cobranca', ic:'fn_receber',  t:'Financeiro',   s:'cobrança, caixa e notas' },
+  { k:'fin',     ang:90,  aba:'fn_receber', ic:'fn_receber',  t:'Financeiro',   s:'a receber, a pagar e caixa' },
   { k:'rel',     ang:150, aba:'fn_painel',   ic:'fn_painel',   t:'Relatórios',   s:'painel e gerencial' }
 ];
 const FLX_W = 1000, FLX_H = 520, FLX_CX = 500, FLX_CY = 260, FLX_RX = 360, FLX_RY = 190;
@@ -2670,7 +2670,7 @@ function ligarFluxo(){
   if(pode('pj_projetos')) conta(sb.from('tarefas_projeto').select('id,etapa,status').eq('etapa', 'Fechado'), l => poe('proj', l.filter(x => x.status !== 'inativo').length, 'projetos fechados para distribuir'));
   if(pode('cp_compras')) conta(sb.from('pedidos_servico').select('id,andamento_interno,status').in('andamento_interno', ['aguardando_sinal','aguardando_compra']), l => poe('equip', l.filter(x => x.status !== 'inativo').length, 'pedidos para comprar'));
   if(pode('sv_agenda')) conta(sb.from('atividades_servico').select('id,data,etapa,status').is('data', null), l => poe('serv', l.filter(x => x.status !== 'inativo' && x.etapa !== 'concluido').length, 'atividades para escalar técnico'));
-  if(pode('fn_cobranca')) conta(sb.from('receber_geral').select('situacao'), l => poe('fin', l.filter(x => x.situacao === 'a_cobrar').length, 'títulos a cobrar'));
+  if(pode('fn_receber')) conta(sb.from('receber_geral').select('situacao'), l => poe('fin', l.filter(x => x.situacao === 'a_cobrar').length, 'títulos a cobrar'));
 }
 
 /* =================== Empresas — importação do cadastro do CIGAM ===================
@@ -6707,7 +6707,7 @@ async function telaPainel(){
   document.querySelectorAll('[data-pnx]').forEach(b => b.onclick = () => { F[b.dataset.pnx] = null; muda(); });
 
   const args = (de, ate) => ({ p_de: de, p_ate: ate, p_grupo: F.grupo, p_empresa: F.empresa || null, p_area: F.area || null, p_base: F.base,
-    p_marca: F.marca || null, p_grupo_prod: F.grupo_prod || null, p_produto: F.produto || null, p_cliente: F.cliente || null, p_cigam: true });
+    p_marca: F.marca || null, p_grupo_prod: F.grupo_prod || null, p_produto: F.produto || null, p_cliente: F.cliente || null, p_cigam: false });   // 24/11: os pedidos do CIGAM já viraram orçamentos (script 81); somar os dois contava a venda duas vezes
   const [r, c] = await Promise.all([ sb.rpc('painel_resultados', args(F.de, F.ate)), F.comp ? sb.rpc('painel_resultados', args(...pnComparar(F.de, F.ate, F.comp))) : Promise.resolve({ data: null }) ]);
   if(r.error) return $('#pnCorpo').innerHTML = `<div class="card"><p class="muted">${/painel_resultados/.test(r.error.message) ? 'Rode o script <b>37_painel.sql</b> no Supabase para ligar esta tela.' : esc(erroBanco(r.error))}</p></div>`;
   ST.pnDados = r.data; desenhaPainel(r.data, c.data);
@@ -7429,10 +7429,13 @@ async function formOrc(id, pre){
 
   /* destinos (depois de aprovado) */
   if(G.some(g => g.destino)){
-    const rot = { proposta:['Proposta em Projetos','pj_propostas'], pedido:['Pedido em Obras e pedidos','sv_pedidos'], atividade:['Atividade na Agenda','sv_agenda'] };
+    const rot = { proposta:['Proposta de projeto','pj_propostas'], pedido:['Pedido (obra)','sv_pedidos'], atividade:['Atividade de serviço','sv_agenda'] };
     const fAp = Number(O.total_bruto) ? Number(O.total) / Number(O.total_bruto) : 1, apv = G.filter(g => g.aprovado === true).reduce((s2, g) => s2 + Number(g.total), 0) * fAp, nc = G.filter(g => g.aprovado === false);
-    $('#ocDestinos').innerHTML = `${O.etapa === 'aprovado_parcial' ? `<div class="secao-sens"><h3>Valor aprovado</h3><p style="margin:0"><b style="font-size:17px;color:var(--verde)">${R$(Math.round(apv * 100) / 100)}</b> <span class="muted">o que o cliente fechou${Number(O.total) !== Number(O.total_bruto) ? ', com desconto' : ''}</span></p>${nc.length ? `<p class="muted" style="margin:4px 0 0;font-size:13px">Não contratado: ${nc.map(g => esc(g.titulo)).join(', ')} · ${R$(Math.round(nc.reduce((s2, g) => s2 + Number(g.total), 0) * fAp * 100) / 100)}</p>` : ''}</div>` : ''}<div class="secao-sens"><h3>Para onde foi</h3>${G.filter(g => g.destino).map(g => `<div class="item"><div>✓ ${esc(g.titulo)} → <b>${rot[g.destino][0]}</b></div><div class="acoes"><button class="btn peq" data-ir3="${rot[g.destino][1]}">Abrir</button></div></div>`).join('')}</div>`;
-    document.querySelectorAll('[data-ir3]').forEach(b => b.onclick = async () => { fecharPainel(); ST.aba = b.dataset.ir3; await carregar(); desenhar(); });
+    $('#ocDestinos').innerHTML = `${O.etapa === 'aprovado_parcial' ? `<div class="secao-sens"><h3>Valor aprovado</h3><p style="margin:0"><b style="font-size:17px;color:var(--verde)">${R$(Math.round(apv * 100) / 100)}</b> <span class="muted">o que o cliente fechou${Number(O.total) !== Number(O.total_bruto) ? ', com desconto' : ''}</span></p>${nc.length ? `<p class="muted" style="margin:4px 0 0;font-size:13px">Não contratado: ${nc.map(g => esc(g.titulo)).join(', ')} · ${R$(Math.round(nc.reduce((s2, g) => s2 + Number(g.total), 0) * fAp * 100) / 100)}</p>` : ''}</div>` : ''}<div class="secao-sens"><h3>Para onde foi</h3>${G.filter(g => g.destino).map(g => `<div class="item"><div>✓ ${esc(g.titulo)} → <b>${rot[g.destino][0]}</b></div><div class="acoes"><button class="btn peq" data-ir3="${rot[g.destino][1]}" data-ir3d="${g.destino}" data-ir3id="${g.destino_id || ''}">Abrir</button></div></div>`).join('')}</div>`;
+    /* 24/11: abre o próprio registro (proposta, pedido ou atividade) aqui mesmo — as telas antigas de Projetos/Serviços do ERP ficam escondidas pelos setores */
+    document.querySelectorAll('[data-ir3]').forEach(b => b.onclick = async () => { const f = { proposta: window.formProposta || (typeof formProposta === 'function' && formProposta), pedido: typeof formPedido === 'function' && formPedido, atividade: typeof formAtividade === 'function' && formAtividade }[b.dataset.ir3d];
+      if(f && b.dataset.ir3id){ fecharPainel(); return f(b.dataset.ir3id); }
+      fecharPainel(); ST.aba = b.dataset.ir3; await carregar(); desenhar(); });
   }
 
   const dadosCab = () => { const t = totais(), ov = $('#ocObra').value; return { tipo: T, obra_id: ov && ov !== '__nova' ? ov : null, pagador_id: cliId, empresa: $('#ocEmp').value || null, aos_cuidados: $('#ocAtt').value.trim() || null,
@@ -11933,7 +11936,7 @@ async function acAuditoria(){
     .in('tabela', ['public.acesso_grade', 'public.acesso_excecoes', 'public.acesso_perfis', 'public.acesso_convites', 'public.usuarios', 'auth.senha'])
     .order('quando', { ascending: false }).limit(600);
   const nomeU = id => (A.usuarios.find(u => u.id === id) || {}).nome || '—';
-  const sensivel = t => /^Administrativo · (Financeiro|Fiscal|Administração)$/.test(t.area);
+  const sensivel = t => /^Administrativo · (Financeiro|Fiscal|Relatórios|Administração)$/.test(t.area);
   const al = [];
   const add = (nivel, tit, dica, pessoas, extra) => { if(pessoas.length) al.push({ nivel, tit, dica, pessoas, extra }); };
   add('alto', 'Acesso vencido, ainda ativo', 'A data de validade passou: a pessoa já não entra. Inative ou renove.', ativos.filter(acessoVencido));
@@ -12017,6 +12020,48 @@ async function acCopiarDe(u){
 .acPessBt small{display:block;color:var(--texto2);font-size:11px;white-space:normal}
 .acPessBt:hover{background:#efeff3}
 `; document.head.appendChild(st); })();
+
+/* =================== 70 — Menu do Administrativo reorganizado (24/11, pedido do Júlio) ===================
+   Roda depois de todos os módulos (que acrescentam telas aos grupos antigos) e antes da "foto" do menu padrão.
+   Grupos menores, na ordem do dia a dia. Telas repetidas ou sem uso saem do menu mas continuam existindo
+   (MENU_GUARDADAS): abrem pelo sino, pela lupa e pelos links, e os acessos delas não mudam.
+   Para devolver uma tela ao menu: tirar a chave de GUARDAR e pôr no grupo desejado em GRUPOS.
+   Os grupos "Projetos" e "Serviços (apps)" (telas internas, escondidas pelos setores) ficam como estão. */
+window.MENU_GUARDADAS = {};
+(() => {
+  const ROTULO = { fn_pagar: 'A pagar e lançamentos', ped_cigam: 'Pedidos (CIGAM)', os_cigam: 'Ordens de serviço (CIGAM)', fs_notas_cigam: 'Notas fiscais (CIGAM)',
+    es_mov_cigam: 'Estoque e movimentos (CIGAM)', vinculos: 'Vínculos com os apps' };
+  const GRUPOS = [
+    ['', ['inicio', 'chat']],
+    ['Cadastros', ['pessoas', 'obras', 'produtos', 'fila']],
+    ['Vendas', ['orc']],
+    ['Compras', ['cp_compras', 'cp_precos', 'cp_requisicoes']],
+    ['Financeiro', ['fn_receber', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fin_servicos', 'fin_projetos']],
+    ['Fiscal', ['fn_notas', 'fn_recebidas', 'fn_contabil', 'adm_fiscal', 'adm_cert', 'adm_regras']],
+    ['Relatórios', ['fn_painel', 'fn_gerencial', 'fn_cnpj']],
+    ['Histórico do CIGAM', ['ped_cigam', 'os_cigam', 'fs_notas_cigam', 'es_mov_cigam']],
+    ['Administração', ['adm_usuarios', 'adm_menu', 'fn_plano', 'registro', 'adm_backup', 'vinculos', 'projetos', 'servicos']]
+  ];
+  /* fora do menu: Contatos (vazia; o contato fica na ficha da empresa) · Cobrança e Posição do cliente (estão dentro de A receber:
+     "Precisa de você" e "Por cliente"; a posição também abre pela ficha da empresa) · Status das ordens de compra (mesmos dados de
+     Ordens de compra) · Estoque antigo do ERP (vazio; o estoque em uso é o do app de Serviços) */
+  const GUARDAR = ['contatos', 'fn_cobranca', 'fn_posicao', 'cp_status', 'sv_estoque'];
+  const INTERNOS = ['Projetos', 'Serviços (apps)'];
+  const item = new Map(MENU.flatMap(g => g.itens.map(i => [i[0], i])));
+  Object.entries(ROTULO).forEach(([k, r]) => { if(item.has(k)) item.get(k)[2] = r; });
+  GUARDAR.forEach(k => { if(item.has(k)) MENU_GUARDADAS[k] = item.get(k); });
+  MENU_GUARDADAS.crm = ['crm', '📞', 'Agenda de retornos (CRM)', 'DAPS'];   // nunca esteve no menu: abre pelo sino
+  const usados = new Set(GUARDAR);
+  const novo = GRUPOS.map(([area, ks]) => ({ area, itens: ks.filter(k => item.has(k) && !usados.has(k) && usados.add(k)).map(k => item.get(k)) }));
+  const internos = MENU.filter(g => INTERNOS.includes(g.area)).map(g => ({ area: g.area, itens: g.itens.filter(i => !usados.has(i[0]) && usados.add(i[0])) }));
+  // tela nova que ninguém pôs num grupo: vai para a Administração (não some)
+  const adm = novo.find(g => g.area === 'Administração');
+  item.forEach((i, k) => { if(!usados.has(k)) adm.itens.push(i); });
+  const pos = novo.findIndex(g => g.area === 'Compras');
+  novo.splice(pos, 0, ...internos);
+  MENU.splice(0, MENU.length, ...novo.filter(g => g.itens.length));
+  if(typeof SETORES === 'object' && SETORES.adm) SETORES.adm.areas = GRUPOS.map(g => g[0]).filter(Boolean);
+})();
 
 
 /* ================== Unificação dos clientes dos dois apps ================== */

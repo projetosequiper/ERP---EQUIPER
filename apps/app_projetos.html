@@ -1023,9 +1023,15 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
   function linhaDe(p){ var ps=partes(p); if(!ps.length) return null; var d=profundidade(ps); return ps.length>=d ? ps.slice(0,d).join('/') : null; }
 
   var pendentes = {}, timer = null, gravando = Promise.resolve();
+  /* 24/11: se a leitura inicial do banco falhar, o aplicativo abre SEM gravar nada (em 23/11 uma leitura que falhou virou "banco vazio"
+     e os dados de exemplo foram gravados por cima dos clientes). As cópias diárias "clm-backup-auto-AAAA-MM-DD" não vão para o banco do ERP
+     (5 MB cada; o ERP tem o próprio backup). */
+  var cargaFalhou = false, COPIA_DIARIA = /^storage\/clm-backup-auto-\d/;
   function marcar(chave){ pendentes[chave]=true; clearTimeout(timer); timer=setTimeout(enviar, 250); }
   function enviar(){
     var ks=Object.keys(pendentes); pendentes={}; if(!ks.length || !sb) return;
+    if(cargaFalhou){ faixa('ERP TESTE · os dados não foram lidos — nada está sendo salvo. Recarregue a página.', '#d0151b'); return; }
+    ks = ks.filter(function(k){ return !COPIA_DIARIA.test(k); }); if(!ks.length) return;
     var up=[], del=[];
     ks.forEach(function(k){ var v=ler(k); if(v==null) del.push(k); else up.push({ caminho:k, valor:v }); });
     gravando = gravando.then(async function(){
@@ -1155,10 +1161,12 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
   /* ---------- 6. Carga inicial + tempo real ---------- */
   async function carregarTudo(){
     if(!sb){ faixa('ERP TESTE · sem conexão com o banco do ERP', '#d0151b'); prontoOk(); return; }
-    var de=0, passo=1000;
+    var de=0, passo=15, tent=0;   // páginas pequenas: há linhas de vários MB e o banco corta consultas longas
     for(;;){
-      var r = await sb.from(TABELA).select('caminho,valor').order('caminho').range(de, de+passo-1);
-      if(r.error){ console.error(r.error); faixa('ERP TESTE · erro ao ler o banco do ERP: '+r.error.message, '#d0151b'); break; }
+      var r = await sb.from(TABELA).select('caminho,valor').not('caminho', 'like', 'storage/clm-backup-auto-2%').order('caminho').range(de, de+passo-1);
+      if(r.error && ++tent <= 3){ await new Promise(function(ok){ setTimeout(ok, 1500 * tent); }); continue; }
+      if(r.error){ console.error(r.error); cargaFalhou = true; faixa('ERP TESTE · erro ao ler o banco do ERP — nada será salvo. Recarregue a página. ('+r.error.message+')', '#d0151b'); break; }
+      tent = 0;
       (r.data||[]).forEach(function(l){ porNaArvore(l.caminho, l.valor); });
       if(!r.data || r.data.length<passo) break; de+=passo;
     }
@@ -2607,7 +2615,9 @@ window.__ponteCfg={tabela:'app_projetos_nos',prefixo:'ERPTESTE::',nome:'app de P
       return false;
     }
     financeiroBloqueado = false; atualizarBannerCarga();
-    if(!rs.valor && !financeiroFoiCarregadoAlgumaVez){
+    if(!rs.valor && !financeiroFoiCarregadoAlgumaVez && window.firebase && window.firebase.__erp){
+      state.financeiro = [];   // dentro do ERP nunca entram os clientes de exemplo: a lista vem do banco do ERP
+    } else if(!rs.valor && !financeiroFoiCarregadoAlgumaVez){
       state.financeiro = FINANCEIRO_PADRAO.map(function(rec, i){
         return Object.assign({ id: 'fin' + i + '_' + Date.now().toString(36) }, rec);
       });
