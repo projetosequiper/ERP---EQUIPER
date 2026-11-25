@@ -7611,7 +7611,8 @@ const expId = p => p + Date.now().toString(36) + Math.random().toString(36).slic
 const expCod = v => { const t = String(v == null ? '' : v).trim(); return /^\d{1,6}$/.test(t) ? t.padStart(6, '0') : t; };
 const QTD_TIPOS = [['unid', 'por unidade ×'], ['cada', '1 a cada'], ['fixo', 'fixo'], ['menos', 'unidades menos']];
 async function expCarrega(forcar){
-  if(!EXP.prod){ const r = await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,tipo,unidade,ativo').order('id')); EXP.prod = Object.fromEntries((r.data || []).map(p => [p.codigo, p])); }
+  if(!EXP.prod){ const r = await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,tipo,unidade,ativo').order('id')); EXP.prod = Object.fromEntries((r.data || []).map(p => [p.codigo, p])); EXP.porId = Object.fromEntries((r.data || []).map(p => [p.id, p])); }
+  if(!EXP.kits || forcar){ const k = await sb.from('produto_componentes').select('kit_id,componente_id,quantidade,ordem').order('ordem'); EXP.kits = {}; (k.data || []).forEach(c => (EXP.kits[c.kit_id] = EXP.kits[c.kit_id] || []).push(c)); }
   if(!EXP.sis || forcar){ const r = await sb.from('express_sistemas').select('*').order('ordem').order('nome'); if(r.error){ EXP.erro = true; EXP.sis = []; } else { EXP.erro = false; EXP.sis = r.data || []; } }
 }
 const expSemScript = t => `<div class="card"><h2>${t}</h2><p class="vazio">Falta rodar o script <b>93_orcamento_express.sql</b> no Supabase.</p></div>`;
@@ -7619,14 +7620,27 @@ const expSe = (se, resp) => !se || Object.entries(se).every(([p, v]) => !v || re
 /* quantidade de um item que vem junto, para n unidades do equipamento */
 function expQtd(q, n){ const v = Number(q && q.v) || 1; return !q || q.tipo === 'unid' ? n * v : q.tipo === 'cada' ? Math.ceil(n / v) : q.tipo === 'fixo' ? v : Math.max(0, n - v); }
 /* monta os itens de UM sistema escolhido: inst = { resp: {pergunta: valor}, esc: {grupoId: { eq, n }} } */
+/* Cada item sai com a SEÇÃO (subdivisão) a que pertence: a do grupo (o nome antes de " · ") ou a indicada no item que vem junto
+   (ex.: "Material auxiliar", "Comando"). Kit com componentes cadastrados no material entra aberto, item por item.
+   Preço: o do cadastro de materiais, ou o "preço fixo" do item que vem junto (ex.: quadro calculado à parte). */
 function expItens(cfg, inst){
-  const out = [], soma = (codigo, nome, q) => { if(!(q > 0)) return; const x = out.find(i => i.codigo === codigo); if(x) x.quantidade += q; else out.push({ codigo, nome, quantidade: q }); };
+  const out = [], secs = [], fixo = v => v === null || v === undefined || v === '' || isNaN(Number(v)) ? null : Number(v);
+  const soma = (sec, codigo, nome, q, preco) => { if(!(q > 0)) return;
+    const comps = preco == null && EXP.kits ? EXP.kits[(EXP.prod[codigo] || {}).id] : null;
+    if(comps && comps.length){ comps.forEach(c => { const p = EXP.porId[c.componente_id]; if(p) soma(sec, p.codigo, p.descricao, q * (Number(c.quantidade) || 1), null); }); return; }
+    if(!secs.includes(sec)) secs.push(sec);
+    const x = out.find(i => i.codigo === codigo && i.sec === sec && i.precoFixo === preco); if(x) x.quantidade += q; else out.push({ sec, codigo, nome, quantidade: q, precoFixo: preco }); };
   (cfg.grupos || []).forEach(g => { const e = inst.esc[g.id]; if(!e || !e.eq || !(e.n > 0)) return;
     const eq = (g.equipamentos || []).find(x => x.id === e.eq); if(!eq || !expSe(eq.se, inst.resp)) return;
-    soma(eq.codigo, eq.nome, e.n * (Number(eq.fator) || 1));   // fator: unidades deste código para cada 1 escolhido (ex.: 3 coletores por conjunto)
-    (eq.junto || []).forEach(j => { if(expSe(j.se, inst.resp) && e.n >= (Number(j.qmin) || 0)) soma(j.codigo, j.nome, expQtd(j.qtd, e.n)); }); });
-  return out.map(i => { const p = EXP.prod[i.codigo]; return { ...i, p, preco: p ? Number(p.preco) || 0 : 0 }; });
+    const sec = String(g.nome || '').split(' · ')[0].trim() || 'Itens';
+    soma(sec, eq.codigo, eq.nome, e.n * (Number(eq.fator) || 1), null);   // fator: unidades deste código para cada 1 escolhido (ex.: 3 coletores por conjunto)
+    (eq.junto || []).forEach(j => { if(expSe(j.se, inst.resp) && e.n >= (Number(j.qmin) || 0)) soma((j.sec || '').trim() || sec, j.codigo, j.nome, expQtd(j.qtd, e.n), fixo(j.preco)); }); });
+  // ordem das seções: primeiro as subdivisões (na ordem da configuração), depois as seções escritas nos itens; "Material auxiliar" por último
+  const dosGrupos = [...new Set((cfg.grupos || []).map(g => String(g.nome || '').split(' · ')[0].trim() || 'Itens'))];
+  const peso = sx => /^material/i.test(sx) && !dosGrupos.includes(sx) ? 9000 : dosGrupos.includes(sx) ? dosGrupos.indexOf(sx) : 1000 + secs.indexOf(sx);
+  return out.map((x, i) => ({ x, i })).sort((a, b) => peso(a.x.sec) - peso(b.x.sec) || a.i - b.i).map(o => o.x).map(i => { const p = EXP.prod[i.codigo]; return { ...i, p, preco: i.precoFixo != null ? i.precoFixo : (p ? Number(p.preco) || 0 : 0) }; });
 }
+const expSecs = its => [...new Set(its.map(i => i.sec))];
 
 /* ================= Orçamento Express ================= */
 ST.express = { cliente: '', inst: [] };
@@ -7646,8 +7660,8 @@ async function telaExpress(){
         return `<div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;flex-wrap:wrap"><label class="campo" style="flex:1 1 260px;margin:0">${esc(g.rotulo || g.nome)}<select data-xg="${k}:${esc(g.id)}"><option value="">— não tem —</option>${ops.map(o => `<option value="${esc(o.id)}" ${e.eq === o.id ? 'selected' : ''}>${esc(o.nome)}${EXP.prod[o.codigo] ? '' : ' (código ' + esc(o.codigo) + ' não achado)'}</option>`).join('')}</select></label>
           <label class="campo" style="width:110px;margin:0">Quantidade<input data-xn="${k}:${esc(g.id)}" type="number" min="1" step="1" value="${e.n || 1}"></label></div>`; }).join('')}
       ${its.length ? `<div style="overflow-x:auto;margin-top:12px"><table class="reg"><thead><tr><th>Código</th><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>
-        ${its.map(x => `<tr><td>${esc(x.codigo)}</td><td>${x.p ? esc(x.p.descricao) : `<span style="color:var(--verm)">não está no cadastro de materiais</span> · ${esc(x.nome || '')}`}${x.p && TIPOS_PROD[x.p.tipo] && x.p.tipo !== 'equipamento' ? ` <span class="muted" style="font-size:11px">${TIPOS_PROD[x.p.tipo].toLowerCase()}</span>` : ''}</td>
-          <td style="text-align:right">${x.quantidade.toLocaleString('pt-BR')}</td><td style="text-align:right">${x.preco ? R$(x.preco) : '<span style="color:#b45309">sem preço</span>'}</td><td style="text-align:right">${R$(x.quantidade * x.preco)}</td></tr>`).join('')}</tbody>
+        ${its.map((x, xi) => `${expSecs(its).length > 1 && (xi === 0 || its[xi - 1].sec !== x.sec) ? `<tr style="background:#f0f0f2"><td colspan="5" style="font-weight:700;font-size:12px;letter-spacing:.3px;text-transform:uppercase">${esc(x.sec)}</td></tr>` : ''}<tr><td>${esc(x.codigo)}</td><td>${x.p ? esc(x.p.descricao) : `<span style="color:var(--verm)">não está no cadastro de materiais</span> · ${esc(x.nome || '')}`}${x.p && TIPOS_PROD[x.p.tipo] && x.p.tipo !== 'equipamento' ? ` <span class="muted" style="font-size:11px">${TIPOS_PROD[x.p.tipo].toLowerCase()}</span>` : ''}</td>
+          <td style="text-align:right">${x.quantidade.toLocaleString('pt-BR')}</td><td style="text-align:right">${x.preco ? R$(x.preco) + (x.precoFixo != null ? ' <span class="muted" style="font-size:11px" title="Preço fixo definido na Configuração do Express">fixo</span>' : '') : '<span style="color:#b45309">sem preço</span>'}</td><td style="text-align:right">${R$(x.quantidade * x.preco)}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td colspan="4" style="text-align:right"><b>Total do pedido</b></td><td style="text-align:right"><b>${R$(tot)}</b></td></tr></tfoot></table></div>` : '<p class="muted" style="font-size:13px;margin:10px 0 0">Escolha o equipamento para ver os itens.</p>'}</div>`; };
   const geral = X.inst.reduce((a, i) => a + expItens(sisDe(i).config || {}, i).reduce((b, x) => b + x.quantidade * x.preco, 0), 0);
   $('#conteudo').innerHTML = `<div class="card"><h2>Orçamento Express <span class="muted" style="font-weight:400">· escolha o cliente e os sistemas; o ERP monta os pedidos</span></h2>
@@ -7667,7 +7681,8 @@ async function telaExpress(){
   if($('#xLimpa')) $('#xLimpa').onclick = () => { X.inst = []; telaExpress(); };
   $('#xGerar').onclick = async () => {
     const cli = pega(); if(!cli) return aviso('Cliente', 'Escolha o cliente do orçamento.');
-    const grupos = X.inst.map(i => ({ titulo: (i.titulo || sisDe(i).nome).toUpperCase(), itens: expItens(sisDe(i).config || {}, i).filter(x => x.p).map(x => ({ produto_id: x.p.id, codigo: x.p.codigo, descricao: x.p.descricao, tipo: x.p.tipo, unidade: x.p.unidade || 'UN', quantidade: x.quantidade, preco_unit: x.preco })) })).filter(g => g.itens.length);
+    const grupos = X.inst.map(i => ({ titulo: (i.titulo || sisDe(i).nome).toUpperCase(), itens: (its => { const varias = expSecs(its).length > 1, l = []; its.forEach((x, xi) => { if(varias && (xi === 0 || its[xi - 1].sec !== x.sec)) l.push({ descricao: String(x.sec).toUpperCase(), tipo: 'titulo', quantidade: 1, preco_unit: 0 });
+        l.push({ produto_id: x.p.id, codigo: x.p.codigo, descricao: x.p.descricao, tipo: x.p.tipo, unidade: x.p.unidade || 'UN', quantidade: x.quantidade, preco_unit: x.preco }); }); return l; })(expItens(sisDe(i).config || {}, i).filter(x => x.p)) })).filter(g => g.itens.some(x => x.tipo !== 'titulo'));
     if(!grupos.length) return aviso('Sistemas', 'Acrescente pelo menos um sistema e escolha o equipamento.');
     const fora = X.inst.flatMap(i => expItens(sisDe(i).config || {}, i).filter(x => !x.p).map(x => x.codigo));
     if(fora.length && !await modal('Itens fora do cadastro', `Os códigos <b>${fora.map(esc).join(', ')}</b> não estão no cadastro de materiais e vão ficar de fora. Gerar assim mesmo?`, [['Cancelar', false], ['Gerar', true, 'pri']])) return;
@@ -7694,6 +7709,8 @@ async function telaExpressCfg(){
       <td style="white-space:nowrap"><select data-p="${base}.qtd.tipo" style="width:130px;font-size:12px" ${dis}>${QTD_TIPOS.map(([k, t]) => `<option value="${k}" ${(j.qtd && j.qtd.tipo || 'unid') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <input data-p="${base}.qtd.v" data-num value="${j.qtd && j.qtd.v != null ? j.qtd.v : 1}" style="width:54px;text-align:right" ${dis}></td>
       <td>${seSel(base + '.se', j.se)}</td><td><input data-p="${base}.qmin" data-num value="${j.qmin || ''}" placeholder="—" title="Só entra a partir desta quantidade do equipamento" style="width:54px;text-align:right" ${dis}></td>
+      <td><input data-p="${base}.sec" value="${esc(j.sec || '')}" placeholder="a mesma" title="Seção do pedido em que este item aparece (vazio = a subdivisão do equipamento). Ex.: Material auxiliar, Comando, Mão de obra" style="width:130px" ${dis}></td>
+      <td><input data-p="${base}.preco" data-num value="${j.preco != null && j.preco !== '' ? numFmt(j.preco) || '0' : ''}" placeholder="do cadastro" title="Preço fixo deste item no Express (vazio = preço do cadastro de materiais). Use para o que é calculado à parte, como o quadro de comando" style="width:104px;text-align:right" ${dis}></td>
       <td>${edita ? `<button class="btn peq" data-del="${base}" title="Tirar">✕</button>` : ''}</td></tr>`;
   const eqHtml = (e, gi, ei) => { const base = `grupos.${gi}.equipamentos.${ei}`, ab = C.aberto[e.id];
     return `<div style="border:1px solid var(--borda);border-radius:10px;padding:8px 10px;margin:8px 0;background:var(--fundo)">
@@ -7702,8 +7719,8 @@ async function telaExpressCfg(){
         <span style="flex:2 1 220px;font-size:12px" data-desc="${base}.codigo">${prodTxt(e.codigo)}</span>${seSel(base + '.se', e.se)}
         <button class="btn peq" data-abre="${esc(e.id)}">${ab ? '▾' : '▸'} vêm junto (${(e.junto || []).length})</button>
         ${edita ? `<button class="btn peq" data-dup="${base}" title="Duplicar este equipamento com os itens que vêm junto">⧉</button><button class="btn peq" data-del="${base}" title="Excluir o equipamento">✕</button>` : ''}</div>
-      ${ab ? `<div style="overflow-x:auto;margin-top:8px"><table class="reg"><thead><tr><th>Código</th><th>Item que vem junto</th><th>Quantidade</th><th>Quando</th><th title="Quantidade mínima do equipamento">A partir de</th><th></th></tr></thead><tbody>
-        ${(e.junto || []).map((j, ji) => juntoTr(j, `${base}.junto.${ji}`)).join('') || '<tr><td colspan="6" class="muted" style="font-size:12px">Nenhum item acompanha este equipamento.</td></tr>'}</tbody></table>
+      ${ab ? `<div style="overflow-x:auto;margin-top:8px"><table class="reg"><thead><tr><th>Código</th><th>Item que vem junto</th><th>Quantidade</th><th>Quando</th><th title="Quantidade mínima do equipamento">A partir de</th><th>Seção no pedido</th><th>Preço fixo</th><th></th></tr></thead><tbody>
+        ${(e.junto || []).map((j, ji) => juntoTr(j, `${base}.junto.${ji}`)).join('') || '<tr><td colspan="8" class="muted" style="font-size:12px">Nenhum item acompanha este equipamento.</td></tr>'}</tbody></table>
         ${edita ? `<button class="btn peq" data-add="${base}.junto" data-novo="junto" style="margin-top:6px">+ item que vem junto</button>` : ''}</div>` : ''}</div>`; };
   $('#conteudo').innerHTML = `<div class="card"><h2>Configuração do Express <span class="muted" style="font-weight:400">· os sistemas e equipamentos que aparecem no Orçamento Express</span></h2>
       <div class="chips" style="margin:4px 0 10px">${EXP.sis.map(s => `<button class="chip ${S && s.id === S.id ? 'on' : ''}" data-sis="${s.id}">${esc(s.nome)}${s.ativo ? '' : ' <span class="muted">(desligado)</span>'}</button>`).join('')}${edita ? '<button class="chip" id="cfNovo">+ Novo sistema</button>' : ''}</div>
@@ -7722,7 +7739,7 @@ async function telaExpressCfg(){
         ${(g.equipamentos || []).map((e, ei) => eqHtml(e, gi, ei)).join('') || '<p class="muted" style="font-size:12px;margin:8px 0">Nenhum equipamento nesta subdivisão.</p>'}
         ${edita ? `<button class="btn peq" data-add="grupos.${gi}.equipamentos" data-novo="equip">+ equipamento</button>` : ''}</div>`).join('')}
       ${edita ? '<div style="margin-top:14px"><button class="btn" data-add="grupos" data-novo="grupo">+ subdivisão</button></div>' : ''}
-      <p class="muted" style="font-size:12px;margin-top:12px">Quantidade do item que vem junto: <b>por unidade ×</b> N (N para cada equipamento) · <b>1 a cada</b> N equipamentos (arredonda para cima) · <b>fixo</b> N · <b>unidades menos</b> N. O preço e a descrição vêm sempre do cadastro de materiais, pelo código.</p>`}
+      <p class="muted" style="font-size:12px;margin-top:12px">Quantidade do item que vem junto: <b>por unidade ×</b> N (N para cada equipamento) · <b>1 a cada</b> N equipamentos (arredonda para cima) · <b>fixo</b> N · <b>unidades menos</b> N. A descrição vem do cadastro de materiais, pelo código; o preço também, a não ser que o item tenha um <b>preço fixo</b>. No orçamento os itens saem separados por seção: a subdivisão (o texto antes de " · " no nome dela) ou a <b>seção</b> escrita no item. Material que é <b>kit</b> com componentes cadastrados entra aberto, item por item.</p>`}
       <div id="cfSug" style="display:none;position:fixed;z-index:60;background:#fff;border:1px solid var(--borda);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.2);max-height:260px;overflow:auto;width:min(520px,92vw)"></div></div>
     ${S && edita ? `<div class="card" style="position:sticky;bottom:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:5"><span style="flex:1" id="cfEst" class="muted">${C.sujo ? '<b style="color:#b45309">Há alterações não salvas.</b>' : 'Sem alterações.'}</span>
       <button class="btn" id="cfExc">Excluir sistema</button><button class="btn" id="cfDesf">Desfazer</button><button class="btn pri" id="cfSalvar">Salvar</button></div>` : ''}`;
