@@ -10663,7 +10663,7 @@ const pct = v => (Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigit
 async function pcBase(){
   const t = await tudo(() => sb.from('compras_precos_tabela').select('forn_chave,fornecedor_id,fornecedor_nome,data').order('forn_chave'));
   if(t.error) return { erro: 'Falta rodar o script 73 (tabela de preços por fornecedor).' };
-  if(!PCX.prod){ const pr = await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,custo,margem,unidade').order('id')); PCX.prod = Object.fromEntries((pr.data || []).map(p => [p.id, p])); }
+  if(!PCX.prod){ const pr = await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,custo,margem,unidade,tem_st').order('id')); PCX.prod = Object.fromEntries((pr.data || []).map(p => [p.id, p])); }
   const ids = [...new Set(t.data.map(x => x.fornecedor_id).filter(Boolean))], pes = {};
   ids.forEach(i => { const p = pessoa(i); if(p) pes[i] = p; });
   const forns = {}; t.data.forEach(x => { const f = forns[x.forn_chave] || (forns[x.forn_chave] = { k: x.forn_chave, id: x.fornecedor_id, nome: (pes[x.fornecedor_id] && (pes[x.fornecedor_id].apelido || pes[x.fornecedor_id].nome)) || x.fornecedor_nome || '(sem fornecedor)', n: 0, ult: '' });
@@ -10680,6 +10680,10 @@ async function pcDoForn(k){
 const pcSel = (B) => `<select id="pcForn" style="max-width:100%;flex:1 1 280px">${B.lf.map(x => `<option value="${esc(x.k)}"${x.k === ST.pcForn ? ' selected' : ''}>${esc(x.nome)} · ${x.n} ${x.n === 1 ? 'item' : 'itens'}</option>`).join('')}</select>
   <input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}" style="flex:1 1 180px"><label style="display:none"><input type="checkbox" id="vInat"></label>`;
 const pcNome = x => { const p = PCX.prod[x.produto_id]; return p ? `<b>${esc(p.codigo)}</b> ${esc(p.descricao)}` : `<span style="color:#b45309">sem produto ligado</span> · ${esc(x.descricao || '')}`; };
+/* 25/11 (Júlio): nome do fornecedor sem "Pedido: nº - cliente", EAN, CEST e restos da nota; o EAN vira o código do fornecedor quando não há outro */
+const pcNomeForn = x => String(x.descricao || '').replace(/^c[oó]d\.\s*CIGAM\s*\d+\s*·\s*/i, '').replace(/\s*Pedido:.*$/i, '').replace(/\s*EAN:\s*\d+/i, '').replace(/\s*CEST:\s*[\d.]+/i, '').replace(/\s*vBCFCPST=.*$/i, '').trim();
+const pcCodForn = x => x.codigo_fornecedor || ((String(x.descricao || '').match(/EAN:\s*(\d+)/i) || [])[1] ? 'EAN ' + String(x.descricao).match(/EAN:\s*(\d+)/i)[1] : '');
+const pcSt = x => x.linha === 'Com ST' ? true : x.linha === 'Sem ST' ? false : (PCX.prod[x.produto_id] || {}).tem_st;
 const pcTxt = x => { const p = PCX.prod[x.produto_id]; return p ? p.codigo + ' ' + p.descricao : (x.descricao || ''); };
 const pcFiltra = (rows) => { const b = norm(ST.busca); return rows.filter(x => !b || norm(pcTxt(x) + ' ' + (x.descricao || '') + ' ' + (x.codigo_fornecedor || '') + ' ' + (x.linha || '')).includes(b)).sort((a, b2) => pcTxt(a).localeCompare(pcTxt(b2), 'pt')); };
 /* grava um campo da condição geral ('' ) ou de uma linha; cria a geral na primeira vez */
@@ -10712,12 +10716,15 @@ async function telaPrecosForn(topo, liga){
         ${edita && D.linhas.length ? `<span style="flex:1"></span><span class="muted" style="font-size:12px">Pôr os ${l.length} itens listados abaixo na linha</span><select id="pcLote" style="max-width:200px"><option value="">Geral (sem linha)</option>${D.linhas.map(L => `<option value="${L.id}">${esc(L.nome)}</option>`).join('')}</select><button class="btn" id="pcLoteOk">Aplicar</button>` : ''}</div>
       <p class="muted" style="font-size:12px">Custo final = preço de tabela + reajuste + IPI + outros impostos + frete + taxa financeira (um sobre o outro). O item que está numa linha usa as condições da linha; os outros usam a Geral.
         Para pôr vários itens numa linha de uma vez: busque (ex.: "CM") e use "Pôr os itens listados na linha". A margem de venda fica em Vendas → Tabela de preços de venda.</p>` : ''}
-      <div style="overflow-x:auto"><table class="reg" id="pcTab"><thead><tr><th>Produto (ERP)</th><th>Como o fornecedor chama</th><th>Linha</th><th style="text-align:right">Preço de tabela</th><th>Data</th><th style="text-align:right">Custo final</th><th style="text-align:right">Venda hoje</th></tr></thead><tbody>
-      ${l.slice(0, 600).map(x => `<tr><td>${pcNome(x)}</td><td style="font-size:12px">${esc(x.descricao || '')}${x.codigo_fornecedor ? ` <span class="muted">· ${esc(x.codigo_fornecedor)}</span>` : ''}</td>
-        <td>${edita && D.linhas.length ? `<select data-itl="${esc(x.item_chave)}" style="max-width:150px;font-size:12px"><option value="">Geral</option>${D.linhas.map(L => `<option value="${L.id}"${x.linha_id === L.id ? ' selected' : ''}>${esc(L.nome)}</option>`).join('')}</select>` : esc(x.linha || 'Geral')}</td>
-        <td style="text-align:right;white-space:nowrap"><a href="#" data-ph="${esc(x.ultimo_id)}" title="Ver o histórico de preços"><b>${R$(x.preco)}</b></a></td><td>${dataBR(String(x.data || '').slice(0, 10))}</td>
-        <td style="text-align:right;white-space:nowrap"><b>${R$(x.custo_final)}</b>${Number(x.custo_final) !== Number(x.preco) && Number(x.preco) ? `<div class="muted" style="font-size:11px">+${pct((x.custo_final / x.preco - 1) * 100)}%</div>` : ''}</td>
-        <td style="text-align:right">${PCX.prod[x.produto_id] ? R$(PCX.prod[x.produto_id].preco) : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum preço.</td></tr>'}</tbody></table></div>
+      <div style="overflow-x:auto"><table class="reg" id="pcTab"><thead><tr><th>Cód.</th><th>Nome (nosso sistema)</th><th>Cód. fornecedor</th><th>Nome no fornecedor</th><th>ST</th><th>Linha</th><th style="text-align:right">Preço de tabela</th><th>Data</th><th style="text-align:right">Custo final</th><th style="text-align:right">Venda hoje</th></tr></thead><tbody>
+      ${l.slice(0, 600).map(x => { const p = PCX.prod[x.produto_id], st = pcSt(x), ac = Number(x.preco) ? (x.custo_final / x.preco - 1) * 100 : 0;
+        return `<tr><td style="white-space:nowrap"><b>${p ? esc(p.codigo) : '—'}</b></td><td>${p ? esc(p.descricao) : '<span style="color:#b45309">sem produto ligado</span>'}</td>
+        <td style="font-size:12px;white-space:nowrap">${esc(pcCodForn(x)) || '<span class="muted">—</span>'}</td><td style="font-size:12px">${esc(pcNomeForn(x))}</td>
+        <td>${st === true ? '<span class="tag" style="background:#fff4d6;color:#8a6400">Com ST</span>' : st === false ? '<span class="tag">Sem ST</span>' : '<span class="muted">—</span>'}</td>
+        <td>${edita && D.linhas.length ? `<select data-itl="${esc(x.item_chave)}" style="min-width:128px;width:auto;font-size:12px;padding-right:26px"><option value="">Geral</option>${D.linhas.map(L => `<option value="${L.id}"${x.linha_id === L.id ? ' selected' : ''}>${esc(L.nome)}</option>`).join('')}</select>` : esc(x.linha || 'Geral')}</td>
+        <td style="text-align:right;white-space:nowrap"><a href="#" data-ph="${esc(x.ultimo_id)}" title="Ver o histórico de preços"><b>${R$(x.preco)}</b></a></td><td style="white-space:nowrap">${dataBR(String(x.data || '').slice(0, 10))}</td>
+        <td style="text-align:right;white-space:nowrap"><b>${R$(x.custo_final)}</b>${Math.abs(ac) >= 0.05 ? `<div class="muted" style="font-size:11px">${ac > 0 ? '+' : '−'}${pct(Math.abs(ac))}%</div>` : ''}</td>
+        <td style="text-align:right;white-space:nowrap">${p ? R$(p.preco) : ''}</td></tr>`; }).join('') || '<tr><td colspan="10" class="vazio">Nenhum preço.</td></tr>'}</tbody></table></div>
       ${l.length > 600 ? `<p class="muted">Mostrando 600 de ${l.length}. Use a busca.</p>` : ''}</div>`;
   ligaBarra(null); liga();
   $('#pcForn').onchange = e => { ST.pcForn = e.target.value; ST.busca = ''; telaPrecosCompra(); };
@@ -10742,7 +10749,7 @@ async function telaPrecosForn(topo, liga){
     if(await poeLinha(l.map(x => x.item_chave), linha)){ toast(`${l.length} item(ns) na linha ${nome}.`); de(); } };
   const porId = Object.fromEntries(D.rows.map(x => [x.ultimo_id, x]));
   document.querySelectorAll('#pcTab [data-ph]').forEach(a => a.onclick = e => { e.preventDefault(); historicoPrecoCompra(porId[a.dataset.ph], PCX.prod, () => B.f.nome); });
-  expRegistra(() => [expCols('Tabela de preços de compra · ' + (B.f ? B.f.nome : ''), [['Código ERP', x => PCX.prod[x.produto_id]?.codigo], ['Produto (ERP)', x => PCX.prod[x.produto_id]?.descricao || ''], ['Como o fornecedor chama', x => x.descricao], ['Linha', x => x.linha || 'Geral'],
+  expRegistra(() => [expCols('Tabela de preços de compra · ' + (B.f ? B.f.nome : ''), [['Código ERP', x => PCX.prod[x.produto_id]?.codigo], ['Produto (ERP)', x => PCX.prod[x.produto_id]?.descricao || ''], ['Cód. fornecedor', pcCodForn], ['Nome no fornecedor', pcNomeForn], ['ST', x => pcSt(x) === true ? 'Com ST' : pcSt(x) === false ? 'Sem ST' : ''], ['Linha', x => x.linha || 'Geral'],
     ['Preço de tabela', x => R$(x.preco)], ['Data', x => dataBR(String(x.data || '').slice(0, 10))], ['Reajuste %', x => pct(x.c_reajuste)], ['IPI %', x => pct(x.c_ipi)], ['Outros impostos %', x => pct(x.c_impostos)], ['Taxa financeira %', x => pct(x.c_taxa)], ['Frete %', x => pct(x.c_frete)],
     ['Custo final', x => R$(x.custo_final)], ['Venda hoje', x => PCX.prod[x.produto_id] ? R$(PCX.prod[x.produto_id].preco) : '']], l)]);
 }
