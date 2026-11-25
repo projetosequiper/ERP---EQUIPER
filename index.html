@@ -7638,7 +7638,7 @@ function expQtd(q, n){ const v = Number(q && q.v) || 1; return !q || q.tipo === 
 function expItens(cfg, inst){
   const out = [], secs = [], fixo = v => v === null || v === undefined || v === '' || isNaN(Number(v)) ? null : Number(v);
   const soma = (sec, codigo, nome, q, preco) => { if(!(q > 0)) return;
-    const comps = preco == null && EXP.kits ? EXP.kits[(EXP.prod[codigo] || {}).id] : null;
+    const comps = preco == null && EXP.kits && EXP.explodir !== false ? EXP.kits[(EXP.prod[codigo] || {}).id] : null;   // EXP.explodir: opção "Explodir os kits" do orçamento express em tela
     if(comps && comps.length){ comps.forEach(c => { const p = EXP.porId[c.componente_id]; if(p) soma(sec, p.codigo, p.descricao, q * (Number(c.quantidade) || 1), null); }); return; }
     if(!secs.includes(sec)) secs.push(sec);
     const x = out.find(i => i.codigo === codigo && i.sec === sec && i.precoFixo === preco); if(x) x.quantidade += q; else out.push({ sec, codigo, nome, quantidade: q, precoFixo: preco }); };
@@ -7664,6 +7664,7 @@ async function telaExpress(){
   const RASC = rq.error ? null : (rq.data || []);   // null = falta o script 95
   if(EXP.erro) return $('#conteudo').innerHTML = expSemScript('Orçamento Express');
   const X = ST.express, ativos = EXP.sis.filter(s => s.ativo);
+  EXP.explodir = !X.kitsFechados;
   const novaInst = s => { const cfg = s.config || {}, resp = {}; (cfg.perguntas || []).forEach(p => resp[p.id] = p.padrao || (p.opcoes || [])[0] || '');
     return { id: expId('i'), sis: s.id, titulo: s.nome, resp, esc: {} }; };
   const sisDe = i => EXP.sis.find(s => s.id === i.sis);
@@ -7690,7 +7691,9 @@ async function telaExpress(){
         <div class="chips" style="margin-top:6px">${ativos.map(s => `<button class="chip" data-xadd="${s.id}">+ ${esc(s.nome)}</button>`).join('') || '<span class="muted">Nenhum sistema cadastrado. Cadastre em Configuração do Express.</span>'}</div></div></div>
     ${X.inst.map(cartao).join('')}
     <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1"><b>3.</b> ${X.inst.length} pedido(s) · total <b style="font-size:17px">${R$(geral)}</b><div class="muted" style="font-size:12px">Abre o orçamento pronto para conferir, ajustar e salvar. Preços do cadastro de materiais.</div></span>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap" title="Kit com itens cadastrados em Materiais: marcado, entra aberto item por item; desmarcado, entra como um item só (dá para explodir depois, dentro do orçamento, no botão kit)"><input type="checkbox" id="xKits" style="width:auto" ${X.kitsFechados ? '' : 'checked'}> Explodir os kits nos itens</label>
       ${X.inst.length ? '<button class="btn" id="xLimpa">Limpar</button>' : ''}<button class="btn pri" id="xGerar">⚡ Gerar orçamento</button></div>`;
+  $('#xKits').onchange = e => { X.kitsFechados = !e.target.checked; X.sujo = true; telaExpress(); };
   const pega = pickEmpresa($('#xCli'), X.cliente, pid => { X.cliente = pid; mexeu(); telaExpress(); }, { papel: 'cliente', rotulo: 'cliente' });
   document.querySelectorAll('[data-xadd]').forEach(b => b.onclick = () => { X.inst.push(novaInst(EXP.sis.find(s => s.id === b.dataset.xadd))); mexeu(); telaExpress(); });
   document.querySelectorAll('[data-xrem]').forEach(b => b.onclick = () => { X.inst.splice(+b.dataset.xrem, 1); mexeu(); telaExpress(); });
@@ -7705,7 +7708,7 @@ async function telaExpress(){
     if(vazio){ aviso('Nada para salvar', 'Escolha o cliente ou acrescente um sistema primeiro.'); return false; }
     let nome = X.nome || nomePadrao();
     if(perguntaNome){ const n = await pedirTexto('Salvar orçamento express', 'Nome para achar depois:', nome); if(n === null) return false; nome = n.trim() || nome; }
-    const reg = { nome, pessoa_id: X.cliente || null, dados: { cliente: X.cliente, inst: X.inst }, total: Math.round(geral * 100) / 100, atualizado_em: new Date().toISOString() };
+    const reg = { nome, pessoa_id: X.cliente || null, dados: { cliente: X.cliente, inst: X.inst, kitsFechados: !!X.kitsFechados }, total: Math.round(geral * 100) / 100, atualizado_em: new Date().toISOString() };
     const r = X.id ? await sb.from('express_rascunhos').update(reg).eq('id', X.id).select('id,atualizado_em').maybeSingle() : await sb.from('express_rascunhos').insert(reg).select('id,atualizado_em').single();
     if(r.error){ aviso('Erro ao salvar', esc(erroBanco(r.error))); return false; }
     if(!r.data){ const n = await sb.from('express_rascunhos').insert(reg).select('id,atualizado_em').single(); if(n.error){ aviso('Erro ao salvar', esc(erroBanco(n.error))); return false; } r.data = n.data; }   // o salvo foi apagado por outra pessoa: grava de novo
@@ -7728,7 +7731,7 @@ async function telaExpress(){
     document.querySelectorAll('#folha [data-xab]').forEach(b => b.onclick = async ev => { if(ev.target.closest('[data-xdel]')) return; ev.stopPropagation(); const id = b.dataset.xab;
       fecharPainel(); if(id === X.id) return; if(!await podeTrocar()) return;
       const r = await sb.from('express_rascunhos').select('*').eq('id', id).maybeSingle(); if(r.error || !r.data) return aviso('Não achei', 'Este salvo não existe mais.');
-      const d = r.data.dados || {}; ST.express = { id: r.data.id, nome: r.data.nome, cliente: d.cliente || r.data.pessoa_id || '', inst: Array.isArray(d.inst) ? d.inst : [], sujo: false, salvoEm: r.data.atualizado_em }; telaExpress(); });
+      const d = r.data.dados || {}; ST.express = { id: r.data.id, nome: r.data.nome, cliente: d.cliente || r.data.pessoa_id || '', inst: Array.isArray(d.inst) ? d.inst : [], kitsFechados: !!d.kitsFechados, sujo: false, salvoEm: r.data.atualizado_em }; telaExpress(); });
   };
   $('#xGerar').onclick = async () => {
     const cli = pega(); if(!cli) return aviso('Cliente', 'Escolha o cliente do orçamento.');
