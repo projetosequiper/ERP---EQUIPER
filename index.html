@@ -574,6 +574,13 @@ const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerC
 /* 25/11 (Júlio): busca "inteligente" em todas as listas — cada palavra digitada precisa aparecer, em qualquer ordem,
    sem ligar para maiúscula/minúscula nem acento ("32 joelho pvc" = "PVC Joelho 32"). Uso: texto.temTudo(busca). */
 String.prototype.temTudo = function(q){ const t = norm(this), ws = norm(q).split(/\s+/).filter(Boolean); for(let i = 0; i < ws.length; i++) if(!t.includes(ws[i])) return false; return true; };
+/* Mesma regra para as buscas feitas NO BANCO: consulta.buscaEm(['coluna', ...], texto) — uma condição por palavra (qualquer ordem);
+   vogais e "c" viram curinga de 1 letra para o acento não atrapalhar ("pressurizacao" acha "Pressurização"). */
+const buscaPadroes = q => norm(q).replace(/[%,()*\\"'_]/g, ' ').split(/\s+/).filter(Boolean).map(w => { const c = w.replace(/c(?=[aou])/g, '_').replace(/[aeiou]/g, '_');
+  return '%' + ((c.match(/[^_]/g) || []).length >= 2 ? c : w) + '%'; });
+function instalaBuscaEm(){ try{ const P = Object.getPrototypeOf(sb.from('produtos').select('id')); if(P.buscaEm) return;
+  P.buscaEm = function(cols, q){ let b = this; buscaPadroes(q).forEach(p => { b = cols.length === 1 ? b.ilike(cols[0], p) : b.or(cols.map(c => c + '.ilike.' + p).join(',')); }); return b; }; }catch(e){ console.error('buscaEm', e); } }
+setTimeout(instalaBuscaEm, 0);
 const dig = s => String(s||'').replace(/\D/g,'');
 const fmtData = d => d ? new Date(d).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}) : '';
 const humano = () => ST.eu && PERFIS_HUMANOS.includes(ST.eu.perfil);
@@ -2992,36 +2999,36 @@ async function pesquisaGeral(texto){
   // no banco (em paralelo; o que a pessoa não pode ver volta vazio)
   const J = [];
   const job = (cond, fn) => { if(cond) J.push(Promise.resolve().then(fn).catch(() => {})); };
-  job(pode('orc'), async () => { let r = n ? sb.from('orcamentos').select('id,numero,tipo,etapa,total,referencia,pagador_id').eq('numero', +n) : sb.from('orcamentos').select('id,numero,tipo,etapa,total,referencia,pagador_id').ilike('referencia', like).order('numero', { ascending: false }).limit(8);
+  job(pode('orc'), async () => { let r = n ? sb.from('orcamentos').select('id,numero,tipo,etapa,total,referencia,pagador_id').eq('numero', +n) : sb.from('orcamentos').select('id,numero,tipo,etapa,total,referencia,pagador_id').buscaEm(['referencia'], q).order('numero', { ascending: false }).limit(8);
     const d = (await r).data || []; let extra = [];
     if(!n){ const ids = ST.pessoas.filter(p => casa(p.nome + ' ' + (p.apelido || ''))).slice(0, 20).map(p => p.id); if(ids.length) extra = (await sb.from('orcamentos').select('id,numero,tipo,etapa,total,referencia,pagador_id').in('pagador_id', ids).order('numero', { ascending: false }).limit(8)).data || []; }
     const m = new Map([...d, ...extra].map(x => [x.id, x]));
     add('Orçamentos', [...m.values()].slice(0, 8).map(o => ({ ic: 'orc', t: `Orçamento ${o.numero} · ${nomeP(o.pagador_id)}`, s: [o.tipo, (typeof ETAPAS_ORC === 'object' ? (ETAPAS_ORC[o.etapa] || [o.etapa])[0] : o.etapa), o.referencia, R$(o.total)].filter(Boolean).join(' · '), abrir: () => formOrc(o.id) }))); });
-  job(pode('ped_cigam'), async () => { const r = n ? await sb.from('pedidos_cigam').select('numero,cliente_nome,sistema,situacao,total').eq('numero', +n) : await sb.from('pedidos_cigam').select('numero,cliente_nome,sistema,situacao,total').or(`cliente_nome.ilike.${like},sistema.ilike.${like}`).order('numero', { ascending: false }).limit(6);
+  job(pode('ped_cigam'), async () => { const r = n ? await sb.from('pedidos_cigam').select('numero,cliente_nome,sistema,situacao,total').eq('numero', +n) : await sb.from('pedidos_cigam').select('numero,cliente_nome,sistema,situacao,total').buscaEm(['cliente_nome', 'sistema'], q).order('numero', { ascending: false }).limit(6);
     add('Pedidos do CIGAM', (r.data || []).map(x => ({ ic: 'ped_cigam', t: `Pedido ${x.numero} · ${x.cliente_nome || ''}`, s: [x.sistema, (typeof SIT_CIGAM === 'object' ? (SIT_CIGAM[x.situacao] || [x.situacao])[0] : x.situacao), R$(x.total)].filter(Boolean).join(' · '), abrir: () => verPedCigam(x.numero) }))); });
-  job(pode('sv_pedidos'), async () => { const r = n ? await sb.from('pedidos_servico').select('id,numero,descricao,situacao,valor,obra_id').eq('numero', n) : await sb.from('pedidos_servico').select('id,numero,descricao,situacao,valor,obra_id').ilike('descricao', like).limit(6);
+  job(pode('sv_pedidos'), async () => { const r = n ? await sb.from('pedidos_servico').select('id,numero,descricao,situacao,valor,obra_id').eq('numero', n) : await sb.from('pedidos_servico').select('id,numero,descricao,situacao,valor,obra_id').buscaEm(['descricao'], q).limit(6);
     add('Pedidos de equipamento', (r.data || []).map(x => ({ ic: 'sv_pedidos', t: `Pedido ${x.numero || ''} · ${obra(x.obra_id)?.nome || ''}`, s: [x.descricao, x.situacao, R$(x.valor)].filter(Boolean).join(' · '), abrir: () => formPedido(x.id) }))); });
   job(pode('pj_propostas'), async () => { const r = await sb.from('propostas_projeto').select('id,numero_proposta,obra_id,valor_total').ilike('numero_proposta', like).limit(6);
     add('Propostas de projeto', (r.data || []).map(x => ({ ic: 'pj_propostas', t: `Proposta ${x.numero_proposta} · ${obra(x.obra_id)?.nome || ''}`, s: R$(x.valor_total), abrir: () => formProposta(x.id) }))); });
-  job(pode('pj_projetos') && !n, async () => { const r = await sb.from('tarefas_projeto').select('id,assunto,disciplina,etapa,obra_id').ilike('assunto', like).neq('status', 'inativo').limit(6);
+  job(pode('pj_projetos') && !n, async () => { const r = await sb.from('tarefas_projeto').select('id,assunto,disciplina,etapa,obra_id').buscaEm(['assunto'], q).neq('status', 'inativo').limit(6);
     add('Tarefas de projeto', (r.data || []).map(x => ({ ic: 'pj_projetos', t: x.assunto, s: [obra(x.obra_id)?.nome, x.disciplina, x.etapa].filter(Boolean).join(' · '), abrir: () => formTarefa(x.id) }))); });
-  job(pode('sv_agenda'), async () => { const r = n ? await sb.from('agenda_servicos').select('id,descricao,cliente_texto,data,etapa,os_numero,obra_id').eq('os_numero', n).limit(6) : await sb.from('agenda_servicos').select('id,descricao,cliente_texto,data,etapa,os_numero,obra_id').or(`descricao.ilike.${like},cliente_texto.ilike.${like}`).order('data', { ascending: false, nullsFirst: true }).limit(6);
+  job(pode('sv_agenda'), async () => { const r = n ? await sb.from('agenda_servicos').select('id,descricao,cliente_texto,data,etapa,os_numero,obra_id').eq('os_numero', n).limit(6) : await sb.from('agenda_servicos').select('id,descricao,cliente_texto,data,etapa,os_numero,obra_id').buscaEm(['descricao', 'cliente_texto'], q).order('data', { ascending: false, nullsFirst: true }).limit(6);
     add('Atividades e OS', (r.data || []).map(x => ({ ic: 'sv_agenda', t: x.descricao || 'Atividade', s: [obra(x.obra_id)?.nome || x.cliente_texto, x.data ? dataBR(x.data) : 'sem data', x.os_numero ? 'OS ' + x.os_numero : '', x.etapa].filter(Boolean).join(' · '), abrir: () => formAtividade(x.id) }))); });
-  job(pode('sv_manut') && !n, async () => { const r = await sb.from('contratos_manutencao').select('id,local,obra_id,status').ilike('local', like).limit(5);
+  job(pode('sv_manut') && !n, async () => { const r = await sb.from('contratos_manutencao').select('id,local,obra_id,status').buscaEm(['local'], q).limit(5);
     add('Contratos de manutenção', (r.data || []).map(x => ({ ic: 'sv_manut', t: obra(x.obra_id)?.nome || 'Contrato', s: x.local || '', abrir: () => formContrato(x.id) }))); });
-  job(pode('fn_notas'), async () => { const r = n ? await sb.from('notas_fiscais').select('id,tipo,numero,tomador_nome,valor,status').eq('numero', n).limit(6) : await sb.from('notas_fiscais').select('id,tipo,numero,tomador_nome,valor,status').ilike('tomador_nome', like).order('criado_em', { ascending: false }).limit(6);
+  job(pode('fn_notas'), async () => { const r = n ? await sb.from('notas_fiscais').select('id,tipo,numero,tomador_nome,valor,status').eq('numero', n).limit(6) : await sb.from('notas_fiscais').select('id,tipo,numero,tomador_nome,valor,status').buscaEm(['tomador_nome'], q).order('criado_em', { ascending: false }).limit(6);
     add('Notas fiscais emitidas', (r.data || []).map(x => ({ ic: 'fn_notas', t: `${x.tipo === 'nfe' ? 'NF-e' : 'NFS-e'} ${x.numero || '(sem nº)'} · ${x.tomador_nome || ''}`, s: [x.status, R$(x.valor)].join(' · '), abrir: () => verNota(x.id) }))); });
-  job(pode('fn_recebidas'), async () => { const r = n ? await sb.from('notas_recebidas').select('id,numero,emitente_nome,valor,data_emissao').eq('numero', n).limit(6) : await sb.from('notas_recebidas').select('id,numero,emitente_nome,valor,data_emissao').ilike('emitente_nome', like).order('data_emissao', { ascending: false }).limit(6);
+  job(pode('fn_recebidas'), async () => { const r = n ? await sb.from('notas_recebidas').select('id,numero,emitente_nome,valor,data_emissao').eq('numero', n).limit(6) : await sb.from('notas_recebidas').select('id,numero,emitente_nome,valor,data_emissao').buscaEm(['emitente_nome'], q).order('data_emissao', { ascending: false }).limit(6);
     add('Notas recebidas', (r.data || []).map(x => ({ ic: 'fn_recebidas', t: `NF ${x.numero} · ${x.emitente_nome || ''}`, s: [dataBR(String(x.data_emissao || '').slice(0, 10)), R$(x.valor)].join(' · '), abrir: () => verRecebida(x.id) }))); });
-  job(pode('fn_pagar'), async () => { const r = n ? await sb.from('titulos_pagar').select('id,lancamento,favorecido,descricao,valor,vencimento,situacao').or(`lancamento.eq.${n},documento.ilike.%${n}%`).limit(6) : await sb.from('titulos_pagar').select('id,lancamento,favorecido,descricao,valor,vencimento,situacao').or(`favorecido.ilike.${like},descricao.ilike.${like},documento.ilike.${like}`).order('vencimento', { ascending: false }).limit(6);
+  job(pode('fn_pagar'), async () => { const r = n ? await sb.from('titulos_pagar').select('id,lancamento,favorecido,descricao,valor,vencimento,situacao').or(`lancamento.eq.${n},documento.ilike.%${n}%`).limit(6) : await sb.from('titulos_pagar').select('id,lancamento,favorecido,descricao,valor,vencimento,situacao').buscaEm(['favorecido', 'descricao', 'documento'], q).order('vencimento', { ascending: false }).limit(6);
     add('Lançamentos (a pagar)', (r.data || []).map(x => ({ ic: 'fn_pagar', t: `${x.favorecido || ''} · ${R$(x.valor)}`, s: [x.lancamento ? 'lanç. ' + x.lancamento : '', x.descricao, 'venc. ' + dataBR(x.vencimento), x.situacao].filter(Boolean).join(' · '), abrir: () => formPagar(x.id) }))); });
-  job(pode('fn_receber'), async () => { const r = n ? await sb.from('receber_geral').select('id,lancamento,obra,descricao,valor,vencimento,situacao').eq('lancamento', n).limit(6) : await sb.from('receber_geral').select('id,lancamento,obra,descricao,valor,vencimento,situacao').or(`obra.ilike.${like},descricao.ilike.${like}`).order('vencimento', { ascending: false }).limit(6);
+  job(pode('fn_receber'), async () => { const r = n ? await sb.from('receber_geral').select('id,lancamento,obra,descricao,valor,vencimento,situacao').eq('lancamento', n).limit(6) : await sb.from('receber_geral').select('id,lancamento,obra,descricao,valor,vencimento,situacao').buscaEm(['obra', 'descricao'], q).order('vencimento', { ascending: false }).limit(6);
     add('A receber', (r.data || []).map(x => ({ ic: 'fn_receber', t: `${x.obra || ''} · ${R$(x.valor)}`, s: [x.lancamento ? 'lanç. ' + x.lancamento : '', x.descricao, 'venc. ' + dataBR(x.vencimento), x.situacao].filter(Boolean).join(' · '), abrir: () => vaiParaTela('fn_receber', x.lancamento ? String(x.lancamento) : (x.obra || '')) }))); });
-  job(pode('fn_cigam_lanc'), async () => { const r = n ? await sb.from('cigam_lancamentos').select('lancamento,data,cliente_nome,historico,valor,situacao,empresa').or(`lancamento.eq.${n},nf.eq.${n}`).limit(6) : await sb.from('cigam_lancamentos').select('lancamento,data,cliente_nome,historico,valor,situacao,empresa').ilike('cliente_nome', like).order('data', { ascending: false }).limit(6);
+  job(pode('fn_cigam_lanc'), async () => { const r = n ? await sb.from('cigam_lancamentos').select('lancamento,data,cliente_nome,historico,valor,situacao,empresa').or(`lancamento.eq.${n},nf.eq.${n}`).limit(6) : await sb.from('cigam_lancamentos').select('lancamento,data,cliente_nome,historico,valor,situacao,empresa').buscaEm(['cliente_nome'], q).order('data', { ascending: false }).limit(6);
     add('Lançamentos do CIGAM', (r.data || []).map(x => ({ ic: 'fn_cigam_lanc', t: `${x.lancamento} · ${x.cliente_nome || ''} · ${R$(x.valor)}`, s: [x.empresa, dataBR(x.data), x.historico, x.situacao].filter(Boolean).join(' · '), abrir: () => verLancCigam(x.lancamento) }))); });
   job(pode('produtos'), async () => { const r = await sb.from('produtos').select('id,codigo,descricao,tipo,preco,marca').or(n ? `codigo.eq.${n.padStart(6, '0')},busca.ilike.${like}` : `busca.ilike.%${norm(q).replace(/\s+/g, '%')}%`).eq('ativo', true).limit(8);
     add('Produtos', (r.data || []).map(x => ({ ic: 'produtos', t: `${x.codigo} · ${x.descricao}`, s: [x.tipo, x.marca, x.preco ? R$(x.preco) : ''].filter(Boolean).join(' · '), abrir: () => formProduto(x.id) }))); });
-  job(pode('crm') && !n, async () => { const r = await sb.from('crm_contatos').select('*').ilike('resumo', like).order('quando', { ascending: false }).limit(5);
+  job(pode('crm') && !n, async () => { const r = await sb.from('crm_contatos').select('*').buscaEm(['resumo'], q).order('quando', { ascending: false }).limit(5);
     add('Contatos (CRM)', (r.data || []).map(x => ({ ic: 'crm', t: `${nomeP(x.pessoa_id)} · ${dataBR(x.quando.slice(0, 10))}`, s: x.resumo, abrir: () => formContatoCRM(x) }))); });
   job(pode('obras'), async () => { const r = await sb.from('equipamentos_instalados').select('id,descricao,numero_serie,obra_id').ilike('numero_serie', like).limit(5);
     add('Nº de série', (r.data || []).map(x => ({ ic: 'obras', t: `${x.numero_serie} · ${x.descricao}`, s: obra(x.obra_id)?.nome || '', abrir: () => formObra(obra(x.obra_id)) }))); });
@@ -8300,7 +8307,7 @@ async function telaCigamLanc(){
   const seq = ST._clSeq = (ST._clSeq || 0) + 1, f = ST.cl, por = 300, b = (ST.busca || '').trim(); if(ST._clBusca !== b){ ST._clBusca = b; f.pagina = 0; }
   const filtra = q => { if(f.pessoa) q = q.eq('pessoa_id', f.pessoa); if(f.emp) q = q.eq('empresa', f.emp); if(f.grupo) q = q.in('tipo', CL_GRUPOS[f.grupo][1]); if(f.sit) q = q.eq('situacao', f.sit);
     if(f.de) q = q.gte('data', f.de); if(f.ate) q = q.lte('data', f.ate); if(f.conta) q = q.eq('conta', f.conta);
-    if(b){ const n = b.replace(/\D/g, ''); q = /^\d+$/.test(b) ? q.or(`lancamento.eq.${b},nf.eq.${b},documento.eq.${b},cliente_codigo.eq.${b}`) : q.or(`cliente_nome.ilike.%${b}%,historico.ilike.%${b}%,conta_nome.ilike.%${b}%`); }
+    if(b){ const n = b.replace(/\D/g, ''); q = /^\d+$/.test(b) ? q.or(`lancamento.eq.${b},nf.eq.${b},documento.eq.${b},cliente_codigo.eq.${b}`) : q.buscaEm(['cliente_nome', 'historico', 'conta_nome'], b); }
     return q; };
   const [r, cnt, cntEq] = await Promise.all([ filtra(sb.from('cigam_lancamentos').select('*')).order('data', { ascending: false }).order('lancamento', { ascending: false }).range(f.pagina * por, f.pagina * por + por - 1),
     filtra(sb.from('cigam_lancamentos').select('lancamento', { count: 'exact', head: true })),
@@ -8479,7 +8486,7 @@ async function telaLancJuntos(){
   if(f.sit === 'pago'){ qe = qe.eq('situacao', 'pago'); qc = qc.neq('situacao', 'Aberto'); }
   if(f.de){ qe = qe.gte('vencimento', f.de); qc = qc.gte('data', f.de); } if(f.ate){ qe = qe.lte('vencimento', f.ate); qc = qc.lte('data', f.ate); }
   if(b){ if(/^\d+$/.test(b)){ qe = qe.or(`lancamento.eq.${b},documento.ilike.%${b}%`); qc = qc.or(`lancamento.eq.${b},nf.eq.${b},documento.eq.${b}`); }
-    else { qe = qe.or(`favorecido.ilike.%${b}%,descricao.ilike.%${b}%`); qc = qc.or(`cliente_nome.ilike.%${b}%,historico.ilike.%${b}%`); } }
+    else { qe = qe.buscaEm(['favorecido', 'descricao'], b); qc = qc.buscaEm(['cliente_nome', 'historico'], b); } }
   const [e, c] = await Promise.all([ qe.order('vencimento', { ascending: false }).limit(lim), qc.order('data', { ascending: false }).limit(lim) ]);
   if(seq !== ST._ljSeq || ST.lancVis !== 'juntos') return;
   const L = [...(e.data || []).map(x => ({ o: 'ERP', id: x.id, n: x.lancamento, data: x.situacao === 'pago' && x.pago_em ? x.pago_em : x.vencimento, venc: x.vencimento, nome: x.favorecido, hist: [x.categoria, x.descricao].filter(Boolean).join(' · '),
@@ -8538,7 +8545,7 @@ async function telaNotasCigam(){
   const seq = ST._ncSeq = (ST._ncSeq || 0) + 1, f = ST.nc, por = 200, b = (ST.busca || '').trim(); if(ST._ncBusca !== b){ ST._ncBusca = b; f.pagina = 0; }
   const filtra = q => { if(f.pessoa) q = q.eq('pessoa_id', f.pessoa); if(f.tipo) q = q.eq('tipo', f.tipo); if(f.emp) q = q.eq('empresa', f.emp);
     if(f.de) q = q.gte('emissao', f.de); if(f.ate) q = q.lte('emissao', f.ate);
-    if(b) q = /^\d{1,15}$/.test(b) ? q.or(`numero.eq.${b},pedido.eq.${b},pessoa_codigo.eq.${b}`) : q.ilike('pessoa_nome', `%${ncLike(b)}%`);
+    if(b) q = /^\d{1,15}$/.test(b) ? q.or(`numero.eq.${b},pedido.eq.${b},pessoa_codigo.eq.${b}`) : q.buscaEm(['pessoa_nome'], b);
     return q; };
   const ordena = q => q.order('emissao', { ascending: false, nullsFirst: false }).order('id', { ascending: false });
   const [r, cnt] = await Promise.all([ ordena(filtra(sb.from('notas_cigam').select(NC_COLS))).range(f.pagina * por, f.pagina * por + por - 1),
@@ -8697,7 +8704,7 @@ async function telaMovCigamMov(){
   const seq = ST._mcSeq = (ST._mcSeq || 0) + 1, f = ST.mc, por = 200, b = (ST.busca || '').trim(); if(ST._mcBusca !== b){ ST._mcBusca = b; f.pagina = 0; }
   const filtra = q => { if(f.codigo) q = q.eq('codigo', f.codigo); if(f.emp) q = q.eq('unidade', f.emp === 'EQP' ? 2 : 1); if(f.tipo) q = q.eq('tipo', f.tipo);
     if(f.de) q = q.gte('data', f.de); if(f.ate) q = q.lte('data', f.ate);
-    if(b) q = /^\d{1,15}$/.test(b) ? q.or(`nf.eq.${b},codigo.ilike.%${b}`) : q.or(`descricao.ilike.%${ncLike(b)}%,codigo.ilike.%${ncLike(b)}%`);
+    if(b) q = /^\d{1,15}$/.test(b) ? q.or(`nf.eq.${b},codigo.ilike.%${b}`) : q.buscaEm(['descricao', 'codigo'], b);
     return q; };
   const ordena = q => q.order('data', { ascending: false, nullsFirst: false }).order('movimento', { ascending: false });
   const [r, cnt] = await Promise.all([ ordena(filtra(sb.from('cigam_movimentos').select(MC_COLS))).range(f.pagina * por, f.pagina * por + por - 1),
@@ -11249,7 +11256,7 @@ async function telaRegrasFiscais(){
       const x = await alvo; if(x.error) return aviso('Erro', esc(erroBanco(x.error))); }
     toast('Regras salvas.'); };
   const lista = async () => { const q = $('#tfBusca').value.trim(), fl = $('#tfFiltro').value;
-    let r; if(q.length >= 2){ const t = q.replace(/[,()*]/g, ' ').trim(); r = await sb.from('produtos').select('id,codigo,descricao,tipo_fiscal').or(`descricao.ilike.*${t}*,codigo.ilike.*${t}*`).order('codigo').limit(60); } else { let x = sb.from('produtos').select('id,codigo,descricao,tipo_fiscal').in('tipo', ['equipamento','material']).order('codigo').limit(100); if(fl) x = x.eq('tipo_fiscal', fl); r = await x; }
+    let r; if(q.length >= 2){ const t = q.replace(/[,()*]/g, ' ').trim(); r = await sb.from('produtos').select('id,codigo,descricao,tipo_fiscal').buscaEm(['busca'], q).order('codigo').limit(60); } else { let x = sb.from('produtos').select('id,codigo,descricao,tipo_fiscal').in('tipo', ['equipamento','material']).order('codigo').limit(100); if(fl) x = x.eq('tipo_fiscal', fl); r = await x; }
     const l = (r.data || []).filter(p => !fl || p.tipo_fiscal === fl);
     $('#tfLista').innerHTML = `<table class="reg"><tbody>${l.map(p => `<tr><td><b>${esc(p.codigo)}</b> ${esc(p.descricao)}</td><td><select data-tf="${p.id}">${[['normal','Normal'],['st','Com ST'],['isento','Isento']].map(([k, t]) => `<option value="${k}" ${p.tipo_fiscal === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td></tr>`).join('') || '<tr><td class="vazio">Nada.</td></tr>'}</tbody></table>`;
     document.querySelectorAll('[data-tf]').forEach(s => s.onchange = async () => { const x = await sb.from('produtos').update({ tipo_fiscal: s.value }).eq('id', s.dataset.tf); if(x.error) aviso('Erro', esc(erroBanco(x.error))); else toast('Produto atualizado.'); }); };
