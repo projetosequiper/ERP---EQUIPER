@@ -7538,10 +7538,22 @@ async function formOrc(id, pre){
 }
 
 /* =================== PDF do orçamento =================== */
-async function pdfOrcamento(id){
+/* juntos (opcional): ids de vários orçamentos do MESMO cliente para sair num PDF só — um pedido por orçamento, com o número de cada um,
+   e resumo/total/parcelas pela SOMA (25/11, Júlio: os orçamentos do Express num arquivo único). O cabeçalho e a condição vêm do primeiro. */
+async function pdfOrcamento(id, juntos){
   const [a, b] = await Promise.all([ sb.from('orcamentos').select('*').eq('id', id).single(), sb.from('orcamento_grupos').select('*, orcamento_itens(*)').eq('orcamento_id', id).order('ordem') ]);
   if(a.error) return aviso('Erro', esc(erroBanco(a.error)));
-  const O = a.data, G = (b.data || []).map(g => ({ ...g, itens: (g.orcamento_itens || []).sort((x, y) => x.ordem - y.ordem) })), ob = obra(O.obra_id) || {}, pg = pessoa(O.pagador_id);
+  const O = a.data, ob = obra(O.obra_id) || {}, pg = pessoa(O.pagador_id);
+  let G = (b.data || []).map(g => ({ ...g, itens: (g.orcamento_itens || []).sort((x, y) => x.ordem - y.ordem) })), OS = [O];
+  const outros = (juntos || []).filter(x => x && x !== id);
+  if(outros.length){
+    const [oo, gg] = await Promise.all([ sb.from('orcamentos').select('*').in('id', outros), sb.from('orcamento_grupos').select('*, orcamento_itens(*)').in('orcamento_id', outros).order('ordem') ]);
+    if(oo.error || gg.error) return aviso('Erro', esc(erroBanco(oo.error || gg.error)));
+    OS = [O].concat(outros.map(x => (oo.data || []).find(y => y.id === x)).filter(Boolean));
+    G = OS.flatMap(o => (o.id === O.id ? G : (gg.data || []).filter(g => g.orcamento_id === o.id).map(g => ({ ...g, itens: (g.orcamento_itens || []).sort((x, y) => x.ordem - y.ordem) }))).map(g => ({ ...g, _num: o.numero })));
+    O.frete = OS.reduce((t, o) => t + Number(o.frete || 0), 0); O.referencia = '';   // os títulos já aparecem em cada pedido
+  }
+  const variosOrc = OS.length > 1, nums = OS.map(o => numOrc(o.numero));
   let end = '', doc = null;
   if(['diretoria','administrativo','projetos','servicos'].includes(ST.eu.perfil)){
     const [e, d] = await Promise.all([ O.obra_id ? sb.schema('privado').from('obras_endereco').select('*').eq('obra_id', O.obra_id).maybeSingle() : Promise.resolve({ data:null }), O.pagador_id ? sb.schema('privado').from('pessoas_dados').select('*').eq('pessoa_id', O.pagador_id).maybeSingle() : Promise.resolve({ data:null }) ]);
@@ -7551,7 +7563,7 @@ async function pdfOrcamento(id){
   }
   if(!end) end = [ob.bairro, [ob.municipio, ob.uf].filter(Boolean).join(' - ')].filter(Boolean).join(' · ');
   const docFmt = s => !s ? '' : s.length === 11 ? s.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : s.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-  const cli = pg ? pg.nome : ob.nome, n = numOrc(O.numero), total = Number(O.total), bruto = Number(O.total_bruto), desc = Math.round((bruto - total) * 100) / 100;
+  const cli = pg ? pg.nome : ob.nome, n = numOrc(O.numero), total = OS.reduce((t, o) => t + Number(o.total || 0), 0), bruto = OS.reduce((t, o) => t + Number(o.total_bruto || 0), 0), desc = Math.round((bruto - total) * 100) / 100;
   const dataExt = new Date((O.data_orcamento || hojeISO()) + 'T12:00').toLocaleDateString('pt-BR', { day:'numeric', month:'long', year:'numeric' });
   const linhas = s => String(s || '').split('\n').map(x => x.trim().replace(/^[-•]\s*/, '')).filter(Boolean);
   const condTxt = O.condicao_pagamento_id ? ((await sb.from('condicoes_pagamento').select('descricao').eq('codigo', O.condicao_pagamento_id).maybeSingle()).data || {}).descricao : null;
@@ -7594,7 +7606,7 @@ async function pdfOrcamento(id){
     const todos = G.flatMap(g => g.itens), seq = G.length > 1, ou = v => v ? R$(v) : '—';
     corpo = (O.referencia ? `<div style="margin:2px 0 12px;padding:2px 0 2px 10px;border-left:4px solid #d0151b;font-size:17px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;line-height:1.25">${esc(O.referencia)}</div>` : '') +
       G.map((g, gi) => { let k = 0; const tg = g.itens.reduce((s, it) => s + Number(it.total), 0);
-        return `<h2>Pedido ${seq ? n + '-' + (gi + 1) : n} · ${esc(g.titulo)}${g.empresa && g.empresa !== O.empresa ? ` <span style="font-weight:400;opacity:.75;text-transform:none">· faturado por ${g.empresa}</span>` : ''}</h2>
+        return `<h2>Pedido ${variosOrc ? numOrc(g._num) : seq ? n + '-' + (gi + 1) : n} · ${esc(g.titulo)}${g.empresa && g.empresa !== O.empresa ? ` <span style="font-weight:400;opacity:.75;text-transform:none">· faturado por ${g.empresa}</span>` : ''}</h2>
         ${pdfTabela([{ t:'Item', w:'34px' }, { t:'Código', w:'58px' }, 'Descrição', { t:'Qtd.', w:'58px', num:true }, { t:'Unitário', num:true, w:'88px' }, { t:'Total', num:true, w:'96px' }],
           g.itens.map(it => it.tipo === 'titulo' ? { tit: it.descricao } : [String(++k).padStart(2, '0'), esc(it.codigo || '·'), esc(it.descricao) + (it.tipo === 'mao_obra' ? ' <small>mão de obra</small>' : it.tipo === 'material' ? ' <small>material auxiliar</small>' : ''), qtdTxt(it.quantidade, it.unidade), fmt3(it.preco_unit), R$(it.total)]),
           ['Total do pedido', null, `<span style="font-weight:400;color:#555">Equipamentos ${ou(soma(g.itens, 'eq'))} · Mão de obra ${ou(soma(g.itens, 'mo'))} · Material ${ou(soma(g.itens, 'mat'))}</span>`, null, null, R$(tg)])}`; }).join('') +
@@ -7603,9 +7615,9 @@ async function pdfOrcamento(id){
       ${pdfNota([`<b>Prazo de entrega:</b> ${esc(O.prazo_texto || 'a combinar')}`, O.validade ? `<b>Validade da proposta:</b> até ${dataBR(O.validade)}` : '', O.empresa ? `<b>Faturamento:</b> ${O.empresa}` : '', O.observacoes ? `<b>Observações:</b> ${esc(O.observacoes)}` : ''].filter(Boolean).map(x => `<p>${x}</p>`).join(''))}
       ${assin(`COMPRA AUTORIZADA POR<br>${esc(cli)} · ____/____/______`)}`;
   }
-  pdfJanela({ titulo: tit, sub: `${O.tipo === 'projeto' ? 'Proposta' : 'Orçamento'} nº ${n}${O.validade ? ' · válida até ' + dataBR(O.validade) : ''}`, emissao: dataBR(O.data_orcamento),
-    faixa, corpo, direita: `Nº ${n}`,
-    arquivo: (O.tipo === 'projeto' ? 'PROPOSTA_' : 'ORCAMENTO_') + n + '_' + String(cli || '').replace(/[\\/:*?"<>|]/g, '') });
+  pdfJanela({ titulo: tit, sub: `${variosOrc ? 'Orçamentos nº ' + nums.join(', ') : (O.tipo === 'projeto' ? 'Proposta' : 'Orçamento') + ' nº ' + n}${O.validade ? ' · válida até ' + dataBR(O.validade) : ''}`, emissao: dataBR(O.data_orcamento),
+    faixa, corpo, direita: variosOrc ? `Nº ${nums[0]} a ${nums[nums.length - 1]}` : `Nº ${n}`,
+    arquivo: (O.tipo === 'projeto' ? 'PROPOSTA_' : 'ORCAMENTO_') + (variosOrc ? nums[0] + '_a_' + nums[nums.length - 1] : n) + '_' + String(cli || '').replace(/[\\/:*?"<>|]/g, '') });
 }
 
 Object.assign(TELAS, { orc: telaOrc, produtos: telaProdutos });
@@ -7715,7 +7727,7 @@ async function telaExpress(){
       <div style="margin-top:14px"><span style="font-size:13px"><b>2.</b> O que este orçamento vai ter? Toque para acrescentar um sistema (pode repetir):</span>
         <div class="chips" style="margin-top:6px">${ativos.map(s => `<button class="chip" data-xadd="${s.id}">+ ${esc(s.nome)}</button>`).join('') || '<span class="muted">Nenhum sistema cadastrado. Cadastre em Configuração do Express.</span>'}</div></div></div>
     ${X.inst.map(cartao).join('')}
-    <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1"><b>3.</b> ${X.inst.length} sistema(s) · total <b style="font-size:17px">${R$(geral)}</b>${(X.gerados || []).length ? `<div style="font-size:12.5px;margin-top:2px">Já gerado: ${X.gerados.map(g => `<a href="#" data-xorc2="${g.id}"><b>${numOrc(g.numero)}</b></a> <span class="muted">${esc(g.titulo)}</span>`).join(' · ')}</div>` : ''}<div class="muted" style="font-size:12px">Cada sistema vira um orçamento próprio, com o seu número, em Vendas → Orçamentos. Antes de gerar, em cada sistema: troque o valor de qualquer item digitando no campo, e use ⤵ abrir kit para explodir só aquele kit.</div></span>
+    <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1"><b>3.</b> ${X.inst.length} sistema(s) · total <b style="font-size:17px">${R$(geral)}</b>${(X.gerados || []).length ? `<div style="font-size:12.5px;margin-top:2px">Já gerado: ${X.gerados.map(g => `<a href="#" data-xorc2="${g.id}"><b>${numOrc(g.numero)}</b></a> <span class="muted">${esc(g.titulo)}</span>`).join(' · ')}${X.gerados.length > 1 ? ' <button class="btn peq" id="xPdfTodos" title="Um único PDF com todos os orçamentos deste express, um pedido por sistema e o total somado">🖨 PDF único</button>' : ''}</div>` : ''}<div class="muted" style="font-size:12px">Cada sistema vira um orçamento próprio, com o seu número, em Vendas → Orçamentos. Antes de gerar, em cada sistema: troque o valor de qualquer item digitando no campo, e use ⤵ abrir kit para explodir só aquele kit.</div></span>
       ${X.inst.length ? '<button class="btn" id="xLimpa">Limpar</button>' : ''}<button class="btn pri" id="xGerar">⚡ ${X.inst.some(i => i.orc) ? 'Atualizar orçamentos' : 'Gerar orçamentos'}</button></div>`;
   /* 25/11 (Júlio): explodir cada kit separadamente e trocar o valor à mão, item por item */
   const marcaKit = (v) => b => b.onclick = () => { const d = b.dataset.xka || b.dataset.xkf, k = d.slice(0, d.indexOf(':')), cod = d.slice(d.indexOf(':') + 1), i = X.inst[+k]; (i.kits = i.kits || {})[cod] = v; mexeu(); telaExpress(); };
@@ -7782,15 +7794,20 @@ async function telaExpress(){
     }
     X.gerados = X.inst.filter(i => i.orc).map(i => ({ id: i.orc.id, numero: i.orc.numero, titulo: tituloDe(i) }));
     return res; };
+  /* PDF único: todos os orçamentos deste express, um pedido por sistema, com o total somado */
+  const pdfTodos = () => { const ids = X.inst.filter(i => i.orc).map(i => i.orc.id); if(ids.length) pdfOrcamento(ids[0], ids); };
   const abrirOrc = async id => { fecharPainel(); if(ST.aba !== 'orc'){ ST.aba = 'orc'; await carregar(); desenhar(); } formOrc(id); };
   const mostraResultado = res => { const todos = res.criados.map(g => ({ ...g, o: 'criado' })).concat(res.atualizados.map(g => ({ ...g, o: 'atualizado' })));
     abrirPainel(`<div class="cab"><h2>Orçamentos do express</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
       <div class="card" data-nao-suja="1">${res.erro ? '<p style="color:var(--verm)">Atenção: houve erro no meio do caminho e nem todos os sistemas foram gravados. Confira e toque de novo em gerar.</p>' : ''}
         <div class="lista">${todos.map(g => `<div class="item"><div><div class="nome">Orçamento ${numOrc(g.numero)} <span class="tag ${g.o === 'criado' ? 'ok' : ''}">${g.o}</span></div><div class="sub">${esc(g.titulo)}</div></div><div class="acoes"><button class="btn peq pri" data-xorc="${g.id}">Abrir</button></div></div>`).join('')
           + res.travados.map(g => `<div class="item"><div><div class="nome">Orçamento ${numOrc(g.numero)} <span class="tag inat">não alterado</span></div><div class="sub">${esc(g.titulo)} · já aprovado, perdido ou cancelado: o express não mexe nele</div></div></div>`).join('')}</div>
+        ${X.inst.filter(i => i.orc).length > 1 ? '<div style="margin-top:12px"><button class="btn pri" data-xpdf>🖨 Imprimir todos em um único arquivo</button> <span class="muted" style="font-size:12px">um pedido por sistema, com o total somado</span></div>' : ''}
         <p class="muted" style="font-size:12px;margin-top:10px">Cada sistema é um orçamento separado em Vendas → Orçamentos. Mudou algo aqui no express? Toque em Salvar ou em Atualizar orçamentos: os orçamentos em elaboração ou enviados recebem a mudança, com o mesmo número.</p></div>`);
-    document.querySelectorAll('#folha [data-xorc]').forEach(b => b.onclick = () => abrirOrc(b.dataset.xorc)); };
+    document.querySelectorAll('#folha [data-xorc]').forEach(b => b.onclick = () => abrirOrc(b.dataset.xorc));
+    document.querySelectorAll('#folha [data-xpdf]').forEach(b => b.onclick = pdfTodos); };
   document.querySelectorAll('[data-xorc2]').forEach(a => a.onclick = e => { e.preventDefault(); abrirOrc(a.dataset.xorc2); });
+  if($('#xPdfTodos')) $('#xPdfTodos').onclick = pdfTodos;
   $('#xGerar').onclick = async () => {
     const cli = pega(); if(!cli) return aviso('Cliente', 'Escolha o cliente do orçamento.');
     const com = X.inst.filter(i => itensDe(i).some(x => x.tipo !== 'titulo'));
