@@ -6984,7 +6984,7 @@ async function formProduto(id){
       <label class="campo">Substituição tributária (ST)<select id="prSt" title="Usado na tabela de preços: itens com ST e sem ST têm margens diferentes"><option value="">não definido</option><option value="1" ${P.tem_st === true ? 'selected' : ''}>Com ST</option><option value="0" ${P.tem_st === false ? 'selected' : ''}>Sem ST</option></select></label>
       <label class="campo largo">Descrição<input id="prDesc" value="${esc(P.descricao)}"></label>
       <label class="campo">Unidade<input id="prUn" value="${esc(P.unidade)}"></label>
-      <label class="campo">Preço de venda (R$ por unidade)<input id="prPreco" inputmode="decimal" value="${fmt3(P.preco)}"></label>
+      <label class="campo">Preço de venda (R$ por unidade)<input id="prPreco" inputmode="decimal" value="${fmt3(P.preco)}">${P.preco_cigam != null ? `<span class="muted" id="prCigam" style="font-size:11px;font-weight:400">Tabela do CIGAM: <b>${R$(P.preco_cigam)}</b> · ${esc(P.preco_cigam_origem || '')}${P.preco_cigam_data ? ' · ' + dataBR(P.preco_cigam_data) : ''}</span>` : ''}</label>
       <label class="campo">Grupo / subgrupo<input id="prGrupo" value="${esc([P.grupo, P.subgrupo].filter(Boolean).join('/'))}"></label>
       <label class="campo">Fabricante / marca<input id="prMarca" value="${esc(P.marca)}"></label>
       <label class="campo">Referência do fabricante<input id="prRef" value="${esc(P.referencia)}"></label>
@@ -10822,7 +10822,7 @@ const pct = v => (Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigit
 async function pcBase(){
   const t = await tudo(() => sb.from('compras_precos_tabela').select('forn_chave,fornecedor_id,fornecedor_nome,data').order('forn_chave'));
   if(t.error) return { erro: 'Falta rodar o script 73 (tabela de preços por fornecedor).' };
-  if(!PCX.prod){ const pr = await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,custo,margem,unidade,tem_st').order('id')); PCX.prod = Object.fromEntries((pr.data || []).map(p => [p.id, p])); }
+  if(!PCX.prod){ const pr = await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,custo,margem,unidade,tem_st,preco_cigam').order('id')); PCX.prod = Object.fromEntries((pr.data || []).map(p => [p.id, p])); }
   const ids = [...new Set(t.data.map(x => x.fornecedor_id).filter(Boolean))], pes = {};
   ids.forEach(i => { const p = pessoa(i); if(p) pes[i] = p; });
   const forns = {}; t.data.forEach(x => { const f = forns[x.forn_chave] || (forns[x.forn_chave] = { k: x.forn_chave, id: x.fornecedor_id, nome: (pes[x.fornecedor_id] && (pes[x.fornecedor_id].apelido || pes[x.fornecedor_id].nome)) || x.fornecedor_nome || '(sem fornecedor)', n: 0, ult: '' });
@@ -10924,7 +10924,8 @@ async function telaPrecosVenda(){
   const edita = nivelTela('pv_precos') >= 3, k = B.f && B.f.k, l = pcFiltra(D.rows), G = D.geral || {};
   const hoje = x => PCX.prod[x.produto_id] ? Number(PCX.prod[x.produto_id].preco) || 0 : null;
   const dif = x => { const h = hoje(x); return h && x.venda_calc ? (x.venda_calc / h - 1) * 100 : null; };
-  const mudam = rows => rows.filter(x => x.produto_id && x.venda_calc && Math.abs(Number(x.venda_calc) - (hoje(x) || 0)) >= 0.01).length;
+  const doCigam = x => (PCX.prod[x.produto_id] || {}).preco_cigam != null;   // preço veio da tabela do CIGAM: a margem sobre a última compra não passa por cima (script 97)
+  const mudam = rows => rows.filter(x => x.produto_id && !doCigam(x) && x.venda_calc && Math.abs(Number(x.venda_calc) - (hoje(x) || 0)) >= 0.01).length;
   const mTr = (L, geral) => { const rs = D.rows.filter(x => geral ? !x.linha_id : x.linha_id === L.id), efet = geral ? G.margem : (L.margem != null ? L.margem : G.margem);
     return `<tr data-ln="${geral ? '' : L.id}"><td>${geral ? '<b>Geral</b> <span class="muted" style="font-size:11px">todo o fornecedor</span>' : `<b>${esc(L.nome)}</b>`}</td>
       <td><input data-mg inputmode="decimal" value="${(geral ? G.margem : L.margem) != null ? pct(geral ? G.margem : L.margem) : ''}" placeholder="${geral ? 'ex.: 35' : (G.margem != null ? 'usa a geral (' + pct(G.margem) + ')' : 'usa a geral')}" style="width:150px;text-align:right" ${edita ? '' : 'disabled'}> %</td>
@@ -10936,11 +10937,12 @@ async function telaPrecosVenda(){
       <div style="overflow-x:auto"><table class="reg" id="pvMarg"><thead><tr><th>Linha do fornecedor</th><th>Margem sobre o custo</th><th style="text-align:right">Itens</th><th style="text-align:right">Preços que mudam</th><th></th></tr></thead><tbody>
         ${mTr(G, true)}${D.linhas.map(L => mTr(L, false)).join('')}</tbody></table></div>
       <p class="muted" style="font-size:12px">Preço de venda = custo final × (1 + margem). O custo final vem de Compras → Tabela de preços de compra (preço do fornecedor + impostos, taxa financeira e frete); as linhas são criadas lá.
-        Nada muda nos produtos até tocar em "Aplicar nos produtos" — aí o produto recebe custo, margem e preço de venda novos (valem para os orçamentos feitos depois).</p>` : ''}
+        Nada muda nos produtos até tocar em "Aplicar nos produtos" — aí o produto recebe custo, margem e preço de venda novos (valem para os orçamentos feitos depois).
+        Os itens marcados <b>tabela CIGAM</b> já estão com o preço de venda da tabela do CIGAM e ficam fora do "Aplicar".</p>` : ''}
       <div style="overflow-x:auto"><table class="reg" id="pvTab"><thead><tr><th>Produto (ERP)</th><th>Linha</th><th style="text-align:right">Custo final</th><th style="text-align:right">Margem</th><th style="text-align:right">Venda calculada</th><th style="text-align:right">Venda hoje</th><th style="text-align:right">Diferença</th></tr></thead><tbody>
       ${l.slice(0, 600).map(x => { const d = dif(x); return `<tr><td>${pcNome(x)}</td><td style="font-size:12px">${esc(x.linha || 'Geral')}</td><td style="text-align:right;white-space:nowrap">${R$(x.custo_final)}</td>
         <td style="text-align:right">${x.margem != null ? pct(x.margem) + '%' : '<span class="muted">—</span>'}</td><td style="text-align:right;white-space:nowrap"><b>${x.venda_calc ? R$(x.venda_calc) : '—'}</b></td>
-        <td style="text-align:right;white-space:nowrap">${hoje(x) != null ? R$(hoje(x)) : '<span class="muted" style="font-size:11px">sem produto</span>'}</td>
+        <td style="text-align:right;white-space:nowrap">${hoje(x) != null ? R$(hoje(x)) + (doCigam(x) ? ' <span class="tag" data-pvcigam title="Preço de venda igual ao da tabela do CIGAM. O botão Aplicar nos produtos não muda este item." style="background:#e8f1fb;color:#1f5fa8;font-size:10px">tabela CIGAM</span>' : '') : '<span class="muted" style="font-size:11px">sem produto</span>'}</td>
         <td style="text-align:right;white-space:nowrap">${d == null || Math.abs(d) < 0.05 ? '' : `<span style="color:${d > 0 ? '#1e8449' : '#c0392b'}">${d > 0 ? '▲' : '▼'} ${pct(Math.abs(d))}%</span>`}</td></tr>`; }).join('') || '<tr><td colspan="7" class="vazio">Nenhum preço deste fornecedor.</td></tr>'}</tbody></table></div>
       ${l.length > 600 ? `<p class="muted">Mostrando 600 de ${l.length}. Use a busca.</p>` : ''}</div>`;
   ligaBarra(null);
