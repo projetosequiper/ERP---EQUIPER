@@ -8263,6 +8263,7 @@ ST.pcSit = ''; ST.pcTipo = ''; ST.pcAno = '';
 async function telaPedCigam(){
   $('#conteudo').innerHTML = '<div class="card"><p class="muted">Carregando os pedidos…</p></div>';
   const todos = await carregaPedCigam(), pode = ['diretoria','administrativo'].includes(ST.eu.perfil);
+  if(ST.aba !== 'ped_cigam') return;   // 25/11: a carga é demorada — se a pessoa já foi para outra tela, não desenha por cima
   const b = norm(ST.busca).split(/\s+/).filter(Boolean);
   const nomeCli = x => (pessoa(x.pessoa_id) || {}).nome || x.cliente_nome || '';
   const base = todos.filter(x => !b.length || b.every(w => (x._b || (x._b = norm([x.numero, x.cliente_codigo, nomeCli(x), (pessoa(x.pessoa_id) || {}).apelido, x.sistema, x.nota_fiscal].join(' ')))).includes(w)))
@@ -8381,7 +8382,7 @@ Object.assign(TELAS, { ped_cigam: telaPedCigam });
 })();
 /* na lista: marca os pedidos que já foram trazidos para o ERP */
 (function(){ const orig = window.telaPedCigam; if(typeof orig !== 'function') return;
-  window.telaPedCigam = async function(...a){ const r = await orig.apply(this, a);
+  window.telaPedCigam = async function(...a){ const r = await orig.apply(this, a); if(ST.aba !== 'ped_cigam') return r;
     const o = await sb.from('orcamentos').select('pedido_cigam').not('pedido_cigam', 'is', null); if(o.error) return r;
     (o.data || []).forEach(x => { const td = document.querySelector(`[data-pc="${x.pedido_cigam}"] td`); if(td) td.insertAdjacentHTML('beforeend', ' <span class="tag ok" title="Já é um orçamento do ERP">no ERP</span>'); });
     return r; };
@@ -12717,6 +12718,55 @@ window.MENU_GUARDADAS = {};
   novo.splice(pos, 0, ...internos);
   MENU.splice(0, MENU.length, ...novo.filter(g => g.itens.length));
   if(typeof SETORES === 'object' && SETORES.adm) SETORES.adm.areas = GRUPOS.map(g => g[0]).filter(Boolean);
+})();
+
+/* =================== 71 — A tela não troca sozinha (25/11, Júlio: "eu estava em orçamento express e do nada mudou para pedidos") ===================
+   Causa: uma tela que demora para carregar (ex.: Pedidos, quase 10 mil linhas) terminava DEPOIS de a pessoa já ter ido para outra
+   tela e desenhava por cima. Cada tela lenta deve conferir `ST.aba` depois de esperar o banco; esta é a rede de proteção para todas:
+     · toda escrita em #conteudo passa por aqui; pela pilha de chamadas dá para saber qual função `telaXxx` está desenhando;
+     · o ERP aprende quais funções desenham cada tela (na parte imediata do desenhar(), quando não há dúvida);
+     · se quem está desenhando é função de OUTRA tela (um desenho atrasado), a tela atual é redesenhada logo em seguida.
+   Na dúvida deixa passar: nunca bloqueia uma escrita. No máximo um conserto por troca de tela (não entra em laço). */
+(() => {
+  const el = document.getElementById('conteudo'), desc = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  if(!el || !desc || typeof desenhar !== 'function') return;
+  const NOMES = {};                       // aba → nomes das funções telaXxx que desenham nela
+  let pend = [], NAV = 0, emDesenho = false, consertou = -1;
+  const nomesNaPilha = () => [...new Set(String(new Error().stack || '').match(/\btela[A-Z]\w*/g) || [])];
+  const aprende = (aba, F) => { const s = NOMES[aba] || (NOMES[aba] = new Set()); F.forEach(n => s.add(n)); };
+  const eDe = (aba, F) => { const s = NOMES[aba]; return !!s && F.some(n => s.has(n)); };
+  const conserta = () => { const aba = ST.aba, nav = NAV; if(consertou === nav) return; consertou = nav;
+    setTimeout(() => { if(ST.aba === aba && NAV === nav){ try{ console.warn('[tela certa] desenho atrasado de outra tela; redesenhando', aba); }catch(e){} desenhar(); consertou = NAV; } }, 0); };
+  window.__telaCerta = { NOMES, consertos: 0 };
+
+  Object.defineProperty(el, 'innerHTML', { configurable: true, enumerable: true, get(){ return desc.get.call(this); },
+    set(v){
+      let atrasado = false;
+      try{
+        const aba = ST.aba, F = nomesNaPilha();
+        if(emDesenho) aprende(aba, F);                                   // parte imediata do desenhar(): é a tela atual, sem dúvida
+        else if(F.length && !eDe(aba, F)){
+          const outras = Object.keys(NOMES).filter(a => a !== aba && eDe(a, F));
+          const velhos = pend.filter(p => p.aba !== aba);
+          if(consertou === NAV) aprende(aba, F);                         // já consertou nesta tela: aceita (função usada por mais de uma tela)
+          else if(outras.length) atrasado = true;                        // função conhecida de outra tela
+          else if(velhos.length && NOMES[aba] && NOMES[aba].size && velhos.some(p => !NOMES[p.aba] || !NOMES[p.aba].size)) atrasado = true;   // função desconhecida, com desenho de outra tela ainda pendente
+          else aprende(aba, F);
+        }
+      }catch(e){}
+      desc.set.call(this, v);
+      if(atrasado){ window.__telaCerta.consertos++; conserta(); }
+    } });
+
+  const desenhar0 = desenhar;
+  desenhar = function(...a){
+    const nav = ++NAV; let ret;
+    emDesenho = true; try{ ret = desenhar0.apply(this, a); } finally { emDesenho = false; }
+    const inv = { aba: ST.aba, nav }; pend.push(inv);
+    const sai = () => { pend = pend.filter(p => p !== inv); };
+    Promise.resolve(ret).then(sai, sai);
+    return ret;
+  };
 })();
 
 
