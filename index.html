@@ -571,6 +571,9 @@ const ST = { eu:null, aba:'inicio', busca:'', mostrarInativos:false, pessoas:[],
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+/* 25/11 (Júlio): busca "inteligente" em todas as listas — cada palavra digitada precisa aparecer, em qualquer ordem,
+   sem ligar para maiúscula/minúscula nem acento ("32 joelho pvc" = "PVC Joelho 32"). Uso: texto.temTudo(busca). */
+String.prototype.temTudo = function(q){ const t = norm(this), ws = norm(q).split(/\s+/).filter(Boolean); for(let i = 0; i < ws.length; i++) if(!t.includes(ws[i])) return false; return true; };
 const dig = s => String(s||'').replace(/\D/g,'');
 const fmtData = d => d ? new Date(d).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}) : '';
 const humano = () => ST.eu && PERFIS_HUMANOS.includes(ST.eu.perfil);
@@ -845,7 +848,7 @@ function ligaBarra(fnNovo){
   $('#vInat').onchange=e=>{ ST.mostrarInativos=e.target.checked; desenhar(); };
   if($('#btnNovo')) $('#btnNovo').onclick=fnNovo;
 }
-const filtra = (lista, txt) => lista.filter(r => (ST.mostrarInativos || r.status!=='inativo') && (!ST.busca || norm(txt(r)).includes(norm(ST.busca))));
+const filtra = (lista, txt) => lista.filter(r => (ST.mostrarInativos || r.status!=='inativo') && (!ST.busca || norm(txt(r)).temTudo(ST.busca)));
 
 /* ================== Início ================== */
 function telaConstrucao(item){
@@ -1523,7 +1526,7 @@ async function telaTarefas(){
   ST.tarefas = r.data || [];
   const f = ST.tf, b = norm(ST.busca), limite = f.conc === 'todos' || f.conc === 'nao' ? null : isoLocal(new Date(Date.now() - (+f.conc)*864e5));
   const l = ST.tarefas.filter(t => (ST.mostrarInativos || t.status !== 'inativo') && (!f.resp || (f.resp === '-' ? !t.responsavel_id : t.responsavel_id === f.resp)) && (!f.disc || t.disciplina === f.disc)
-    && (!b || norm((t.cliente||'') + ' ' + t.disciplina + ' ' + (t.responsavel||'') + ' ' + (t.observacoes||'')).includes(b))
+    && (!b || norm((t.cliente||'') + ' ' + t.disciplina + ' ' + (t.responsavel||'') + ' ' + (t.observacoes||'')).temTudo(b))
     && (t.etapa !== 'Concluído' || (f.conc === 'nao' ? !t.enviado : !limite || (t.data_conclusao||'') >= limite)));
   const ativas = ST.tarefas.filter(t => t.status !== 'inativo' && !CONCL(t.etapa));
   const fq = l.filter(t => t.etapa === FQ), cols = fq.length ? [...ETAPAS, FQ] : ETAPAS;
@@ -4095,7 +4098,7 @@ async function novoCadastroPessoa(nome, papel){
 function escolhePessoa(lista, alvo, aoEscolher){
   alvo.innerHTML = `<input placeholder="Buscar no cadastro de Empresas…" style="margin-bottom:6px"><div class="lista" style="max-height:240px;overflow:auto"></div>`;
   const inp = alvo.querySelector('input'), box = alvo.querySelector('.lista');
-  const desenha = () => { const q = norm(inp.value); const l = lista.filter(p => !q || norm(p.nome + ' ' + (p.apelido || '')).includes(q)).slice(0, 60);
+  const desenha = () => { const q = norm(inp.value); const l = lista.filter(p => !q || norm(p.nome + ' ' + (p.apelido || '')).temTudo(q)).slice(0, 60);
     box.innerHTML = l.map(p => `<div class="item" data-pes="${p.id}" style="cursor:pointer;padding:6px 8px"><div><div class="nome">${esc(p.nome)}</div><div class="sub">${(p.papeis || []).map(papelTxt).join(', ')}</div></div></div>`).join('') || '<div class="muted" style="padding:6px">Ninguém com esse nome.</div>';
     box.querySelectorAll('[data-pes]').forEach(d => d.onclick = () => aoEscolher(pessoa(d.dataset.pes))); };
   inp.oninput = desenha; desenha(); inp.focus();
@@ -4359,7 +4362,7 @@ async function telaCRM(){
   const todos = r.data || [], nomeU = id => (resp.find(u => u.id === id) || {}).nome || '';
   const agenda = todos.filter(c => c.proximo_em && !c.retorno_feito).sort((a, b) => a.proximo_em.localeCompare(b.proximo_em));
   const busca = norm(ST.busca || ''), pes = c => pessoa(c.pessoa_id) || {};
-  const casa = c => !busca || norm([pes(c).nome, pes(c).apelido, c.resumo, c.falou_com, c.proximo_assunto].join(' ')).includes(busca);
+  const casa = c => !busca || norm([pes(c).nome, pes(c).apelido, c.resumo, c.falou_com, c.proximo_assunto].join(' ')).temTudo(busca);
   const atras = agenda.filter(c => c.proximo_em < hoje), deHoje = agenda.filter(c => c.proximo_em === hoje), sem = agenda.filter(c => c.proximo_em > hoje && c.proximo_em <= em7);
   const mes = todos.filter(c => c.quando.slice(0, 7) === hoje.slice(0, 7)).length;
   const linhaAg = c => `<tr><td style="${c.proximo_em < hoje ? 'color:var(--verm);font-weight:600' : c.proximo_em === hoje ? 'font-weight:600' : ''}">${dataBR(c.proximo_em)}</td>
@@ -4521,7 +4524,7 @@ async function telaAgenda(){
   const [r, sem] = await Promise.all([ sb.from('agenda_servicos').select('id,obra_id,cliente,data,descricao,tecnicos,tecnicos_nomes,etapa,status,check_in,check_out,contrato_id,oficina_id,retorno_de_id').gte('data', s).lte('data', f).order('data'),
     sb.from('agenda_servicos').select('id,obra_id,cliente,descricao,tecnicos,tecnicos_nomes,etapa,status,retorno_de_id').is('data', null), carregaTecnicos() ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
-  const flt = l => (l || []).filter(a => a.status !== 'inativo' && (!ST.ag.tec || (a.tecnicos||[]).includes(ST.ag.tec)) && (!ST.busca || norm(a.cliente + ' ' + a.descricao + ' ' + (a.tecnicos_nomes||'')).includes(norm(ST.busca))));
+  const flt = l => (l || []).filter(a => a.status !== 'inativo' && (!ST.ag.tec || (a.tecnicos||[]).includes(ST.ag.tec)) && (!ST.busca || norm(a.cliente + ' ' + a.descricao + ' ' + (a.tecnicos_nomes||'')).temTudo(ST.busca)));
   const l = flt(r.data), semData = flt(sem.data).filter(a => a.etapa !== 'concluido');
   const card = a => `<div class="kcard" data-at="${a.id}" style="border-left:4px solid ${ETAPA_AT[a.etapa||'aguardando']?.[1]}"><div class="cli">${esc(a.cliente)}</div><div style="font-size:12px;margin-top:3px">${esc(a.descricao)}</div>
     <div class="lin">${a.tecnicos_nomes?'👷 '+esc(a.tecnicos_nomes):'<span style="color:var(--amar)">sem técnico</span>'}</div><div class="lin">${tagEtapa(a.etapa)}${a.contrato_id?'<span class="tag">preventiva</span>':''}${a.retorno_de_id?'<span class="tag">retorno</span>':''}${a.oficina_id?'<span class="tag">oficina</span>':''}</div></div>`;
@@ -4659,7 +4662,7 @@ async function telaOS(){
   const [r] = await Promise.all([ sb.from('agenda_servicos').select('id,obra_id,cliente,data,descricao,tecnicos_nomes,os_situacao,os_numero,os_valor,os_empresa,concluido_em,status,contrato_id').eq('etapa', 'concluido').order('concluido_em', { ascending:false }), carregaTecnicos() ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const todas = (r.data || []).filter(a => a.status !== 'inativo'), cont = k => todas.filter(a => a.os_situacao === k).length;
-  const l = todas.filter(a => a.os_situacao === ST.osAba && (!ST.busca || norm(a.cliente + ' ' + a.descricao + ' ' + (a.os_numero||'')).includes(norm(ST.busca))));
+  const l = todas.filter(a => a.os_situacao === ST.osAba && (!ST.busca || norm(a.cliente + ' ' + a.descricao + ' ' + (a.os_numero||'')).temTudo(ST.busca)));
   $('#conteudo').innerHTML = `<div class="card"><h2>Ordens de serviço <span class="muted" style="font-weight:400">· serviços concluídos: cobrar ou não</span></h2>
     <div class="chips" style="margin-bottom:10px">${[['a_decidir','A decidir'],['cobrar','Cobradas (no financeiro)'],['nao_cobrar','Não cobrar']].map(([k,r]) => `<button class="chip ${ST.osAba===k?'on':''}" data-os="${k}">${r} (${cont(k)})</button>`).join('')}</div>
     <div class="barra"><input type="search" id="busca" placeholder="Buscar cliente, serviço, nº da OS…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
@@ -4955,7 +4958,7 @@ async function telaEstoque(){
   carregandoTela();
   const [r, m] = await Promise.all([ sb.from('estoque_itens').select('*').order('nome'), podeSv() ? sb.from('estoque_movimentos').select('*').order('criado_em', { ascending:false }).limit(60) : Promise.resolve({ data:[] }) ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
-  const l = (r.data || []).filter(i => (ST.mostrarInativos || i.ativo) && (!ST.busca || norm(i.nome + ' ' + (i.categoria||'')).includes(norm(ST.busca))));
+  const l = (r.data || []).filter(i => (ST.mostrarInativos || i.ativo) && (!ST.busca || norm(i.nome + ' ' + (i.categoria||'')).temTudo(ST.busca)));
   const baixo = l.filter(i => i.ativo && Number(i.minimo) > 0 && Number(i.quantidade) <= Number(i.minimo)), nomeIt = id => (r.data||[]).find(i => i.id === id)?.nome || '—';
   const MOT = { compra:'Compra', entrada:'Entrada', uso_servico:'Usado em serviço', uso_oficina:'Usado na oficina', devolucao:'Devolução', ajuste:'Ajuste' };
   $('#conteudo').innerHTML = `${baixo.length ? `<div class="card" style="background:#fde7e7;margin-bottom:12px">⚠ Abaixo do mínimo: ${baixo.map(i => `<b>${esc(i.nome)}</b> (${Number(i.quantidade)})`).join(', ')}</div>` : ''}
@@ -5132,7 +5135,7 @@ async function telaReceber(){
   const nfs = typeof notasPorOrigem === 'function' ? await notasPorOrigem().catch(() => ({})) : {};
   const f = ST.rec, hoje = hojeISO(), mes = hoje.slice(0,7), todos = (r.data || []).filter(x => x.situacao !== 'cancelado');
   const filtroSit = { abertos: x => x.situacao !== 'recebido', a_cobrar: x => x.situacao === 'a_cobrar', enviado: x => ['enviado','agendado'].includes(x.situacao), vencidos: x => x.situacao !== 'recebido' && x.situacao !== 'nao_liberado' && x.vencimento && x.vencimento < hoje, recebidos: x => x.situacao === 'recebido', todos: () => true };
-  const l = todos.filter(x => (!f.emp || (f.emp === '-' ? !x.empresa : x.empresa === f.emp)) && (!f.orig || x.origem === f.orig) && filtroSit[f.sit](x) && (!ST.busca || norm(x.obra + ' ' + x.descricao + ' ' + (x.cliente || '')).includes(norm(ST.busca))))
+  const l = todos.filter(x => (!f.emp || (f.emp === '-' ? !x.empresa : x.empresa === f.emp)) && (!f.orig || x.origem === f.orig) && filtroSit[f.sit](x) && (!ST.busca || norm(x.obra + ' ' + x.descricao + ' ' + (x.cliente || '')).temTudo(ST.busca)))
     .sort((a, b) => f.sit === 'recebidos' ? String(b.recebido_em).localeCompare(String(a.recebido_em)) : String(a.agendado_para || a.vencimento || '9999').localeCompare(String(b.agendado_para || b.vencimento || '9999')));
   const soma = fn => todos.filter(x => !f.emp || x.empresa === f.emp).filter(fn).reduce((s, x) => s + Number(x.valor), 0);
   $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px">
@@ -5217,7 +5220,7 @@ async function telaPagar(){
   const r = await sb.from('titulos_pagar').select('*').order('vencimento');
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const hoje = hojeISO(), em7 = somaDias(hoje, 7), mes = hoje.slice(0,7), f = ST.pag, todos = (r.data || []).filter(x => x.situacao !== 'cancelado' && (!f.emp || x.empresa === f.emp));
-  const l = todos.filter(x => (f.sit === 'todos' || x.situacao === f.sit) && (!ST.busca || norm(x.favorecido + ' ' + (x.descricao||'') + ' ' + x.categoria).includes(norm(ST.busca))))
+  const l = todos.filter(x => (f.sit === 'todos' || x.situacao === f.sit) && (!ST.busca || norm(x.favorecido + ' ' + (x.descricao||'') + ' ' + x.categoria).temTudo(ST.busca)))
     .sort((a, b) => f.sit === 'pago' ? String(b.pago_em).localeCompare(String(a.pago_em)) : a.vencimento.localeCompare(b.vencimento));
   const soma = fn => todos.filter(fn).reduce((s, x) => s + Number(x.valor), 0);
   $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px">
@@ -5431,7 +5434,7 @@ async function telaCobranca(){
   const lembrete = x => (x.proximo && x.proximo <= hoje) || (x.combinado && x.combinado < hoje);
   const filtros = { atrasados: x => x.dias_atraso > 0, hoje: lembrete, nunca: x => !x.n_contatos, pendencia: x => x.pendencias > 0 };
   const l = todos.filter(x => (!f.tipo || (f.tipo === 'os' ? ['os','contrato'].includes(x.origem) : x.origem === f.tipo)) && (!f.so || filtros[f.so](x))
-      && (!ST.busca || norm([x.cliente, x.obra, x.descricao, x.lancamento, x.numero].join(' ')).includes(norm(ST.busca))))
+      && (!ST.busca || norm([x.cliente, x.obra, x.descricao, x.lancamento, x.numero].join(' ')).temTudo(ST.busca)))
     .sort((a, b) => (lembrete(b) - lembrete(a)) || (b.dias_atraso - a.dias_atraso) || String(a.vencimento || '9').localeCompare(String(b.vencimento || '9')));
   const soma = fn => todos.filter(fn).reduce((s, x) => s + Number(x.valor), 0);
   const grupo = { projeto:'Projetos', pedido:'Obras / equipamentos', os:'OS', contrato:'Preventivas', avulso:'Avulsos' };
@@ -5548,7 +5551,7 @@ async function telaPosicao(){
   if(r.error) return $('#posLista').innerHTML = `<div class="vazio">${esc(erroBanco(r.error))}</div>`;
   const ag = {}, hoje = hojeISO();
   (r.data || []).filter(x => x.pagador_id && x.situacao !== 'cancelado').forEach(x => { const a = ag[x.pagador_id] ||= { aberto:0, vencido:0, n:0 }; a.n++; if(x.situacao !== 'recebido'){ a.aberto += Number(x.valor); if(x.situacao !== 'nao_liberado' && x.vencimento && x.vencimento < hoje) a.vencido += Number(x.valor); } });
-  const l = Object.entries(ag).map(([id, a]) => ({ id, nome: pessoa(id)?.nome || '—', ...a })).filter(x => !ST.busca || norm(x.nome).includes(norm(ST.busca))).sort((a, b) => b.vencido - a.vencido || b.aberto - a.aberto || a.nome.localeCompare(b.nome));
+  const l = Object.entries(ag).map(([id, a]) => ({ id, nome: pessoa(id)?.nome || '—', ...a })).filter(x => !ST.busca || norm(x.nome).temTudo(ST.busca)).sort((a, b) => b.vencido - a.vencido || b.aberto - a.aberto || a.nome.localeCompare(b.nome));
   $('#posLista').innerHTML = `<table class="reg"><thead><tr><th>Cliente</th><th style="text-align:right">Em aberto</th><th style="text-align:right">Vencido</th><th>Lançamentos</th></tr></thead><tbody>
     ${l.slice(0, 300).map(x => `<tr data-pp="${x.id}" style="cursor:pointer"><td><b>${esc(x.nome)}</b></td><td style="text-align:right">${R$(x.aberto)}</td><td style="text-align:right;${x.vencido ? 'color:var(--verm);font-weight:600' : ''}">${R$(x.vencido)}</td><td>${x.n}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Nenhum cliente.</td></tr>'}</tbody></table>`;
   document.querySelectorAll('[data-pp]').forEach(tr => tr.onclick = () => verPosicao(tr.dataset.pp));
@@ -5561,7 +5564,7 @@ async function telaRecibos(){
   carregandoTela();
   const r = await sb.from('fin_recibos').select('id,numero,modelo,recebido_de,data,total,pessoa_id').order('numero', { ascending:false });
   if(r.error) return $('#conteudo').innerHTML = semScript22();
-  const l = (r.data || []).filter(x => !ST.busca || norm(x.recebido_de + ' ' + x.numero).includes(norm(ST.busca)));
+  const l = (r.data || []).filter(x => !ST.busca || norm(x.recebido_de + ' ' + x.numero).temTudo(ST.busca));
   $('#conteudo').innerHTML = `<div class="card"><h2>Recibos</h2>
     <div class="barra"><input type="search" id="busca" placeholder="Cliente ou número…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label><button class="btn" id="recModelos">Modelos</button><button class="btn pri" id="btnNovo">+ Novo recibo</button></div>
     <table class="reg"><thead><tr><th>Nº</th><th>Data</th><th>Recebido de</th><th>Modelo</th><th style="text-align:right">Total</th></tr></thead><tbody>
@@ -5658,7 +5661,7 @@ async function escolherCliente(){
   return new Promise(res => {
     $('#mTit').textContent = 'Recibo para qual cliente?';
     $('#mTxt').innerHTML = `<input id="ecBusca" placeholder="Digite o nome…" autocomplete="off"><div id="ecLista" style="max-height:260px;overflow:auto;margin-top:8px"></div>`;
-    const lista = () => { const q = norm($('#ecBusca').value); $('#ecLista').innerHTML = ST.pessoas.filter(p => p.status !== 'inativo' && (!q || norm(p.nome + ' ' + (p.apelido || '')).includes(q))).slice(0, 30)
+    const lista = () => { const q = norm($('#ecBusca').value); $('#ecLista').innerHTML = ST.pessoas.filter(p => p.status !== 'inativo' && (!q || norm(p.nome + ' ' + (p.apelido || '')).temTudo(q))).slice(0, 30)
       .map(p => `<div data-ec="${p.id}" style="padding:6px;cursor:pointer;border-bottom:1px solid var(--borda)">${esc(p.nome)}</div>`).join('');
       document.querySelectorAll('[data-ec]').forEach(d => d.onclick = () => { $('#modal').classList.add('hidden'); res(d.dataset.ec); }); };
     $('#ecBusca').oninput = lista; lista();
@@ -6228,7 +6231,7 @@ async function formBoleto(x, depois){
   const razaoCli = x => { const p = pesDe(x); return (p && p.nome) || x.cliente_cadastro || ''; };
   const nomesCli = x => [nomeCli(x), razaoCli(x), x.cliente, x.fantasia, x.cliente_cadastro, x.obra].filter(Boolean).join(' ');
   const filtrados = () => { const f = ST.rec, b = norm(ST.busca || '');
-    return RU.dados.filter(x => (!f.fonte || (f.fonte === 'erp' ? !x.app : f.fonte === 'apps' ? !!x.app : x.app === f.fonte)) && (!f.emp || (f.emp === '-' ? !x.empresa : x.empresa === f.emp)) && (!f.orig || x.origem === f.orig) && (!b || norm(nomesCli(x) + ' ' + x.descricao + ' ' + (x.numero || '')).includes(b))); };
+    return RU.dados.filter(x => (!f.fonte || (f.fonte === 'erp' ? !x.app : f.fonte === 'apps' ? !!x.app : x.app === f.fonte)) && (!f.emp || (f.emp === '-' ? !x.empresa : x.empresa === f.emp)) && (!f.orig || x.origem === f.orig) && (!b || norm(nomesCli(x) + ' ' + x.descricao + ' ' + (x.numero || '')).temTudo(b))); };
 
   const ALERTAS = [
     ['combinada', '#d0151b', 'Data combinada já passou', 'o cliente combinou pagar e a data venceu', (x, h) => x.situacao === 'agendado' && x.agendado_para && x.agendado_para < h],
@@ -6452,7 +6455,7 @@ async function formRecorrentes(){
       <td style="font-size:12px">${u.map(y => `${mesBR(y.competencia)} ${R$(y.valor)}`).join(' · ') || '<span class="muted">—</span>'}</td></tr>`; }).join('') || '<tr><td colspan="7" class="vazio">Nenhuma conta fixa ainda.</td></tr>'}</tbody></table></div>`);
   $('#folha').style.width = 'min(1100px,100%)';
   const filtra = () => { const b = norm($('#rcBusca').value), ina = $('#rcInat').checked;
-    document.querySelectorAll('#rcLin [data-rc]').forEach(tr => tr.style.display = (ina || tr.dataset.ativa === 'true') && (!b || tr.dataset.b.includes(b)) ? '' : 'none'); };
+    document.querySelectorAll('#rcLin [data-rc]').forEach(tr => tr.style.display = (ina || tr.dataset.ativa === 'true') && (!b || tr.dataset.b.temTudo(b)) ? '' : 'none'); };
   $('#rcBusca').oninput = filtra; $('#rcInat').onchange = filtra;
   $('#rcNova').onclick = () => formRecorrente(null);
   document.querySelectorAll('#rcLin [data-rc]').forEach(tr => tr.onclick = () => formRecorrente(tr.dataset.rc));
@@ -6593,7 +6596,7 @@ async function telaPlano(){
   const uso = Object.fromEntries((u.data || []).map(x => [x.codigo, x])), f = ST.pc, b = norm(ST.busca), pode = ['diretoria','administrativo'].includes(ST.eu.perfil);
   const todas = (p.data || []).sort((a, x) => clKey(a).localeCompare(clKey(x)));
   const l = todas.filter(x => (f.ver === 'todas' || (f.ver === 'gerencial' ? x.tipo === 'gerencial' : x.tipo !== 'gerencial')) && (ST.mostrarInativos || x.ativo)
-    && (!b || norm(x.codigo + ' ' + (x.classificacao || '') + ' ' + x.nome).includes(b)));
+    && (!b || norm(x.codigo + ' ' + (x.classificacao || '') + ' ' + x.nome).temTudo(b)));
   const nivel = x => x.classificacao && x.classificacao !== 'ERP' ? x.classificacao.split('.').length - 1 : 0;
   const nA = todas.filter(x => x.tipo_conta === 'A' && x.tipo !== 'gerencial').length, nG = todas.filter(x => x.tipo === 'gerencial' && x.tipo_conta === 'A').length, nE = todas.filter(x => x.origem === 'erp').length;
   $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px"><div class="kpi"><span class="muted">Contas de lançamento</span><b>${nA}</b></div><div class="kpi"><span class="muted">Gerenciais (centro de custo)</span><b>${nG}</b></div><div class="kpi"><span class="muted">Criadas no ERP</span><b>${nE}</b></div></div>
@@ -7044,7 +7047,7 @@ async function consultaProdutos({ q = '', tipos = null, tipo = null, ativos = tr
   if(tipo) r = r.eq('tipo', tipo);
   if(tipos) r = r.in('tipo', tipos);
   const b = String(q).trim(), pad = /^\d{1,6}$/.test(b) ? b.padStart(6, '0') : null;
-  if(pad) r = r.eq('codigo', pad); else termosBusca(q).forEach(w => r = r.ilike('descricao', `%${w}%`));
+  if(pad) r = r.eq('codigo', pad); else termosBusca(norm(q)).forEach(w => r = r.ilike('busca', `%${w}%`));   // 25/11: coluna 'busca' (código + descrição + referência + marca, sem acento): qualquer ordem, com ou sem acento
   r = await r.order('descricao').limit(lim);
   if(r.error) return Object.assign([], { error: r.error, data: [], total: 0, outros: 0 });
   const x = r.data || []; return Object.assign(x, { data: x, total: r.count ?? x.length, outros: 0 });
@@ -7194,7 +7197,7 @@ async function telaOrc(){
     const fora = gs.filter(g => g.aprovado === false); o.grupos = gs.filter(g => g.aprovado).map(g => g.titulo).join(' · ') + (fora.length ? ` · <span class="muted">${fora.length} não contratado(s)</span>` : ''); o.gruposHtml = true; });
   const f = ST.orc, mes = hojeISO().slice(0,7), todos = (r.data || []).filter(o => ST.mostrarInativos || o.status !== 'inativo').filter(o => !f.tipo || o.tipo === f.tipo);
   const FILT = { abertos: o => ['elaboracao','enviado'].includes(o.etapa), elaboracao: o => o.etapa === 'elaboracao', enviado: o => o.etapa === 'enviado', aprovados: o => o.etapa.startsWith('aprovado'), perdidos: o => ['perdido','cancelado'].includes(o.etapa), todos: () => true };
-  const l = todos.filter(FILT[f.etapa]).filter(o => !ST.busca || norm(numOrc(o.numero) + ' ' + (o.obra||'') + ' ' + (o.pagador||'') + ' ' + (o.pagador_apelido||'') + ' ' + ((o.pagador_codigos||[]).join(' ')) + ' ' + (o.referencia||'') + ' ' + (o.grupos||'')).includes(norm(ST.busca)));
+  const l = todos.filter(FILT[f.etapa]).filter(o => !ST.busca || norm(numOrc(o.numero) + ' ' + (o.obra||'') + ' ' + (o.pagador||'') + ' ' + (o.pagador_apelido||'') + ' ' + ((o.pagador_codigos||[]).join(' ')) + ' ' + (o.referencia||'') + ' ' + (o.grupos||'')).temTudo(ST.busca));
   const soma = fn => todos.filter(fn).reduce((s, o) => s + Number(o.total), 0), hoje = hojeISO();
   $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px">
       <div class="kpi" data-fe="elaboracao"><span class="muted">Em elaboração</span><b>${R$(soma(FILT.elaboracao))}</b></div>
@@ -7613,7 +7616,7 @@ function expItens(cfg, inst){
   const out = [], soma = (codigo, nome, q) => { if(!(q > 0)) return; const x = out.find(i => i.codigo === codigo); if(x) x.quantidade += q; else out.push({ codigo, nome, quantidade: q }); };
   (cfg.grupos || []).forEach(g => { const e = inst.esc[g.id]; if(!e || !e.eq || !(e.n > 0)) return;
     const eq = (g.equipamentos || []).find(x => x.id === e.eq); if(!eq || !expSe(eq.se, inst.resp)) return;
-    soma(eq.codigo, eq.nome, e.n);
+    soma(eq.codigo, eq.nome, e.n * (Number(eq.fator) || 1));   // fator: unidades deste código para cada 1 escolhido (ex.: 3 coletores por conjunto)
     (eq.junto || []).forEach(j => { if(expSe(j.se, inst.resp) && e.n >= (Number(j.qmin) || 0)) soma(j.codigo, j.nome, expQtd(j.qtd, e.n)); }); });
   return out.map(i => { const p = EXP.prod[i.codigo]; return { ...i, p, preco: p ? Number(p.preco) || 0 : 0 }; });
 }
@@ -7688,7 +7691,7 @@ async function telaExpressCfg(){
   const eqHtml = (e, gi, ei) => { const base = `grupos.${gi}.equipamentos.${ei}`, ab = C.aberto[e.id];
     return `<div style="border:1px solid var(--borda);border-radius:10px;padding:8px 10px;margin:8px 0;background:var(--fundo)">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input data-p="${base}.nome" value="${esc(e.nome || '')}" placeholder="Nome que aparece na lista" style="flex:1 1 200px;font-weight:600" ${dis}>${codInput(base + '.codigo', e.codigo)}
+        <input data-p="${base}.nome" value="${esc(e.nome || '')}" placeholder="Nome que aparece na lista" style="flex:1 1 200px;font-weight:600" ${dis}>${codInput(base + '.codigo', e.codigo)}<input data-p="${base}.fator" data-num value="${e.fator && e.fator !== 1 ? e.fator : ''}" placeholder="×1" title="Quantas unidades deste código entram para cada 1 escolhido no Express (vazio = 1)" style="width:52px;text-align:right" ${dis}>
         <span style="flex:2 1 220px;font-size:12px" data-desc="${base}.codigo">${prodTxt(e.codigo)}</span>${seSel(base + '.se', e.se)}
         <button class="btn peq" data-abre="${esc(e.id)}">${ab ? '▾' : '▸'} vêm junto (${(e.junto || []).length})</button>
         ${edita ? `<button class="btn peq" data-dup="${base}" title="Duplicar este equipamento com os itens que vêm junto">⧉</button><button class="btn peq" data-del="${base}" title="Excluir o equipamento">✕</button>` : ''}</div>
@@ -8235,7 +8238,7 @@ async function telaOSCigam(){
   const q = norm(ST.busca || ''), anos = [...new Set(_oscCache.map(o => String(o.data || '').slice(0, 4)).filter(Boolean))].sort().reverse();
   const nome = o => { const p = pessoa(o.pessoa_id); return p ? (p.apelido || p.nome) : (o.cliente_nome || ''); };
   const l = _oscCache.filter(o => (!f.ano || String(o.data || '').startsWith(f.ano)) && (!porSerie || porSerie.has(o.numero))
-    && (!q || norm([o.numero, o.cliente_nome, nome(o), o.responsavel].join(' ')).includes(q)));
+    && (!q || norm([o.numero, o.cliente_nome, nome(o), o.responsavel].join(' ')).temTudo(q)));
   const MAX = 300, soma = l.reduce((s, o) => s + Number(o.total || 0), 0);
   $('#conteudo').innerHTML = `<div class="card"><h2>Ordens de serviço (CIGAM) <span class="muted" style="font-weight:400">· ordens de serviço lidas dos PDFs do CIGAM</span></h2>${barraBusca()}
     <div class="chips" style="margin:-4px 0 10px;align-items:center"><select id="oscAno" style="max-width:130px"><option value="">Todos os anos</option>${anos.map(a => `<option ${f.ano === a ? 'selected' : ''}>${a}</option>`).join('')}</select>
@@ -9032,7 +9035,7 @@ async function telaNotas(){
   const f = ST.nf, hoje = hojeISO(), mes = hoje.slice(0, 7), todas = r.data || [];
   const l = todas.filter(n => (!f.emp || n.empresa === f.emp) && (!f.tipo || n.tipo === f.tipo) && (!f.amb || (n.ambiente || 'homologacao') === f.amb)
     && (!f.sit || (f.sit === 'atencao' ? ['erro','nao_enviada','enviando','denegada'].includes(n.status) : n.status === f.sit))
-    && (!ST.busca || norm([n.tomador_nome, n.descricao, n.numero, n.ref].join(' ')).includes(norm(ST.busca))));
+    && (!ST.busca || norm([n.tomador_nome, n.descricao, n.numero, n.ref].join(' ')).temTudo(ST.busca)));
   const prod = todas.filter(n => n.ambiente === 'producao'), soma = a => a.reduce((s, n) => s + Number(n.valor), 0);
   const autMes = prod.filter(n => n.status === 'autorizada' && String(n.autorizada_em || '').slice(0, 7) === mes), atencao = todas.filter(n => ['erro','nao_enviada','enviando','denegada'].includes(n.status));
   const semConfig = !(ST.fiscal.emit || []).length;
@@ -9752,7 +9755,7 @@ async function telaRecebidas(){
   const f = ST.rec2, todas = r.data || [], mes = hojeISO().slice(0, 7), agenda = ag.data || {};
   const l = todas.filter(n => (!f.emp || n.empresa === f.emp) && (!f.tipo || n.tipo === f.tipo)
     && (!f.sit || (f.sit === 'cancelada' ? n.situacao !== 'autorizada' : n.status === f.sit && n.situacao === 'autorizada'))
-    && (!ST.busca || norm([n.emitente_nome, n.emitente_doc, n.numero, n.chave].join(' ')).includes(norm(ST.busca))));
+    && (!ST.busca || norm([n.emitente_nome, n.emitente_doc, n.numero, n.chave].join(' ')).temTudo(ST.busca)));
   const conferir = todas.filter(n => n.status === 'nova' && n.situacao === 'autorizada'), lancMes = todas.filter(n => n.status === 'lancada' && String(n.lancada_em || '').slice(0, 7) === mes);
   const emits = (ST.fiscal.emit || []).filter(e => e.recebe_notas !== undefined);
   const linhaEmp = e => { const sx = (s.data || []).filter(x => x.empresa === e.empresa), tk = tokenDe(e.empresa, e.recebe_ambiente || 'producao'), ult = sx.map(x => x.executado_em).filter(Boolean).sort().pop(), erro = sx.find(x => x.ok === false);
@@ -10286,7 +10289,7 @@ async function telaCompras(){
   const econ = ocs.filter(o => o.situacao !== 'cancelada' && o.valor_inicial && String(o.enviada_em || '').slice(0, 4) === mes.slice(0, 4)).reduce((s, o) => s + Math.max(0, Number(o.valor_inicial) - Number(o.total)), 0);
   const abertas = ocs.filter(o => ['rascunho','enviada','parcial'].includes(o.situacao));
   const filtro = { abertas: o => ['rascunho','enviada','parcial'].includes(o.situacao), atrasadas: o => o.atrasada, recebidas: o => o.situacao === 'recebida', todas: () => true };
-  const lo = ocs.filter(filtro[f.sit] || filtro.abertas).filter(o => !ST.busca || norm([o.fornecedor, o.pedido_numero, o.obra, o.numero, o.notas].join(' ')).includes(norm(ST.busca)));
+  const lo = ocs.filter(filtro[f.sit] || filtro.abertas).filter(o => !ST.busca || norm([o.fornecedor, o.pedido_numero, o.obra, o.numero, o.notas].join(' ')).temTudo(ST.busca));
   $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px">
       <div class="kpi v" data-ka="pedidos"><span class="muted">Pedidos para comprar</span><b>${peds.filter(p => p.andamento_interno === 'aguardando_compra').length}</b>${peds.some(p => p.andamento_interno === 'aguardando_sinal') ? `<span class="muted" style="font-size:12px">+ ${peds.filter(p => p.andamento_interno === 'aguardando_sinal').length} fechado(s) aguardando o sinal</span>` : ''}</div>
       <div class="kpi" data-ka="atrasadas"><span class="muted">OCs atrasadas</span><b style="color:var(--verm)">${ocs.filter(o => o.atrasada).length}</b><span class="muted" style="font-size:12px">${abertas.length} OC(s) em aberto</span></div>
@@ -10557,7 +10560,7 @@ async function telaPrecosCompra(){
   const busca = norm(ST.busca);
   if(vis === 'forn'){
     if(!ST.pcForn || !forns[ST.pcForn]) ST.pcForn = (lf.slice().sort((a, b) => b.ult.localeCompare(a.ult))[0] || {}).k;
-    const f = forns[ST.pcForn], l = rows.filter(x => x.forn_chave === ST.pcForn && (!busca || norm(pTxt(x) + ' ' + (x.descricao || '') + ' ' + (x.codigo_fornecedor || '')).includes(busca))).sort((a, b) => pTxt(a).localeCompare(pTxt(b), 'pt'));
+    const f = forns[ST.pcForn], l = rows.filter(x => x.forn_chave === ST.pcForn && (!busca || norm(pTxt(x) + ' ' + (x.descricao || '') + ' ' + (x.codigo_fornecedor || '')).temTudo(busca))).sort((a, b) => pTxt(a).localeCompare(pTxt(b), 'pt'));
     $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de compra <span class="muted" style="font-weight:400">· tabela de cada fornecedor</span></h2>${topo}
       <div class="barra"><select id="pcForn" style="max-width:100%;flex:1 1 280px">${lf.map(x => `<option value="${esc(x.k)}"${x.k === ST.pcForn ? ' selected' : ''}>${esc(x.nome)} · ${x.n} ${x.n === 1 ? 'item' : 'itens'}${x.id ? '' : ' (sem ligação no cadastro)'}</option>`).join('')}</select>
         <input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}" style="flex:1 1 180px"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
@@ -10571,7 +10574,7 @@ async function telaPrecosCompra(){
     $('#pcForn').onchange = e => { ST.pcForn = e.target.value; ST.busca = ''; telaPrecosCompra(); };
   } else {
     const grupos = {}; rows.forEach(x => { const k = x.produto_id || ('d:' + x.descricao); (grupos[k] || (grupos[k] = [])).push(x); });
-    const lg = Object.values(grupos).filter(g => busca ? norm(pTxt(g[0])).includes(busca) : g.length > 1).sort((a, b) => pTxt(a[0]).localeCompare(pTxt(b[0]), 'pt'));
+    const lg = Object.values(grupos).filter(g => busca ? norm(pTxt(g[0])).temTudo(busca) : g.length > 1).sort((a, b) => pTxt(a[0]).localeCompare(pTxt(b[0]), 'pt'));
     $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de compra <span class="muted" style="font-weight:400">· comparar fornecedores do mesmo produto</span></h2>${topo}
       <div class="barra"><input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
       <p class="muted" style="font-size:12px">${busca ? lg.length + ' produto(s) achados.' : lg.length + ' produtos comprados de mais de um fornecedor.'} Em cada produto, o último preço de cada fornecedor, do mais barato para o mais caro. Preço antigo pode não valer mais: veja a data.</p>
@@ -10602,7 +10605,7 @@ async function telaPrecosCompraLista(topo, liga){
   if(r.error) return $('#conteudo').innerHTML = semScript23();
   const prods = (await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,custo,margem'))).data || [];
   const pm = Object.fromEntries(prods.map(p => [p.id, p]));
-  const l = (r.data || []).filter(x => !ST.busca || norm([x.descricao, x.fornecedor_nome, x.codigo_fornecedor, pm[x.produto_id]?.codigo, pm[x.produto_id]?.descricao].join(' ')).includes(norm(ST.busca)));
+  const l = (r.data || []).filter(x => !ST.busca || norm([x.descricao, x.fornecedor_nome, x.codigo_fornecedor, pm[x.produto_id]?.codigo, pm[x.produto_id]?.descricao].join(' ')).temTudo(ST.busca));
   const custo = x => Number(x.preco) * (1 + Number(x.ipi) / 100) * (1 + Number(x.frete) / 100);
   $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de compra <span class="muted" style="font-weight:400">· tabelas dos fornecedores → custo → preço de venda</span></h2>${topo}
     <div class="barra"><input type="search" id="busca" placeholder="Produto, fornecedor ou código…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
@@ -10685,7 +10688,7 @@ const pcNomeForn = x => String(x.descricao || '').replace(/^c[oó]d\.\s*CIGAM\s*
 const pcCodForn = x => x.codigo_fornecedor || ((String(x.descricao || '').match(/EAN:\s*(\d+)/i) || [])[1] ? 'EAN ' + String(x.descricao).match(/EAN:\s*(\d+)/i)[1] : '');
 const pcSt = x => x.linha === 'Com ST' ? true : x.linha === 'Sem ST' ? false : (PCX.prod[x.produto_id] || {}).tem_st;
 const pcTxt = x => { const p = PCX.prod[x.produto_id]; return p ? p.codigo + ' ' + p.descricao : (x.descricao || ''); };
-const pcFiltra = (rows) => { const b = norm(ST.busca); return rows.filter(x => !b || norm(pcTxt(x) + ' ' + (x.descricao || '') + ' ' + (x.codigo_fornecedor || '') + ' ' + (x.linha || '')).includes(b)).sort((a, b2) => pcTxt(a).localeCompare(pcTxt(b2), 'pt')); };
+const pcFiltra = (rows) => { const b = norm(ST.busca); return rows.filter(x => !b || norm(pcTxt(x) + ' ' + (x.descricao || '') + ' ' + (x.codigo_fornecedor || '') + ' ' + (x.linha || '')).temTudo(b)).sort((a, b2) => pcTxt(a).localeCompare(pcTxt(b2), 'pt')); };
 /* grava um campo da condição geral ('' ) ou de uma linha; cria a geral na primeira vez */
 async function pcGrava(k, linhaId, campo, valor){
   const v = valor === '' && campo === 'margem' ? null : (num(valor) || 0);
@@ -10809,7 +10812,7 @@ async function telaStatusOC(){
   if(seq !== ST._cpsSeq) return;
   if(r.error) return $('#conteudo').innerHTML = semScript23();
   const f = ST.cps, desde = somaDias(hojeISO(), -f.dias);
-  const q = norm(ST.busca || ''), todas = (r.data || []).filter(o => !q || norm([o.numero, o.fornecedor, o.pedido_numero, o.obra, o.notas].join(' ')).includes(q));
+  const q = norm(ST.busca || ''), todas = (r.data || []).filter(o => !q || norm([o.numero, o.fornecedor, o.pedido_numero, o.obra, o.notas].join(' ')).temTudo(q));
   const recente = o => String(o.recebida_em || o.atualizado_em || o.criado_em || '').slice(0, 10) >= desde;
   const COL = [
     ['rascunho', '✏️ Em preparação', 'var(--texto2)', o => o.situacao === 'rascunho'],
@@ -10861,7 +10864,7 @@ async function telaControleOC(){
   const todas = r.data || [], noPer = todas.filter(PER[f.per] || PER.ano);
   const q = norm(ST.busca || ''), qc = norm(f.cli), qf = norm(f.forn);
   const l = noPer.filter(SIT[f.sit] || SIT.abertas).filter(PARA[f.para] || PARA.todos)
-    .filter(o => (!q || norm([o.numero, o.fornecedor, o.cliente, o.destino, o.pedido_numero, o.obra, o.notas].join(' ')).includes(q)) && (!qc || norm([o.cliente, o.obra].join(' ')).includes(qc)) && (!qf || norm(o.fornecedor || '').includes(qf)))
+    .filter(o => (!q || norm([o.numero, o.fornecedor, o.cliente, o.destino, o.pedido_numero, o.obra, o.notas].join(' ')).temTudo(q)) && (!qc || norm([o.cliente, o.obra].join(' ')).temTudo(qc)) && (!qf || norm(o.fornecedor || '').temTudo(qf)))
     .sort((a, b) => pedidoEm(b).localeCompare(pedidoEm(a)) || b.numero - a.numero);
   const ab = noPer.filter(aberta), soma = x => x.reduce((s, o) => s + Number(o.total || 0), 0), velhas = todas.filter(o => aberta(o) && !(PER[f.per] || PER.ano)(o)).length;
   const para = o => o.finalidade === 'estoque' ? '<span class="tag" style="background:#eef2ff;color:#3730a3">📦 Estoque</span>'
@@ -11097,7 +11100,7 @@ async function telaRequisicoes(){
   const atende = nivelTela('cp_requisicoes') >= 3 || nivelTela('cp_compras') >= 3, f = ST.req, us = atende ? ((await sb.rpc('fin_responsaveis')).data || []) : [];
   const nomeU = id => id === ST.eu.id ? 'eu' : ((us.find(u => u.id === id) || {}).nome || (ST.tecnicos || []).find(t => t.usuario_id === id)?.nome || '');
   const l = (r.data || []).filter(x => f.sit === 'todos' || (f.sit === 'abertos' ? ['pendente','separado','comprar'].includes(x.situacao) : x.situacao === f.sit))
-    .filter(x => !ST.busca || norm(JSON.stringify(x.itens) + ' ' + (obra(x.obra_id)?.nome || '')).includes(norm(ST.busca)));
+    .filter(x => !ST.busca || norm(JSON.stringify(x.itens) + ' ' + (obra(x.obra_id)?.nome || '')).temTudo(ST.busca));
   $('#conteudo').innerHTML = `<div class="card"><h2>Pedidos de material <span class="muted" style="font-weight:400">· técnico ou escritório pede, compras separa do estoque ou compra</span></h2>
     <div class="barra"><input type="search" id="busca" placeholder="Buscar material ou obra…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <select id="rqSit" style="max-width:190px">${[['abertos','Em aberto'],['pendente','Pendentes'],['atendido','Entregues'],['recusado','Recusados'],['todos','Todos']].map(([k, t]) => `<option value="${k}" ${f.sit === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
@@ -11819,7 +11822,7 @@ const iniciais = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(x => 
 // ---------- Usuários ----------
 function acUsuarios(){
   const A = ST.ac, aguard = A.usuarios.filter(u => u.aguardando && !u.ativo), busca = (ST.acBuscaU || '').toLowerCase();
-  const resto = A.usuarios.filter(u => !(u.aguardando && !u.ativo)).filter(u => !busca || (u.nome + ' ' + (u.email || '') + ' ' + perfilNome(u.perfil_id)).toLowerCase().includes(busca));
+  const resto = A.usuarios.filter(u => !(u.aguardando && !u.ativo)).filter(u => !busca || (u.nome + ' ' + (u.email || '') + ' ' + perfilNome(u.perfil_id)).temTudo(busca));
   const nExc = id => A.excecoes.filter(e => e.usuario_id === id && excVale(e)).length;
   $('#acCorpo').innerHTML = `${aguard.length ? `<div class="card" style="border-color:#f59e0b88"><h2>Solicitações de acesso <span class="tag rasc">${aguard.length}</span></h2>
       <p class="muted" style="margin-top:-4px;font-size:13px">Contas criadas na tela de entrada que não constam no pré-cadastro. Aprove definindo o perfil de acesso, ou recuse.</p>
@@ -11989,7 +11992,7 @@ function acPastas(telas){
 function acEditor(alvo, ctx){
   ST.acAbertas = ST.acAbertas || {}; const ab = ST.acAbertas[ctx.chave] = ST.acAbertas[ctx.chave] || new Set();
   const busca = (ST.acBusca || '').toLowerCase().trim();
-  const telas = ST.ac.telas.filter(t => t.area !== 'Interno' && (!busca || (t.nome + ' ' + t.area).toLowerCase().includes(busca)));
+  const telas = ST.ac.telas.filter(t => t.area !== 'Interno' && (!busca || (t.nome + ' ' + t.area).temTudo(busca)));
   const pastas = acPastas(telas);
   const linha = t => {
     const v = ctx.valor(t), tr = acTrava(ctx.tipo, t), teto = acTeto(ctx.tipo, t), pad = ctx.padrao ? ctx.padrao(t) : null;
