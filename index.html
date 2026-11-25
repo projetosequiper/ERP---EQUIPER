@@ -7242,6 +7242,7 @@ async function novoOrcamento(obraId, pre){
 
 async function formOrc(id, pre){
   await carregaCadastrosOrc();
+  try{ const k = await sb.from('produto_componentes').select('kit_id'); ST.kitsIds = new Set((k.data || []).map(x => x.kit_id)); }catch(e){ ST.kitsIds = new Set(); }
   let O, G = [];
   if(id){
     const [a, b] = await Promise.all([ sb.from('orcamentos').select('*').eq('id', id).single(), sb.from('orcamento_grupos').select('*, orcamento_itens(*)').eq('orcamento_id', id).order('ordem') ]);
@@ -7376,13 +7377,22 @@ async function formOrc(id, pre){
         <td><input data-iq="${gi}-${ii}" inputmode="decimal" value="${String(Number(it.quantidade)).replace('.',',')}" ${travado?'disabled':''}><div class="muted" style="font-size:10px;text-align:center">${unidadeTxt(it.unidade)}</div></td>
         <td><input data-iu="${gi}-${ii}" inputmode="decimal" value="${fmt3(it.preco_unit)}" ${travado?'disabled':''}></td>
         <td style="text-align:right" data-it="${gi}-${ii}">${R$(Number(it.quantidade) * Number(it.preco_unit))}</td>
-        <td>${travado?'':`<button class="btn peq" data-ix="${gi}-${ii}" type="button">✕</button>`}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">Nenhum item. Busque abaixo no catálogo${T==='projeto'?' (dica: “KIT ORC PROJETOS BIM” traz todos os projetos de uma vez)':''}.</td></tr>`}
+        <td style="white-space:nowrap">${!travado && it.produto_id && ST.kitsIds && ST.kitsIds.has(it.produto_id) ? `<button class="btn peq" data-ik="${gi}-${ii}" type="button" title="Explodir o kit: troca esta linha pelos itens de dentro dele">⤵ kit</button> ` : ''}${travado?'':`<button class="btn peq" data-ix="${gi}-${ii}" type="button">✕</button>`}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">Nenhum item. Busque abaixo no catálogo${T==='projeto'?' (dica: “KIT ORC PROJETOS BIM” traz todos os projetos de uma vez)':''}.</td></tr>`}
       </tbody></table></div>
       ${travado ? '' : `<div style="position:relative;margin-top:8px"><input data-busca="${gi}" placeholder="🔎 Adicionar item: código ou palavras da descrição, em qualquer ordem, sem precisar de acento…" autocomplete="off"><div data-sug="${gi}" class="sugestoes"></div></div>`}
       <div style="text-align:right;margin-top:6px;font-size:13px">${multi ? `Equip. ${R$(g.itens.filter(i=>tipoCat(i)==='eq').reduce((s,i)=>s+i.quantidade*i.preco_unit,0))} · Mão de obra ${R$(g.itens.filter(i=>tipoCat(i)==='mo').reduce((s,i)=>s+i.quantidade*i.preco_unit,0))} · Material ${R$(g.itens.filter(i=>tipoCat(i)==='mat').reduce((s,i)=>s+i.quantidade*i.preco_unit,0))} · ` : ''}<b>Total ${multi?'do pedido ':''}${R$(totG(g))}</b></div></div>`).join('');
     $('#ocGrupos').querySelectorAll('[data-iq],[data-iu]').forEach(e => e.oninput = () => { lerItens(); const [gi, ii] = (e.dataset.iq || e.dataset.iu).split('-'); const it = G[gi].itens[ii];
       document.querySelector(`[data-it="${gi}-${ii}"]`).textContent = R$(it.quantidade * it.preco_unit); resumo(); });
     $('#ocGrupos').querySelectorAll('[data-ix]').forEach(b => b.onclick = () => { lerItens(); const [gi, ii] = b.dataset.ix.split('-'); G[gi].itens.splice(ii, 1); desenhaGrupos(); });
+    /* 25/11 (Júlio): explodir um kit que está como um item só — a linha vira os itens de dentro dele */
+    $('#ocGrupos').querySelectorAll('[data-ik]').forEach(b => b.onclick = async () => { lerItens(); const [gi, ii] = b.dataset.ik.split('-'), it = G[gi].itens[ii];
+      const comp = (await sb.from('produto_componentes').select('*').eq('kit_id', it.produto_id).order('ordem')).data || []; if(!comp.length) return toast('Este kit não tem itens cadastrados.');
+      const ps = (await sb.from('produtos').select('*').in('id', comp.map(c => c.componente_id))).data || [], q = Number(it.quantidade) || 1;
+      const novos = comp.map(c => { const x = ps.find(y => y.id === c.componente_id); return x ? { produto_id: x.id, codigo: x.codigo, descricao: x.descricao, tipo: x.tipo, disciplina: x.disciplina, escopo: x.escopo, unidade: x.unidade, kit_codigo: it.codigo,
+        quantidade: c.multiplica === false ? Number(c.quantidade) : Number(c.quantidade) * q, preco_unit: Number(x.preco) } : null; }).filter(Boolean);
+      const antes = Number(it.quantidade) * Number(it.preco_unit || 0), depois = novos.reduce((a, x) => a + x.quantidade * x.preco_unit, 0);
+      if(!await modal('Explodir o kit', `<b>${esc(it.descricao)}</b> (${String(q).replace('.', ',')} un.) vira ${novos.length} itens.<br>Valor da linha hoje: <b>${R$(antes)}</b> · soma dos itens pelo cadastro: <b>${R$(depois)}</b>.`, [['Cancelar', false], ['Explodir', true, 'pri']])) return;
+      G[gi].itens.splice(ii, 1, ...novos); desenhaGrupos(); toast(`Kit aberto em ${novos.length} itens.`); });
     $('#ocGrupos').querySelectorAll('[data-gx]').forEach(b => b.onclick = async () => { lerItens(); if(G[b.dataset.gx].itens.length && !await modal('Tirar este pedido?', 'Os itens dele saem do orçamento.', [['Cancelar',false],['Tirar',true,'verm']])) return; G.splice(+b.dataset.gx, 1); desenhaGrupos(); });
     $('#ocGrupos').querySelectorAll('[data-busca]').forEach(inp => { let t;
       inp.oninput = () => { clearTimeout(t); t = setTimeout(async () => { const q = inp.value.trim(), box = document.querySelector(`[data-sug="${inp.dataset.busca}"]`); if(q.length < 2 && !/^\d$/.test(q)){ box.innerHTML = ''; return; }
@@ -7394,7 +7404,9 @@ async function formOrc(id, pre){
         box.querySelectorAll('[data-pp]').forEach(s2 => s2.onclick = async () => { lerItens(); const p = JSON.parse(s2.dataset.pp), gi = inp.dataset.busca;
           if(p.estrutura){
             const comp = (await sb.from('produto_componentes').select('*').eq('kit_id', p.id).order('ordem')).data || [];
-            if(comp.length){
+            const como = comp.length ? await modal('Kit', `<b>${esc(p.descricao)}</b> é um kit com ${comp.length} itens. Como ele entra no orçamento?`, [['Cancelar', null], ['Um item só (kit fechado)', 'fechado'], ['Explodir nos itens', 'abrir', 'pri']]) : 'fechado';
+            if(!como) return;
+            if(como === 'abrir'){
               const area = T === 'projeto' && $('#ocArea') ? num($('#ocArea').value) : 0;
               const qk = await pedirTexto(p.descricao, String(p.unidade).toUpperCase() === 'M2' ? 'Área em m² (os itens por m² acompanham):' : 'Quantidade do kit:');
               if(qk === null) return; const qtdKit = num(qk || (area ? String(area) : '1')) || 1;
@@ -7405,7 +7417,7 @@ async function formOrc(id, pre){
                   quantidade: c.multiplica ? Number(c.quantidade) * qtdKit : Number(c.quantidade), preco_unit: Number(x.preco) }); });
               desenhaGrupos(); toast(`${comp.length} itens do kit adicionados. Confira as quantidades (piscina, gás…).`); return;
             }
-            toast('Este kit ainda não tem itens cadastrados — entrou como um item só. Monte o kit em Produtos e preços.');
+            if(!comp.length) toast('Este kit ainda não tem itens cadastrados — entrou como um item só. Monte o kit em Cadastros → Materiais (marque "é um kit" e ponha os itens).');
           }
           const area = T === 'projeto' && $('#ocArea') ? num($('#ocArea').value) : 0;
           G[gi].itens.push({ produto_id: p.id, codigo: p.codigo, descricao: p.descricao, tipo: p.tipo, disciplina: p.disciplina, escopo: p.escopo, unidade: p.unidade,
