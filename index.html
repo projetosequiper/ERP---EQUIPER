@@ -6965,7 +6965,7 @@ async function formProduto(id){
   abrirPainel(`<div class="cab"><h2>${id ? esc(P.codigo) + ' · ' + esc(P.descricao) : 'Novo produto'}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card"><div class="grade">
       <label class="campo">Código<input id="prCod" value="${esc(P.codigo)}"></label>
-      <label class="campo">Tipo<select id="prTipo">${Object.entries(TIPOS_PROD).map(([k,r]) => `<option value="${k}" ${P.tipo===k?'selected':''}>${r}</option>`).join('')}</select></label>
+      <label class="campo">O que representa no orçamento<select id="prTipo" title="Equipamento, mão de obra ou material: é por aqui que o orçamento soma cada coluna do resumo">${Object.entries(TIPOS_PROD).map(([k,r]) => `<option value="${k}" ${P.tipo===k?'selected':''}>${r}</option>`).join('')}</select></label>
       <label class="campo largo">Descrição<input id="prDesc" value="${esc(P.descricao)}"></label>
       <label class="campo">Unidade<input id="prUn" value="${esc(P.unidade)}"></label>
       <label class="campo">Preço de venda (R$ por unidade)<input id="prPreco" inputmode="decimal" value="${fmt3(P.preco)}"></label>
