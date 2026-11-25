@@ -6971,6 +6971,7 @@ async function formProduto(id){
     <div class="card"><div class="grade">
       <label class="campo">Código<input id="prCod" value="${esc(P.codigo)}"></label>
       <label class="campo">O que representa no orçamento<select id="prTipo" title="Equipamento, mão de obra ou material: é por aqui que o orçamento soma cada coluna do resumo">${Object.entries(TIPOS_PROD).map(([k,r]) => `<option value="${k}" ${P.tipo===k?'selected':''}>${r}</option>`).join('')}</select></label>
+      <label class="campo">Substituição tributária (ST)<select id="prSt" title="Usado na tabela de preços: itens com ST e sem ST têm margens diferentes"><option value="">não definido</option><option value="1" ${P.tem_st === true ? 'selected' : ''}>Com ST</option><option value="0" ${P.tem_st === false ? 'selected' : ''}>Sem ST</option></select></label>
       <label class="campo largo">Descrição<input id="prDesc" value="${esc(P.descricao)}"></label>
       <label class="campo">Unidade<input id="prUn" value="${esc(P.unidade)}"></label>
       <label class="campo">Preço de venda (R$ por unidade)<input id="prPreco" inputmode="decimal" value="${fmt3(P.preco)}"></label>
@@ -7012,7 +7013,7 @@ async function formProduto(id){
     const r = await buscaProdutos(q, null); $('#prCompSug').innerHTML = r.filter(p => p.id !== id).map(p => `<div class="sug" data-cp='${esc(JSON.stringify({ id:p.id, codigo:p.codigo, descricao:p.descricao, unidade:p.unidade }))}'><b>${esc(p.codigo)}</b> · ${esc(p.descricao)}</div>`).join('');
     $('#prCompSug').querySelectorAll('[data-cp]').forEach(x => x.onclick = () => { const p = JSON.parse(x.dataset.cp); if(!C.some(c => c.componente_id === p.id)) C.push({ componente_id: p.id, quantidade: 1, multiplica: String(p.unidade).toUpperCase() === String($('#prUn').value).toUpperCase(), p }); $('#prCompSug').innerHTML = ''; $('#prCompBusca').value = ''; desComp(); }); }, 250); };
   $('#bSalvar').onclick = async () => { const [g1, g2] = $('#prGrupo').value.split('/').map(x => x.trim());
-    const d = { codigo: $('#prCod').value.trim(), descricao: $('#prDesc').value.trim(), tipo: $('#prTipo').value, grupo: g1 || null, subgrupo: g2 || null, marca: $('#prMarca').value.trim() || null,
+    const d = { codigo: $('#prCod').value.trim(), descricao: $('#prDesc').value.trim(), tipo: $('#prTipo').value, ...('tem_st' in P || $('#prSt').value ? { tem_st: $('#prSt').value === '' ? null : $('#prSt').value === '1' } : {}), grupo: g1 || null, subgrupo: g2 || null, marca: $('#prMarca').value.trim() || null,
       referencia: $('#prRef').value.trim() || null, ncm: $('#prNcm').value.replace(/\D/g,'') || null, unidade: $('#prUn').value.trim().toUpperCase() || 'UN', preco: num($('#prPreco').value),
       disciplina: $('#prDisc').value || null, escopo: $('#prEsc').value.trim() || null, estrutura: $('#prKit').checked, ativo: $('#prAtivo').checked, ipi: $('#prIpi').value.trim() ? num($('#prIpi').value) : null, peso: $('#prPeso').value.trim() ? num($('#prPeso').value) : null,
       origem: $('#prOrigem').value || null, controla_serie: $('#prSerie').checked, fornecedor_cigam: $('#prFornC').value.trim() || null, atualizado_em: new Date().toISOString() };

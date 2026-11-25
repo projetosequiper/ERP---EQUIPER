@@ -2,7 +2,7 @@
    A tela abre com a versão já guardada no aparelho e, ao mesmo tempo, baixa a versão nova por trás;
    se mudou, avisa a tela ("versão nova — aperte F5"). As cópias dos apps (apps/…) só são baixadas quando alguém abre.
    Os dados (Supabase) NUNCA ficam guardados: sempre vêm do servidor, com o login de quem está usando. */
-const VERSAO = 'erp-2026-11-25-7';
+const VERSAO = 'erp-2026-11-25-8';
 const APP = ['./', './index.html', './manifest.webmanifest', './icones/icon-192.png', './icones/icon-512.png', './icones/apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSAO).then(c => c.addAll(APP)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSAO).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
