@@ -10114,7 +10114,7 @@ async function telaCompras(){
       : `<div class="barra"><input type="search" id="busca" placeholder="Fornecedor, pedido, obra, nº da OC ou da nota…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
           <select id="cpSit" style="max-width:170px">${[['abertas','Em aberto'],['atrasadas','Atrasadas'],['recebidas','Recebidas'],['todas','Todas']].map(([k, t]) => `<option value="${k}" ${f.sit === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
         <table class="reg"><thead><tr><th>OC</th><th>Fornecedor</th><th>Pedido / obra</th><th>Previsão</th><th style="text-align:right">Total</th><th>Situação</th><th>Notas</th></tr></thead><tbody>
-        ${lo.slice(0, 400).map(o => `<tr data-oc="${o.id}" style="cursor:pointer"><td><b>${o.numero}</b> <span class="muted">${o.empresa}</span>${o.origem === 'cigam' ? ' <span class="tag" style="font-size:10px">CIGAM</span>' : ''}${o.conferir ? ' <span title="Conferir" style="color:var(--amar)">⚠</span>' : ''}</td><td>${esc(o.fornecedor || '—')}</td><td>${o.pedido_numero ? esc(o.pedido_numero) + ' · ' + esc(o.obra || '') : o.destino ? esc(o.destino) : '<span class="muted">estoque próprio</span>'}</td>
+        ${lo.slice(0, 400).map(o => `<tr data-oc="${o.id}" style="cursor:pointer"><td><b>${o.numero}</b> <span class="muted">${o.empresa}</span>${o.origem === 'cigam' ? ' <span class="tag" style="font-size:10px">CIGAM</span>' : ''}${o.conferir ? ' <span title="Conferir" style="color:var(--amar)">⚠</span>' : ''}</td><td>${esc(o.fornecedor || '—')}</td><td>${o.pedido_numero ? esc(o.pedido_numero) + ' · ' + esc(o.obra || '') : o.finalidade === 'estoque' ? '<span class="tag">estoque</span>' : o.cliente ? esc(o.cliente) : '<span class="muted">a definir</span>'}</td>
           <td style="${o.atrasada ? 'color:var(--verm);font-weight:600' : ''}">${o.previsao_entrega ? dataBR(o.previsao_entrega) : '—'}</td><td style="text-align:right">${R$(o.total)}${o.valor_inicial && Number(o.valor_inicial) > Number(o.total) ? `<div style="font-size:11px;color:var(--verde)">economia ${R$(o.valor_inicial - o.total)}</div>` : ''}</td><td>${tagOC(o.situacao)}</td><td>${esc(o.notas || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhuma OC.</td></tr>'}</tbody></table>
         <p class="muted" style="font-size:12px">${lo.length.toLocaleString('pt-BR')} OC(s)${lo.length > 400 ? ' · mostrando as 400 mais novas — use a busca (fornecedor, nº, obra) ou a situação' : ''}</p>`}</div>`;
   if($('#busca')) ligaBarra(null);
@@ -10152,7 +10152,9 @@ async function montarCompra(p){
       <label class="campo largo">Fornecedor<select id="ocForn"><option value="">— escolher —</option>${fornecedores.map(x => `<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select></label>
       <label class="campo">Empresa que compra<select id="ocEmp">${['Equiper','EQP'].map(e => `<option ${(p?.empresa || 'Equiper') === e ? 'selected' : ''}>${e}</option>`).join('')}</select></label>
       <label class="campo">Previsão de entrega<input id="ocPrev" type="date" value="${somaDias2(hojeISO(), 15)}"></label>
-      <label class="campo">Condição de pagamento<input id="ocCond" placeholder="ex.: 30/60/90"></label><label class="campo">Frete (R$)<input id="ocFrete" inputmode="decimal"></label></div></div>
+      <label class="campo">Condição de pagamento<input id="ocCond" placeholder="ex.: 30/60/90"></label><label class="campo">Frete (R$)<input id="ocFrete" inputmode="decimal"></label>
+      <label class="campo">Esta compra é para<select id="ocFin"><option value="cliente" ${p ? 'selected' : ''}>Cliente específico</option><option value="estoque" ${p ? '' : 'selected'}>Reposição de estoque</option></select></label>
+      <div class="campo largo" id="ocCliBox" data-nao-suja="1"><span>Cliente desta compra${p ? ' <span class="muted">(pedido ' + esc(p.numero || '') + (p.obra ? ' · ' + esc(p.obra) : '') + ')</span>' : ''}</span><div id="ocCli"></div></div></div></div>
     <div class="card"><table class="reg"><thead><tr><th></th><th>Produto</th><th>Cód. no fornecedor</th><th style="text-align:right">Qtd</th><th>Un.</th><th style="text-align:right">Valor unit.</th></tr></thead><tbody id="ocItens">
       ${itens.map((x, i) => `<tr data-i="${i}" data-prod="${x.produto_id || ''}"><td><input type="checkbox" data-s checked style="width:auto"></td><td><input data-f="descricao" value="${esc(x.descricao)}">${x.fornecedor_ultimo ? `<div class="muted" style="font-size:11px">último preço: ${R$(x.preco_ultimo)} · ${esc(x.fornecedor_ultimo)}</div>` : ''}</td>
         <td><input data-f="codigo_fornecedor" style="width:110px"></td><td><input data-f="quantidade" inputmode="decimal" value="${numFmt(x.comprar).replace(/,00$/, '')}" style="width:70px;text-align:right"></td><td><input data-f="unidade" value="${esc(x.unidade || 'UN')}" style="width:50px"></td>
@@ -10160,13 +10162,18 @@ async function montarCompra(p){
       <button class="btn peq" id="ocLinha" style="margin-top:8px">+ item</button></div>
     <div class="rodape"><button class="btn" id="ocRasc">Salvar rascunho</button><button class="btn pri" id="ocEnviar">Salvar e enviar ao fornecedor</button></div>`);
   $('#folha').style.width = 'min(960px,100%)';
+  const pagP = p && p.obra_id ? (ST.pagadores.find(g => g.obra_id === p.obra_id) || {}).pessoa_id : '';
+  const pegaCliOc = pickEmpresa($('#ocCli'), pagP || '', null, { papel: 'cliente', rotulo: 'cliente' });
+  const mostraCliOc = () => $('#ocCliBox').style.display = $('#ocFin').value === 'cliente' ? '' : 'none'; mostraCliOc(); $('#ocFin').onchange = mostraCliOc;
   $('#ocLinha').onclick = () => $('#ocItens').insertAdjacentHTML('beforeend', `<tr data-i="n" data-prod=""><td><input type="checkbox" data-s checked style="width:auto"></td><td><input data-f="descricao"></td><td><input data-f="codigo_fornecedor" style="width:110px"></td><td><input data-f="quantidade" inputmode="decimal" value="1" style="width:70px;text-align:right"></td><td><input data-f="unidade" value="UN" style="width:50px"></td><td><input data-f="valor_unitario" inputmode="decimal" style="width:100px;text-align:right"></td></tr>`);
   const salvar = async (enviar) => {
     const forn = $('#ocForn').value; if(!forn) return aviso('Fornecedor', 'Escolha o fornecedor.');
     const its = [...document.querySelectorAll('#ocItens tr')].filter(tr => tr.querySelector('[data-s]').checked).map(tr => { const g = k => tr.querySelector(`[data-f="${k}"]`).value.trim();
       return { produto_id: tr.dataset.prod || null, descricao: g('descricao'), codigo_fornecedor: g('codigo_fornecedor') || null, quantidade: num(g('quantidade')), unidade: g('unidade') || 'UN', valor_unitario: num(g('valor_unitario')) || 0 }; }).filter(x => x.descricao && x.quantidade > 0);
     if(!its.length) return aviso('Itens', 'Marque pelo menos um item.');
-    const o = await sb.from('compras_ordens').insert({ empresa: $('#ocEmp').value, fornecedor_id: forn, pedido_id: p?.id || null, previsao_entrega: $('#ocPrev').value || null, condicao: $('#ocCond').value.trim() || null, frete: num($('#ocFrete').value) || 0 }).select().single();
+    const o = await sb.from('compras_ordens').insert({ empresa: $('#ocEmp').value, fornecedor_id: forn, pedido_id: p?.id || null, previsao_entrega: $('#ocPrev').value || null, condicao: $('#ocCond').value.trim() || null, frete: num($('#ocFrete').value) || 0,
+      finalidade: $('#ocFin').value, cliente_id: $('#ocFin').value === 'cliente' ? (pegaCliOc() || null) : null,
+      destino: $('#ocFin').value === 'estoque' ? 'Estoque' : ((pegaCliOc() && pessoa(pegaCliOc())?.nome) || p?.obra || null) }).select().single();
     if(o.error) return aviso('Erro', esc(erroBanco(o.error)));
     const x = await sb.from('compras_itens').insert(its.map(i => ({ ...i, ordem_id: o.data.id }))); if(x.error) return aviso('Erro nos itens', esc(erroBanco(x.error)));
     if(enviar){ const e = await sb.rpc('compras_enviar', { p_ordem: o.data.id }); if(e.error) return aviso('Erro', esc(erroBanco(e.error))); }
@@ -10189,7 +10196,8 @@ async function verOC(id){
       <label class="campo">Previsão de entrega<input id="voPrev" type="date" value="${O.previsao_entrega || ''}"></label><label class="campo">Condição<input id="voCond" value="${esc(O.condicao || '')}"></label>
       <label class="campo">Frete (R$)<input id="voFrete" inputmode="decimal" value="${numFmt(O.frete)}"></label>
       <label class="campo">Valor da 1ª cotação (R$)<input id="voIni" inputmode="decimal" value="${numFmt(O.valor_inicial)}" title="Para medir a economia da negociação"></label>
-      <label class="campo">Para quem / destino<input id="voDest" value="${esc(O.destino || '')}" placeholder="cliente da obra ou Estoque"></label>
+      <label class="campo">Esta compra é para<select id="voFin"><option value="">— definir —</option><option value="cliente" ${O.finalidade === 'cliente' ? 'selected' : ''}>Cliente específico</option><option value="estoque" ${O.finalidade === 'estoque' ? 'selected' : ''}>Reposição de estoque</option></select></label>
+      <div class="campo largo" id="voCliBox" data-nao-suja="1"><span>Cliente desta compra</span><div id="voCli"></div><input id="voDest" style="margin-top:6px" value="${esc(O.finalidade === 'estoque' ? '' : O.destino || '')}" placeholder="ou escreva o nome (cliente ainda sem cadastro)"></div>
       <label class="campo">Responsável pela compra<input id="voResp" value="${esc(O.responsavel || '')}"></label>
       <label class="campo">Frete CIF / FOB<select id="voFTipo"><option value=""></option>${['CIF', 'FOB'].map(k => `<option ${O.frete_tipo === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
       <label class="campo">Transportadora<input id="voTransp" value="${esc(O.transportadora || '')}"></label>
@@ -10215,14 +10223,17 @@ async function verOC(id){
     <div class="rodape">${['rascunho','enviada','parcial'].includes(O.situacao) ? '<button class="btn" id="voCanc">Cancelar OC</button>' : ''}<button class="btn" id="voImp">Imprimir para o fornecedor</button>${['enviada','parcial'].includes(O.situacao) ? '<button class="btn pri" id="voChegou">📦 Chegou</button>' : ''}
       ${O.situacao !== 'recebida' && O.situacao !== 'cancelada' ? '<button class="btn" id="voSalvar">Salvar</button>' : ''}${O.situacao === 'rascunho' ? '<button class="btn pri" id="voEnviar">Enviar</button>' : ''}</div>`);
   $('#folha').style.width = 'min(960px,100%)';
-  const salvar = async () => { const x = await sb.from('compras_ordens').update({ previsao_entrega: $('#voPrev').value || null, condicao: $('#voCond').value.trim() || null, frete: num($('#voFrete').value) || 0, valor_inicial: num($('#voIni').value) || null,
-      destino: $('#voDest').value.trim() || null, responsavel: $('#voResp').value.trim() || null, frete_tipo: $('#voFTipo').value || null, transportadora: $('#voTransp').value.trim() || null,
+  const pegaCli = pickEmpresa($('#voCli'), O.cliente_id || '', pid => { ST._painelSujo = true; if(pid && $('#voDest')) $('#voDest').value = pessoa(pid)?.nome || ''; }, { papel: 'cliente', rotulo: 'cliente' });
+  const mostraCli = () => $('#voCliBox').style.display = $('#voFin').value === 'cliente' ? '' : 'none'; mostraCli(); $('#voFin').onchange = mostraCli;
+  const salvar = async () => { const fin = $('#voFin').value || null, cli = fin === 'cliente' ? (pegaCli() || null) : null;
+    const x = await sb.from('compras_ordens').update({ finalidade: fin, cliente_id: cli, previsao_entrega: $('#voPrev').value || null, condicao: $('#voCond').value.trim() || null, frete: num($('#voFrete').value) || 0, valor_inicial: num($('#voIni').value) || null,
+      destino: fin === 'estoque' ? 'Estoque' : ($('#voDest').value.trim() || (cli && pessoa(cli)?.nome) || null), responsavel: $('#voResp').value.trim() || null, frete_tipo: $('#voFTipo').value || null, transportadora: $('#voTransp').value.trim() || null,
       transportadora_fone: $('#voTFone').value.trim() || null, desconto: num($('#voDesc').value) || 0, ipi: num($('#voIpi').value) || 0, encargo: num($('#voEnc').value) || 0, seguro: num($('#voSeg').value) || 0,
       encargo_financeiro_pct: $('#voEncF').value.trim() ? num($('#voEncF').value) : null }).eq('id', id);
     if(x.error) return aviso('Erro', esc(erroBanco(x.error)));
     for(const tr of document.querySelectorAll('#folha [data-it]')){ const y = await sb.from('compras_itens').update({ codigo_fornecedor: tr.querySelector('[data-f=codigo_fornecedor]').value.trim() || null, valor_unitario: num(tr.querySelector('[data-f=valor_unitario]').value) || 0 }).eq('id', tr.dataset.it); if(y.error) return aviso('Erro', esc(erroBanco(y.error))); }
     return true; };
-  if($('#voSalvar')) $('#voSalvar').onclick = async () => { if(await salvar()){ toast('OC salva.'); verOC(id); if(ST.aba === 'cp_compras') telaCompras(); } };
+  if($('#voSalvar')) $('#voSalvar').onclick = async () => { if(await salvar()){ toast('OC salva.'); verOC(id); if(ST.aba === 'cp_compras') telaCompras(); if(ST.aba === 'cp_controle') telaControleOC(); } };
   if($('#voEnviar')) $('#voEnviar').onclick = async () => { if(!await salvar()) return; const e = await sb.rpc('compras_enviar', { p_ordem: id }); if(e.error) return aviso('Erro', esc(erroBanco(e.error))); toast('OC enviada.'); verOC(id); if(ST.aba === 'cp_compras') telaCompras(); };
   if($('#voCanc')) $('#voCanc').onclick = async () => { if(!await confirmaDuplo('Cancelar OC', `Cancelar a OC ${O.numero}?`, 'Cancelar OC')) return; try{ await exec(sb.from('compras_ordens').update({ situacao:'cancelada' }).eq('id', id), 'OC cancelada.'); fecharPainel(); if(ST.aba === 'cp_compras') telaCompras(); }catch(e){} };
   $('#voImp').onclick = () => imprimir(`Ordem de compra nº ${O.numero} · ${O.empresa}`, `<p>Fornecedor: <b>${esc(O.fornecedor || '')}</b><br>Previsão de entrega: ${O.previsao_entrega ? dataBR(O.previsao_entrega) : '—'} · Condição: ${esc(O.condicao || '—')}${O.pedido_numero ? '<br>Referência: pedido ' + esc(O.pedido_numero) : ''}</p>
@@ -10339,6 +10350,7 @@ async function telaPrecosCompra(){
   const topo = `<div class="chips" id="pcAbas" style="margin:4px 0 10px">${abas.map(([k, t]) => `<span class="chip${vis === k ? ' on' : ''}" data-pv="${k}">${t}</span>`).join('')}</div>`;
   const liga = () => document.querySelectorAll('[data-pv]').forEach(c => c.onclick = () => { ST.pcVis = c.dataset.pv; telaPrecosCompra(); });
   if(vis === 'lista') return telaPrecosCompraLista(topo, liga);
+  if(vis === 'forn' && typeof telaPrecosForn === 'function') return telaPrecosForn(topo, liga);   // 25/11: condições por fornecedor e linha (56p)
   const [t, pr] = await Promise.all([tudo(() => sb.from('compras_precos_tabela').select('*').order('data', { ascending:false })), tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,unidade'))]);
   if(t.error){ $('#conteudo').innerHTML = `<div class="card">${topo}<p class="vazio">Falta rodar o script 73 (tabela de preços por fornecedor).</p></div>`; return liga(); }
   const pm = Object.fromEntries((pr.data || []).map(p => [p.id, p])), rows = t.data || [];
@@ -10356,7 +10368,7 @@ async function telaPrecosCompra(){
   if(vis === 'forn'){
     if(!ST.pcForn || !forns[ST.pcForn]) ST.pcForn = (lf.slice().sort((a, b) => b.ult.localeCompare(a.ult))[0] || {}).k;
     const f = forns[ST.pcForn], l = rows.filter(x => x.forn_chave === ST.pcForn && (!busca || norm(pTxt(x) + ' ' + (x.descricao || '') + ' ' + (x.codigo_fornecedor || '')).includes(busca))).sort((a, b) => pTxt(a).localeCompare(pTxt(b), 'pt'));
-    $('#conteudo').innerHTML = `<div class="card"><h2>Tabelas de preços <span class="muted" style="font-weight:400">· tabela de cada fornecedor</span></h2>${topo}
+    $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de compra <span class="muted" style="font-weight:400">· tabela de cada fornecedor</span></h2>${topo}
       <div class="barra"><select id="pcForn" style="max-width:100%;flex:1 1 280px">${lf.map(x => `<option value="${esc(x.k)}"${x.k === ST.pcForn ? ' selected' : ''}>${esc(x.nome)} · ${x.n} ${x.n === 1 ? 'item' : 'itens'}${x.id ? '' : ' (sem ligação no cadastro)'}</option>`).join('')}</select>
         <input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}" style="flex:1 1 180px"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
       ${f ? `<p class="muted" style="font-size:12px">${lf.length} fornecedores · <b>${esc(f.nome)}</b>: ${f.n} produtos, última compra ${dataBR(f.ult.slice(0, 10))}. Preço = último preço unitário (nota do CIGAM ou tabela colada); ▲▼ = mudança sobre o preço anterior. Toque na linha para ver o histórico.</p>` : ''}
@@ -10370,7 +10382,7 @@ async function telaPrecosCompra(){
   } else {
     const grupos = {}; rows.forEach(x => { const k = x.produto_id || ('d:' + x.descricao); (grupos[k] || (grupos[k] = [])).push(x); });
     const lg = Object.values(grupos).filter(g => busca ? norm(pTxt(g[0])).includes(busca) : g.length > 1).sort((a, b) => pTxt(a[0]).localeCompare(pTxt(b[0]), 'pt'));
-    $('#conteudo').innerHTML = `<div class="card"><h2>Tabelas de preços <span class="muted" style="font-weight:400">· comparar fornecedores do mesmo produto</span></h2>${topo}
+    $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de compra <span class="muted" style="font-weight:400">· comparar fornecedores do mesmo produto</span></h2>${topo}
       <div class="barra"><input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
       <p class="muted" style="font-size:12px">${busca ? lg.length + ' produto(s) achados.' : lg.length + ' produtos comprados de mais de um fornecedor.'} Em cada produto, o último preço de cada fornecedor, do mais barato para o mais caro. Preço antigo pode não valer mais: veja a data.</p>
       ${lg.slice(0, 120).map(g => { g.sort((a, b) => Number(a.preco) - Number(b.preco)); return `<div class="pcCmp" style="border:1px solid var(--borda);border-radius:8px;padding:8px 10px;margin:8px 0"><div style="margin-bottom:4px">${pNome(g[0])}${pm[g[0].produto_id] ? ` <span class="muted" style="font-size:12px">· venda hoje ${R$(pm[g[0].produto_id].preco)}</span>` : ''}</div>
@@ -10402,7 +10414,7 @@ async function telaPrecosCompraLista(topo, liga){
   const pm = Object.fromEntries(prods.map(p => [p.id, p]));
   const l = (r.data || []).filter(x => !ST.busca || norm([x.descricao, x.fornecedor_nome, x.codigo_fornecedor, pm[x.produto_id]?.codigo, pm[x.produto_id]?.descricao].join(' ')).includes(norm(ST.busca)));
   const custo = x => Number(x.preco) * (1 + Number(x.ipi) / 100) * (1 + Number(x.frete) / 100);
-  $('#conteudo').innerHTML = `<div class="card"><h2>Tabelas de preços <span class="muted" style="font-weight:400">· tabelas dos fornecedores → custo → preço de venda</span></h2>${topo}
+  $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de compra <span class="muted" style="font-weight:400">· tabelas dos fornecedores → custo → preço de venda</span></h2>${topo}
     <div class="barra"><input type="search" id="busca" placeholder="Produto, fornecedor ou código…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
       <button class="btn" id="pcImp">Colar tabela do fornecedor</button><button class="btn" id="pcMarg">Aplicar margem nos marcados</button></div>
     <p class="muted" style="font-size:12px">Custo = preço + IPI + frete. O ICMS (4% importado, 12% nacional) fica registrado para o caso de a empresa voltar ao sublimite — no Simples não gera crédito.</p>
@@ -10449,6 +10461,145 @@ async function avisosCompras(){
 
 Object.assign(TELAS, { cp_compras: telaCompras, cp_precos: telaPrecosCompra });
 
+/* ============ Tabelas de preços de COMPRA e de VENDA (script 88, 25/11 — pedido do Júlio) ============
+   Compra (cp_precos · "Por fornecedor"): em cada fornecedor, as condições (reajuste, IPI, outros impostos, taxa financeira, frete),
+   gerais e por LINHA (subcategoria, para reajustes diferentes). Custo final = preço de tabela + tudo isso.
+   Venda (pv_precos): margem por fornecedor / linha → preço de venda; "Aplicar" grava custo, margem e preço no produto.
+   Dados: compras_forn_linhas, compras_forn_linha_itens, visão compras_precos_calc, função precos_venda_aplicar. */
+IC.pv_precos = '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/><path d="M12 12l4 4"/>';
+MENU.find(g => g.area === 'Orçamentos').itens.push(['pv_precos', '💲', 'Tabela de preços de venda', 'DA']);
+const PCX = { prod: null };
+const pct = v => (Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+async function pcBase(){
+  const t = await tudo(() => sb.from('compras_precos_tabela').select('forn_chave,fornecedor_id,fornecedor_nome,data').order('forn_chave'));
+  if(t.error) return { erro: 'Falta rodar o script 73 (tabela de preços por fornecedor).' };
+  if(!PCX.prod){ const pr = await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,custo,margem,unidade').order('id')); PCX.prod = Object.fromEntries((pr.data || []).map(p => [p.id, p])); }
+  const ids = [...new Set(t.data.map(x => x.fornecedor_id).filter(Boolean))], pes = {};
+  ids.forEach(i => { const p = pessoa(i); if(p) pes[i] = p; });
+  const forns = {}; t.data.forEach(x => { const f = forns[x.forn_chave] || (forns[x.forn_chave] = { k: x.forn_chave, id: x.fornecedor_id, nome: (pes[x.fornecedor_id] && (pes[x.fornecedor_id].apelido || pes[x.fornecedor_id].nome)) || x.fornecedor_nome || '(sem fornecedor)', n: 0, ult: '' });
+    f.n++; if(String(x.data || '') > f.ult) f.ult = String(x.data || ''); });
+  const lf = Object.values(forns).sort((a, b) => a.nome.localeCompare(b.nome, 'pt'));
+  if(!ST.pcForn || !forns[ST.pcForn]) ST.pcForn = (lf.slice().sort((a, b) => b.ult.localeCompare(a.ult))[0] || {}).k;
+  return { forns, lf, f: forns[ST.pcForn] };
+}
+async function pcDoForn(k){
+  const [c, l] = await Promise.all([tudo(() => sb.from('compras_precos_calc').select('*').eq('forn_chave', k).order('item_chave')), sb.from('compras_forn_linhas').select('*').eq('forn_chave', k).order('nome')]);
+  if(c.error || l.error) return { erro: 'Falta rodar o script <b>88_compras_vendas_precos.sql</b> no Supabase.' };
+  return { rows: c.data || [], linhas: (l.data || []).filter(x => x.nome), geral: (l.data || []).find(x => !x.nome) || null };
+}
+const pcSel = (B) => `<select id="pcForn" style="max-width:100%;flex:1 1 280px">${B.lf.map(x => `<option value="${esc(x.k)}"${x.k === ST.pcForn ? ' selected' : ''}>${esc(x.nome)} · ${x.n} ${x.n === 1 ? 'item' : 'itens'}</option>`).join('')}</select>
+  <input type="search" id="busca" placeholder="Produto ou código…" value="${esc(ST.busca)}" style="flex:1 1 180px"><label style="display:none"><input type="checkbox" id="vInat"></label>`;
+const pcNome = x => { const p = PCX.prod[x.produto_id]; return p ? `<b>${esc(p.codigo)}</b> ${esc(p.descricao)}` : `<span style="color:#b45309">sem produto ligado</span> · ${esc(x.descricao || '')}`; };
+const pcTxt = x => { const p = PCX.prod[x.produto_id]; return p ? p.codigo + ' ' + p.descricao : (x.descricao || ''); };
+const pcFiltra = (rows) => { const b = norm(ST.busca); return rows.filter(x => !b || norm(pcTxt(x) + ' ' + (x.descricao || '') + ' ' + (x.codigo_fornecedor || '') + ' ' + (x.linha || '')).includes(b)).sort((a, b2) => pcTxt(a).localeCompare(pcTxt(b2), 'pt')); };
+/* grava um campo da condição geral ('' ) ou de uma linha; cria a geral na primeira vez */
+async function pcGrava(k, linhaId, campo, valor){
+  const v = valor === '' && campo === 'margem' ? null : (num(valor) || 0);
+  const r = linhaId ? await sb.from('compras_forn_linhas').update({ [campo]: v, atualizado_em: new Date().toISOString() }).eq('id', linhaId)
+    : await sb.from('compras_forn_linhas').upsert({ forn_chave: k, nome: '', [campo]: v, atualizado_em: new Date().toISOString() }, { onConflict: 'forn_chave,nome' });
+  if(r.error){ aviso('Erro', esc(erroBanco(r.error))); return false; } return true;
+}
+
+/* ---------- COMPRA: condições e preços do fornecedor ---------- */
+async function telaPrecosForn(topo, liga){
+  const seq = ST._pcSeq = (ST._pcSeq || 0) + 1;
+  const B = await pcBase(); if(seq !== ST._pcSeq) return;
+  if(B.erro){ $('#conteudo').innerHTML = `<div class="card">${topo}<p class="vazio">${B.erro}</p></div>`; return liga(); }
+  const D = B.f ? await pcDoForn(B.f.k) : { rows: [], linhas: [], geral: null }; if(seq !== ST._pcSeq) return;
+  if(D.erro){ $('#conteudo').innerHTML = `<div class="card">${topo}<p class="vazio">${D.erro}</p></div>`; return liga(); }
+  const edita = nivelTela('cp_precos') >= 3, k = B.f && B.f.k, l = pcFiltra(D.rows), G = D.geral || {};
+  const CAMPOS = [['reajuste', 'Reajuste %'], ['ipi', 'IPI %'], ['impostos', 'Outros impostos %'], ['taxa_financeira', 'Taxa financeira %'], ['frete', 'Frete %']];
+  const linhaTr = (L, geral) => `<tr data-ln="${geral ? '' : L.id}"><td>${geral ? '<b>Geral</b> <span class="muted" style="font-size:11px">todo o fornecedor</span>' : `<b>${esc(L.nome)}</b>`}</td>
+      ${CAMPOS.map(([c]) => `<td><input data-cd="${c}" inputmode="decimal" value="${Number(L[c]) ? pct(L[c]) : ''}" placeholder="0" style="width:84px;text-align:right" ${edita ? '' : 'disabled'}></td>`).join('')}
+      <td style="text-align:right">${geral ? D.rows.filter(x => !x.linha_id).length : D.rows.filter(x => x.linha_id === L.id).length}</td>
+      <td style="white-space:nowrap">${!geral && edita ? `<button class="btn peq" data-lnren="${L.id}" title="Mudar o nome">✎</button> <button class="btn peq" data-lndel="${L.id}" title="Apagar a linha (os itens voltam para a geral)">✕</button>` : ''}</td></tr>`;
+  $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de compra <span class="muted" style="font-weight:400">· preços, impostos, taxas e frete de cada fornecedor</span></h2>${topo}
+      <div class="barra">${pcSel(B)}</div>
+      ${B.f ? `<h3 style="font-size:14px;margin:6px 0 4px">Condições de compra · ${esc(B.f.nome)}</h3>
+      <div style="overflow-x:auto"><table class="reg" id="pcCond"><thead><tr><th>Linha do fornecedor</th>${CAMPOS.map(c => `<th>${c[1]}</th>`).join('')}<th style="text-align:right">Itens</th><th></th></tr></thead><tbody>
+        ${linhaTr(G, true)}${D.linhas.map(L => linhaTr(L, false)).join('')}</tbody></table></div>
+      <div class="barra" style="margin-top:8px">${edita ? '<button class="btn" id="pcNovaLn">+ Nova linha (subcategoria)</button>' : ''}
+        ${edita && D.linhas.length ? `<span style="flex:1"></span><span class="muted" style="font-size:12px">Pôr os ${l.length} itens listados abaixo na linha</span><select id="pcLote" style="max-width:200px"><option value="">Geral (sem linha)</option>${D.linhas.map(L => `<option value="${L.id}">${esc(L.nome)}</option>`).join('')}</select><button class="btn" id="pcLoteOk">Aplicar</button>` : ''}</div>
+      <p class="muted" style="font-size:12px">Custo final = preço de tabela + reajuste + IPI + outros impostos + frete + taxa financeira (um sobre o outro). O item que está numa linha usa as condições da linha; os outros usam a Geral.
+        Para pôr vários itens numa linha de uma vez: busque (ex.: "CM") e use "Pôr os itens listados na linha". A margem de venda fica em Vendas → Tabela de preços de venda.</p>` : ''}
+      <div style="overflow-x:auto"><table class="reg" id="pcTab"><thead><tr><th>Produto (ERP)</th><th>Como o fornecedor chama</th><th>Linha</th><th style="text-align:right">Preço de tabela</th><th>Data</th><th style="text-align:right">Custo final</th><th style="text-align:right">Venda hoje</th></tr></thead><tbody>
+      ${l.slice(0, 600).map(x => `<tr><td>${pcNome(x)}</td><td style="font-size:12px">${esc(x.descricao || '')}${x.codigo_fornecedor ? ` <span class="muted">· ${esc(x.codigo_fornecedor)}</span>` : ''}</td>
+        <td>${edita && D.linhas.length ? `<select data-itl="${esc(x.item_chave)}" style="max-width:150px;font-size:12px"><option value="">Geral</option>${D.linhas.map(L => `<option value="${L.id}"${x.linha_id === L.id ? ' selected' : ''}>${esc(L.nome)}</option>`).join('')}</select>` : esc(x.linha || 'Geral')}</td>
+        <td style="text-align:right;white-space:nowrap"><a href="#" data-ph="${esc(x.ultimo_id)}" title="Ver o histórico de preços"><b>${R$(x.preco)}</b></a></td><td>${dataBR(String(x.data || '').slice(0, 10))}</td>
+        <td style="text-align:right;white-space:nowrap"><b>${R$(x.custo_final)}</b>${Number(x.custo_final) !== Number(x.preco) && Number(x.preco) ? `<div class="muted" style="font-size:11px">+${pct((x.custo_final / x.preco - 1) * 100)}%</div>` : ''}</td>
+        <td style="text-align:right">${PCX.prod[x.produto_id] ? R$(PCX.prod[x.produto_id].preco) : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum preço.</td></tr>'}</tbody></table></div>
+      ${l.length > 600 ? `<p class="muted">Mostrando 600 de ${l.length}. Use a busca.</p>` : ''}</div>`;
+  ligaBarra(null); liga();
+  $('#pcForn').onchange = e => { ST.pcForn = e.target.value; ST.busca = ''; telaPrecosCompra(); };
+  const de = () => telaPrecosCompra();
+  document.querySelectorAll('#pcCond [data-cd]').forEach(i => i.onchange = async () => { if(await pcGrava(k, i.closest('tr').dataset.ln, i.dataset.cd, i.value)){ toast('Condição gravada.'); de(); } });
+  if($('#pcNovaLn')) $('#pcNovaLn').onclick = async () => { const n = await pedirTexto('Nova linha', `Nome da linha (subcategoria) de ${B.f.nome} — ex.: "Linha CM", "Pressurizadores", "Peças":`, ''); if(!n || !n.trim()) return;
+    const r = await sb.from('compras_forn_linhas').insert({ forn_chave: k, nome: n.trim(), reajuste: G.reajuste || 0, ipi: G.ipi || 0, impostos: G.impostos || 0, taxa_financeira: G.taxa_financeira || 0, frete: G.frete || 0 });
+    if(r.error) return aviso('Erro', /duplicate|unique/i.test(r.error.message) ? 'Já existe uma linha com esse nome neste fornecedor.' : esc(erroBanco(r.error))); toast('Linha criada com as condições da Geral. Ajuste o que for diferente.'); de(); };
+  document.querySelectorAll('[data-lnren]').forEach(b => b.onclick = async () => { const L = D.linhas.find(x => x.id === b.dataset.lnren), n = await pedirTexto('Nome da linha', 'Novo nome:', L.nome); if(!n || !n.trim() || n.trim() === L.nome) return;
+    const r = await sb.from('compras_forn_linhas').update({ nome: n.trim() }).eq('id', L.id); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); de(); });
+  document.querySelectorAll('[data-lndel]').forEach(b => b.onclick = async () => { const L = D.linhas.find(x => x.id === b.dataset.lndel);
+    if(!await modal('Apagar a linha?', `A linha <b>${esc(L.nome)}</b> sai e os itens dela voltam a usar a condição Geral. Nenhum preço é apagado.`, [['Cancelar', false], ['Apagar', true, 'pri']])) return;
+    const r = await sb.from('compras_forn_linhas').delete().eq('id', L.id); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); de(); });
+  const poeLinha = async (chaves, linha) => { if(!chaves.length) return true;
+    for(let i = 0; i < chaves.length; i += 200){ const lote = chaves.slice(i, i + 200);
+      const r = linha ? await sb.from('compras_forn_linha_itens').upsert(lote.map(c => ({ forn_chave: k, item_chave: c, linha_id: linha })), { onConflict: 'forn_chave,item_chave' })
+        : await sb.from('compras_forn_linha_itens').delete().eq('forn_chave', k).in('item_chave', lote);
+      if(r.error){ aviso('Erro', esc(erroBanco(r.error))); return false; } } return true; };
+  document.querySelectorAll('#pcTab [data-itl]').forEach(s => s.onchange = async () => { if(await poeLinha([s.dataset.itl], s.value)) de(); });
+  if($('#pcLoteOk')) $('#pcLoteOk').onclick = async () => { const linha = $('#pcLote').value, nome = linha ? D.linhas.find(x => x.id === linha).nome : 'Geral';
+    if(!await modal('Pôr na linha', `Pôr os <b>${l.length}</b> itens listados na linha <b>${esc(nome)}</b>?`, [['Cancelar', false], ['Aplicar', true, 'pri']])) return;
+    if(await poeLinha(l.map(x => x.item_chave), linha)){ toast(`${l.length} item(ns) na linha ${nome}.`); de(); } };
+  const porId = Object.fromEntries(D.rows.map(x => [x.ultimo_id, x]));
+  document.querySelectorAll('#pcTab [data-ph]').forEach(a => a.onclick = e => { e.preventDefault(); historicoPrecoCompra(porId[a.dataset.ph], PCX.prod, () => B.f.nome); });
+  expRegistra(() => [expCols('Tabela de preços de compra · ' + (B.f ? B.f.nome : ''), [['Código ERP', x => PCX.prod[x.produto_id]?.codigo], ['Produto (ERP)', x => PCX.prod[x.produto_id]?.descricao || ''], ['Como o fornecedor chama', x => x.descricao], ['Linha', x => x.linha || 'Geral'],
+    ['Preço de tabela', x => R$(x.preco)], ['Data', x => dataBR(String(x.data || '').slice(0, 10))], ['Reajuste %', x => pct(x.c_reajuste)], ['IPI %', x => pct(x.c_ipi)], ['Outros impostos %', x => pct(x.c_impostos)], ['Taxa financeira %', x => pct(x.c_taxa)], ['Frete %', x => pct(x.c_frete)],
+    ['Custo final', x => R$(x.custo_final)], ['Venda hoje', x => PCX.prod[x.produto_id] ? R$(PCX.prod[x.produto_id].preco) : '']], l)]);
+}
+
+/* ---------- VENDA: margem por fornecedor / linha → preço de venda ---------- */
+async function telaPrecosVenda(){
+  carregandoTela();
+  const seq = ST._pvSeq = (ST._pvSeq || 0) + 1;
+  const B = await pcBase(); if(seq !== ST._pvSeq) return;
+  if(B.erro) return $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de venda</h2><p class="vazio">${B.erro}</p></div>`;
+  const D = B.f ? await pcDoForn(B.f.k) : { rows: [], linhas: [], geral: null }; if(seq !== ST._pvSeq) return;
+  if(D.erro) return $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de venda</h2><p class="vazio">${D.erro}</p></div>`;
+  const edita = nivelTela('pv_precos') >= 3, k = B.f && B.f.k, l = pcFiltra(D.rows), G = D.geral || {};
+  const hoje = x => PCX.prod[x.produto_id] ? Number(PCX.prod[x.produto_id].preco) || 0 : null;
+  const dif = x => { const h = hoje(x); return h && x.venda_calc ? (x.venda_calc / h - 1) * 100 : null; };
+  const mudam = rows => rows.filter(x => x.produto_id && x.venda_calc && Math.abs(Number(x.venda_calc) - (hoje(x) || 0)) >= 0.01).length;
+  const mTr = (L, geral) => { const rs = D.rows.filter(x => geral ? !x.linha_id : x.linha_id === L.id), efet = geral ? G.margem : (L.margem != null ? L.margem : G.margem);
+    return `<tr data-ln="${geral ? '' : L.id}"><td>${geral ? '<b>Geral</b> <span class="muted" style="font-size:11px">todo o fornecedor</span>' : `<b>${esc(L.nome)}</b>`}</td>
+      <td><input data-mg inputmode="decimal" value="${(geral ? G.margem : L.margem) != null ? pct(geral ? G.margem : L.margem) : ''}" placeholder="${geral ? 'ex.: 35' : (G.margem != null ? 'usa a geral (' + pct(G.margem) + ')' : 'usa a geral')}" style="width:150px;text-align:right" ${edita ? '' : 'disabled'}> %</td>
+      <td style="text-align:right">${rs.length}</td><td style="text-align:right">${efet != null ? mudam(rs) : '—'}</td>
+      <td>${edita && efet != null && mudam(rs) ? `<button class="btn peq pri" data-apl="${geral ? 'geral' : L.id}">Aplicar nos produtos</button>` : ''}</td></tr>`; };
+  $('#conteudo').innerHTML = `<div class="card"><h2>Tabela de preços de venda <span class="muted" style="font-weight:400">· margem de cada fornecedor → preço de venda</span></h2>
+      <div class="barra">${pcSel(B)}</div>
+      ${B.f ? `<h3 style="font-size:14px;margin:6px 0 4px">Margem de venda · ${esc(B.f.nome)}</h3>
+      <div style="overflow-x:auto"><table class="reg" id="pvMarg"><thead><tr><th>Linha do fornecedor</th><th>Margem sobre o custo</th><th style="text-align:right">Itens</th><th style="text-align:right">Preços que mudam</th><th></th></tr></thead><tbody>
+        ${mTr(G, true)}${D.linhas.map(L => mTr(L, false)).join('')}</tbody></table></div>
+      <p class="muted" style="font-size:12px">Preço de venda = custo final × (1 + margem). O custo final vem de Compras → Tabela de preços de compra (preço do fornecedor + impostos, taxa financeira e frete); as linhas são criadas lá.
+        Nada muda nos produtos até tocar em "Aplicar nos produtos" — aí o produto recebe custo, margem e preço de venda novos (valem para os orçamentos feitos depois).</p>` : ''}
+      <div style="overflow-x:auto"><table class="reg" id="pvTab"><thead><tr><th>Produto (ERP)</th><th>Linha</th><th style="text-align:right">Custo final</th><th style="text-align:right">Margem</th><th style="text-align:right">Venda calculada</th><th style="text-align:right">Venda hoje</th><th style="text-align:right">Diferença</th></tr></thead><tbody>
+      ${l.slice(0, 600).map(x => { const d = dif(x); return `<tr><td>${pcNome(x)}</td><td style="font-size:12px">${esc(x.linha || 'Geral')}</td><td style="text-align:right;white-space:nowrap">${R$(x.custo_final)}</td>
+        <td style="text-align:right">${x.margem != null ? pct(x.margem) + '%' : '<span class="muted">—</span>'}</td><td style="text-align:right;white-space:nowrap"><b>${x.venda_calc ? R$(x.venda_calc) : '—'}</b></td>
+        <td style="text-align:right;white-space:nowrap">${hoje(x) != null ? R$(hoje(x)) : '<span class="muted" style="font-size:11px">sem produto</span>'}</td>
+        <td style="text-align:right;white-space:nowrap">${d == null || Math.abs(d) < 0.05 ? '' : `<span style="color:${d > 0 ? '#1e8449' : '#c0392b'}">${d > 0 ? '▲' : '▼'} ${pct(Math.abs(d))}%</span>`}</td></tr>`; }).join('') || '<tr><td colspan="7" class="vazio">Nenhum preço deste fornecedor.</td></tr>'}</tbody></table></div>
+      ${l.length > 600 ? `<p class="muted">Mostrando 600 de ${l.length}. Use a busca.</p>` : ''}</div>`;
+  ligaBarra(null);
+  $('#pcForn').onchange = e => { ST.pcForn = e.target.value; ST.busca = ''; telaPrecosVenda(); };
+  document.querySelectorAll('#pvMarg [data-mg]').forEach(i => i.onchange = async () => { if(await pcGrava(k, i.closest('tr').dataset.ln, 'margem', i.value.trim())){ toast('Margem gravada.'); telaPrecosVenda(); } });
+  document.querySelectorAll('[data-apl]').forEach(b => b.onclick = async () => { const geral = b.dataset.apl === 'geral', L = geral ? null : D.linhas.find(x => x.id === b.dataset.apl);
+    const rs = D.rows.filter(x => geral ? !x.linha_id : x.linha_id === L.id), n = mudam(rs);
+    if(!await modal('Aplicar preço de venda', `<b>${n}</b> produto(s) de <b>${esc(B.f.nome)}</b>${geral ? ' (sem linha)' : ' · linha ' + esc(L.nome)} vão receber o preço de venda calculado. Os orçamentos já feitos não mudam.`, [['Cancelar', false], ['Aplicar', true, 'pri']])) return;
+    const r = await sb.rpc('precos_venda_aplicar', { p_forn: k, p_linha: geral ? null : L.id, p_so_sem_linha: geral });
+    if(r.error) return aviso('Erro', esc(erroBanco(r.error))); PCX.prod = null; toast(`${r.data} produto(s) com preço de venda atualizado.`); telaPrecosVenda(); });
+  expRegistra(() => [expCols('Tabela de preços de venda · ' + (B.f ? B.f.nome : ''), [['Código ERP', x => PCX.prod[x.produto_id]?.codigo], ['Produto (ERP)', x => PCX.prod[x.produto_id]?.descricao || x.descricao], ['Linha', x => x.linha || 'Geral'],
+    ['Custo final', x => R$(x.custo_final)], ['Margem %', x => x.margem != null ? pct(x.margem) : ''], ['Venda calculada', x => x.venda_calc ? R$(x.venda_calc) : ''], ['Venda hoje', x => hoje(x) != null ? R$(hoje(x)) : '']], l)]);
+}
+Object.assign(TELAS, { pv_precos: telaPrecosVenda });
+
 /* ============ Status das ordens de compra (script 77, 19/11 — pedido do Júlio) ============
    Um quadro com as OCs separadas pela situação: em preparação, enviadas ao fornecedor (no prazo / atrasadas),
    recebendo (parcial), recebidas e canceladas. Tocar abre a OC (verOC). Mesmas regras de acesso de Ordens de compra. */
@@ -10489,6 +10640,72 @@ async function telaStatusOC(){
     ['Pedido', o => o.pedido_numero], ['Obra', o => o.obra], ['Previsão', o => o.previsao_entrega ? dataBR(o.previsao_entrega) : ''], ['Total', o => Number(o.total || 0)]], todas)]);
 }
 Object.assign(TELAS, { cp_status: telaStatusOC });
+
+/* ============ Controle de ordens de compra (script 88, 25/11 — pedido do Júlio) ============
+   Todas as OCs em aberto: quando foi pedido, de qual fornecedor, para quem (cliente específico ou reposição de estoque)
+   e se já chegou. Consulta por cliente ou por fornecedor. Tocar abre a OC (verOC), onde se marca "Esta compra é para". */
+IC.cp_controle = '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>';
+MENU.find(g => g.area === 'Suprimentos').itens.push(['cp_controle', '📋', 'Controle de ordens de compra', 'DAS']);
+ST.coc = { sit: 'abertas', para: 'todos', per: 'ano', cli: '', forn: '' };
+async function telaControleOC(){
+  carregandoTela();
+  const seq = ST._cocSeq = (ST._cocSeq || 0) + 1;
+  const r = await tudo(() => sb.from('compras_resumo').select('*').order('numero', { ascending: false }));
+  if(seq !== ST._cocSeq) return;
+  if(r.error) return $('#conteudo').innerHTML = r.error.message && /finalidade|cliente/.test(r.error.message) ? '<div class="card"><p class="vazio">Falta rodar o script 88.</p></div>' : semScript23();
+  if((r.data || []).length && !('finalidade' in r.data[0])) return $('#conteudo').innerHTML = '<div class="card"><h2>Controle de ordens de compra</h2><p class="vazio">Falta rodar o script <b>88_compras_vendas_precos.sql</b> no Supabase.</p></div>';
+  const f = ST.coc, hoje = hojeISO(), ano = hoje.slice(0, 4);
+  const pedidoEm = o => String(o.enviada_em || o.criado_em || '').slice(0, 10);
+  const dias = d => d ? Math.round((new Date(hoje) - new Date(d)) / 864e5) : null;
+  const aberta = o => ['rascunho', 'enviada', 'parcial'].includes(o.situacao);
+  const SIT = { abertas: aberta, atrasadas: o => o.atrasada, parcial: o => o.situacao === 'parcial', recebidas: o => o.situacao === 'recebida', todas: o => o.situacao !== 'cancelada' };
+  const PARA = { todos: () => true, cliente: o => o.finalidade === 'cliente', estoque: o => o.finalidade === 'estoque', indef: o => !o.finalidade };
+  const PER = { ano: o => pedidoEm(o) >= ano + '-01-01', m12: o => pedidoEm(o) >= somaDias(hoje, -365), tudo: () => true };
+  const todas = r.data || [], noPer = todas.filter(PER[f.per] || PER.ano);
+  const q = norm(ST.busca || ''), qc = norm(f.cli), qf = norm(f.forn);
+  const l = noPer.filter(SIT[f.sit] || SIT.abertas).filter(PARA[f.para] || PARA.todos)
+    .filter(o => (!q || norm([o.numero, o.fornecedor, o.cliente, o.destino, o.pedido_numero, o.obra, o.notas].join(' ')).includes(q)) && (!qc || norm([o.cliente, o.obra].join(' ')).includes(qc)) && (!qf || norm(o.fornecedor || '').includes(qf)))
+    .sort((a, b) => pedidoEm(b).localeCompare(pedidoEm(a)) || b.numero - a.numero);
+  const ab = noPer.filter(aberta), soma = x => x.reduce((s, o) => s + Number(o.total || 0), 0), velhas = todas.filter(o => aberta(o) && !(PER[f.per] || PER.ano)(o)).length;
+  const para = o => o.finalidade === 'estoque' ? '<span class="tag" style="background:#eef2ff;color:#3730a3">📦 Estoque</span>'
+    : o.cliente ? `<span class="tag" style="background:#e6f4ea;color:#17703a">👤 Cliente</span> ${esc(o.cliente)}${o.pedido_numero ? ` <span class="muted" style="font-size:11px">· pedido ${esc(o.pedido_numero)}</span>` : ''}`
+    : o.finalidade === 'cliente' ? '<span class="tag" style="background:#e6f4ea;color:#17703a">👤 Cliente</span> <span class="muted">sem nome</span>' : '<span class="muted">a definir</span>';
+  const chegou = o => o.situacao === 'recebida' ? `<span style="color:var(--verde);font-weight:600">✓ chegou${o.recebida_em ? ' em ' + dataBR(String(o.recebida_em).slice(0, 10)) : ''}</span>`
+    : o.situacao === 'parcial' ? `<span style="color:#b45309;font-weight:600">em parte</span>${Number(o.qtd) ? ` <span class="muted" style="font-size:11px">${Number(o.qtd_recebida || 0).toLocaleString('pt-BR')} de ${Number(o.qtd).toLocaleString('pt-BR')}</span>` : ''}`
+    : o.situacao === 'rascunho' ? '<span class="muted">ainda não enviada</span>'
+    : o.atrasada ? `<span style="color:var(--verm);font-weight:600">não chegou · atrasada ${dias(o.previsao_entrega)} dia(s)</span>` : '<span class="muted">aguardando</span>';
+  const chip = (grupo, atual, ops) => ops.map(([k, t]) => `<button class="chip ${atual === k ? 'on' : ''}" data-coc="${grupo}:${k}">${t}</button>`).join('');
+  const nomes = c => [...new Set(noPer.map(c).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt')).slice(0, 800).map(n => `<option value="${esc(n)}">`).join('');
+  $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px">
+      <div class="kpi" data-coc="sit:abertas"><span class="muted">OCs em aberto</span><b>${ab.length}</b><span class="muted" style="font-size:12px">${R$(soma(ab))}</span></div>
+      <div class="kpi v" data-coc="sit:atrasadas"><span class="muted">Atrasadas</span><b style="color:var(--verm)">${noPer.filter(o => o.atrasada).length}</b></div>
+      <div class="kpi" data-coc="para:cliente"><span class="muted">Em aberto para clientes</span><b>${ab.filter(PARA.cliente).length}</b></div>
+      <div class="kpi" data-coc="para:estoque"><span class="muted">Em aberto para o estoque</span><b>${ab.filter(PARA.estoque).length}</b>${ab.filter(PARA.indef).length ? `<span class="muted" style="font-size:12px">+ ${ab.filter(PARA.indef).length} a definir</span>` : ''}</div></div>
+    <div class="card"><h2>Controle de ordens de compra <span class="muted" style="font-weight:400">· o que foi pedido, para quem e se já chegou</span></h2>
+      <div class="barra"><input type="search" id="busca" placeholder="Buscar (nº da OC, pedido, nota…)" value="${esc(ST.busca)}" style="flex:1 1 180px"><label style="display:none"><input type="checkbox" id="vInat"></label>
+        <input id="cocCli" list="cocCliL" placeholder="Cliente…" value="${esc(f.cli)}" style="flex:1 1 180px"><datalist id="cocCliL">${nomes(o => o.cliente)}</datalist>
+        <input id="cocForn" list="cocFornL" placeholder="Fornecedor…" value="${esc(f.forn)}" style="flex:1 1 180px"><datalist id="cocFornL">${nomes(o => o.fornecedor)}</datalist></div>
+      <div class="chips" style="margin:-4px 0 6px">${chip('sit', f.sit, [['abertas', 'Em aberto'], ['atrasadas', 'Atrasadas'], ['parcial', 'Chegou em parte'], ['recebidas', 'Recebidas'], ['todas', 'Todas']])}
+        <span style="width:10px"></span>${chip('para', f.para, [['todos', 'Para todos'], ['cliente', '👤 Cliente'], ['estoque', '📦 Estoque'], ['indef', 'A definir']])}
+        <span style="width:10px"></span>${chip('per', f.per, [['ano', 'Pedidas em ' + ano], ['m12', 'Últimos 12 meses'], ['tudo', 'Desde sempre']])}</div>
+      ${velhas && f.sit === 'abertas' ? `<p class="muted" style="font-size:12px;margin:0 0 6px">Há mais ${velhas} OC(s) antigas que o CIGAM ainda mostra em aberto — veja em "Desde sempre".</p>` : ''}
+      <div style="overflow-x:auto"><table class="reg" id="cocTab"><thead><tr><th>OC</th><th>Pedido em</th><th>Fornecedor</th><th>Para quem</th><th>Previsão</th><th>Chegou?</th><th style="text-align:right">Total</th><th>Situação</th></tr></thead><tbody>
+      ${l.slice(0, 500).map(o => { const d = pedidoEm(o), n = dias(d); return `<tr data-oc="${o.id}" style="cursor:pointer"><td><b>${o.numero}</b> <span class="muted">${esc(o.empresa || '')}</span></td>
+        <td style="white-space:nowrap">${d ? dataBR(d) : '—'}${aberta(o) && n != null ? `<div class="muted" style="font-size:11px">há ${n} dia(s)</div>` : ''}</td><td>${esc(o.fornecedor || '—')}</td><td>${para(o)}</td>
+        <td style="white-space:nowrap;${o.atrasada ? 'color:var(--verm);font-weight:600' : ''}">${o.previsao_entrega ? dataBR(o.previsao_entrega) : '—'}</td><td>${chegou(o)}</td><td style="text-align:right;white-space:nowrap">${R$(o.total)}</td><td>${tagOC(o.situacao)}</td></tr>`; }).join('')
+        || '<tr><td colspan="8" class="vazio">Nenhuma ordem de compra com esses filtros.</td></tr>'}</tbody></table></div>
+      <p class="muted" style="font-size:12px">${l.length.toLocaleString('pt-BR')} OC(s) · ${R$(soma(l))}${l.length > 500 ? ' · mostrando as 500 mais novas' : ''}. Toque na OC para abrir e marcar se é de um cliente ou reposição de estoque.</p></div>`;
+  ligaBarra(null);
+  document.querySelectorAll('[data-coc]').forEach(b => b.onclick = () => { const [g, k] = b.dataset.coc.split(':'); f[g] = k; if(b.classList.contains('kpi')){ if(g === 'para') f.sit = 'abertas'; else f.para = 'todos'; } telaControleOC(); });
+  const campo = (id, k) => { const el = $(id); let t; el.oninput = () => { clearTimeout(t); t = setTimeout(() => { f[k] = el.value; ST._cocFoco = id; telaControleOC(); }, 450); }; };
+  campo('#cocCli', 'cli'); campo('#cocForn', 'forn');
+  if(ST._cocFoco && $(ST._cocFoco)){ const el = $(ST._cocFoco); el.focus(); try{ el.setSelectionRange(el.value.length, el.value.length); }catch(e){} ST._cocFoco = null; }
+  document.querySelectorAll('#cocTab [data-oc]').forEach(tr => tr.onclick = () => verOC(tr.dataset.oc));
+  expRegistra(() => [expCols('Controle de ordens de compra', [['OC', o => o.numero], ['Empresa', o => o.empresa], ['Pedido em', o => pedidoEm(o) ? dataBR(pedidoEm(o)) : ''], ['Fornecedor', o => o.fornecedor],
+    ['Para', o => o.finalidade === 'estoque' ? 'Estoque' : o.finalidade === 'cliente' ? 'Cliente' : 'A definir'], ['Cliente', o => o.cliente], ['Pedido', o => o.pedido_numero], ['Previsão', o => o.previsao_entrega ? dataBR(o.previsao_entrega) : ''],
+    ['Situação', o => SIT_OC[o.situacao] ? SIT_OC[o.situacao][0] : o.situacao], ['Recebida em', o => o.recebida_em ? dataBR(String(o.recebida_em).slice(0, 10)) : ''], ['Total', o => R$(o.total)]], l)]);
+}
+Object.assign(TELAS, { cp_controle: telaControleOC });
 
 /* =================== Compras: cotação, pedido interno de material e alçada (script 52) =================== */
 IC.cp_requisicoes = '<path d="M9 4h6l1 2h3v14H5V6h3z"/><path d="M9 11h6M9 15h4"/>';
@@ -12038,13 +12255,13 @@ async function acCopiarDe(u){
    Os grupos "Projetos" e "Serviços (apps)" (telas internas, escondidas pelos setores) ficam como estão. */
 window.MENU_GUARDADAS = {};
 (() => {
-  const ROTULO = { fn_pagar: 'A pagar e lançamentos', ped_cigam: 'Pedidos (CIGAM)', os_cigam: 'Ordens de serviço (CIGAM)', fs_notas_cigam: 'Notas fiscais (CIGAM)',
+  const ROTULO = { cp_precos: 'Tabela de preços de compra', fn_pagar: 'A pagar e lançamentos', ped_cigam: 'Pedidos (CIGAM)', os_cigam: 'Ordens de serviço (CIGAM)', fs_notas_cigam: 'Notas fiscais (CIGAM)',
     es_mov_cigam: 'Estoque e movimentos (CIGAM)', vinculos: 'Vínculos com os apps' };
   const GRUPOS = [
     ['', ['inicio', 'chat']],
     ['Cadastros', ['pessoas', 'produtos']],
-    ['Vendas', ['orc']],
-    ['Compras', ['cp_compras', 'cp_precos']],
+    ['Vendas', ['orc', 'pv_precos']],
+    ['Compras', ['cp_compras', 'cp_controle', 'cp_precos']],
     ['Financeiro', ['fn_receber', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fin_servicos', 'fin_projetos']],
     ['Fiscal', ['fn_notas', 'fn_recebidas', 'fn_contabil', 'adm_fiscal', 'adm_cert', 'adm_regras']],
     ['Relatórios', ['fn_painel', 'fn_gerencial', 'fn_cnpj']],
