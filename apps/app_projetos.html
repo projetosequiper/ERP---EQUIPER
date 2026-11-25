@@ -811,7 +811,7 @@
   .pjf-pc-d{font-size:11px; color:var(--ink-soft); margin-top:3px;}
   .pjf-st{display:inline-block; border-radius:999px; padding:2px 9px; font-weight:700; font-size:11.5px; border:1px solid var(--border); background:var(--sheet); color:var(--ink-soft); white-space:nowrap;}
   .pjf-st.a_cobrar{background:#FFF4D6; color:#8A6400; border-color:#E8C55A;}
-  .pjf-st.enviado{background:rgba(47,111,176,.12); color:#2F6FB0; border-color:rgba(47,111,176,.35);}
+  .pjf-st.enviado, .pjf-st.agendado{background:rgba(47,111,176,.12); color:#2F6FB0; border-color:rgba(47,111,176,.35);}
   .pjf-st.recebido{background:#E3F4EA; color:#1E6440; border-color:#3A9D6A;}
   .pjf-tot{display:flex; gap:6px 22px; flex-wrap:wrap; font-size:12px; color:var(--ink-soft); padding-top:8px; border-top:1px solid var(--border);}
   .pjf-tot b{font-size:13.5px; color:var(--ink); margin-left:3px; font-variant-numeric:tabular-nums;}
@@ -8379,13 +8379,17 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     var lista = state.financeiro;
     /* ERP (18/11): subabas. Concluído = totalmente quitado (falta zero, ou marcado "quitado manualmente"), igual à etiqueta "quitado" da lista */
     var finQuitado = function(r){ return !!r.quitadoManual || ((r.valorTotal||0) - recebidoDoCliente(r)) <= 0.01; };
-    var nConc = lista.filter(finQuitado).length, nAb = lista.length - nConc, sub = document.getElementById('finSubAbas');
+    var finAgendado = function(r){ return !finQuitado(r) && (r.parcelas||[]).some(function(p){ return p.status !== 'Recebido' && p.dataPrevista; }); };
+    var nConc = lista.filter(finQuitado).length, nAb = lista.length - nConc, nAg = lista.filter(finAgendado).length, sub = document.getElementById('finSubAbas');
     if(sub){
       sub.innerHTML = '<button type="button" data-finsub="aberto" class="' + (finSubAba === 'aberto' ? 'ativo' : '') + '">Projetos em aberto<span class="n">' + nAb + '</span></button>' +
+                      '<button type="button" data-finsub="agendados" class="' + (finSubAba === 'agendados' ? 'ativo' : '') + '" title="Clientes com pagamento combinado para uma data">Agendados<span class="n">' + nAg + '</span></button>' +
                       '<button type="button" data-finsub="concluidos" class="' + (finSubAba === 'concluidos' ? 'ativo' : '') + '">Concluídos<span class="n">' + nConc + '</span></button>';
       Array.prototype.forEach.call(sub.querySelectorAll('[data-finsub]'), function(b){ b.onclick = function(){ finSubAba = b.getAttribute('data-finsub'); colapsadoFinListaGeral = false; renderFinanceiroLista(); }; });
     }
-    lista = lista.filter(function(r){ return finSubAba === 'concluidos' ? finQuitado(r) : !finQuitado(r); });
+    lista = lista.filter(function(r){ return finSubAba === 'concluidos' ? finQuitado(r) : finSubAba === 'agendados' ? finAgendado(r) : !finQuitado(r); });
+    if(finSubAba === 'agendados'){ var prox = function(r){ return (r.parcelas||[]).filter(function(p){ return p.status !== 'Recebido' && p.dataPrevista; }).map(function(p){ return p.dataPrevista; }).sort()[0] || '9'; };
+      lista = lista.slice().sort(function(a, b){ return prox(a).localeCompare(prox(b)); }); }   // o pagamento mais próximo primeiro
     pjfKpis(lista);
     if(finFiltro === 'aberto' || finFiltro === 'quitado') finFiltro = '';
     if(finFiltro){
@@ -8406,7 +8410,7 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
     var lbl = document.getElementById('lblFinLista');
     var expandidoAgora = buscaFinanceiroTexto ? true : !colapsadoFinListaGeral;
     el.style.display = expandidoAgora ? 'block' : 'none';
-    if(lbl) lbl.textContent = (expandidoAgora ? '▾ ' : '▸ ') + (finSubAba === 'concluidos' ? 'Concluídos' : 'Em aberto') + ' (' + lista.length + ')';
+    if(lbl) lbl.textContent = (expandidoAgora ? '▾ ' : '▸ ') + (finSubAba === 'concluidos' ? 'Concluídos' : finSubAba === 'agendados' ? 'Agendados · pagamento combinado' : 'Em aberto') + ' (' + lista.length + ')';
     if(!expandidoAgora) return;
     if(lista.length){
       var cab = document.createElement('div'); cab.className = 'fin-cab-colunas';
@@ -8432,21 +8436,21 @@ var caixaPerguntar = (msg, o) => caixaDialogo(Object.assign({titulo: "Informe", 
   }
 
   /* ===== ERP (25/11): mesmo padrão do Financeiro de Serviços ===== */
-  function pjfSit(p){ return p.status === 'Recebido' ? 'recebido' : p.status === 'Cobrar' ? (p.cobrancaEnviada ? 'enviado' : 'a_cobrar') : 'nao_liberado'; }
-  var PJF_ROT = { recebido:'Recebido', enviado:'Enviado', a_cobrar:'A cobrar', nao_liberado:'Não liberado' };
+  function pjfSit(p){ return p.status === 'Recebido' ? 'recebido' : p.dataPrevista ? 'agendado' : p.status === 'Cobrar' ? (p.cobrancaEnviada ? 'enviado' : 'a_cobrar') : 'nao_liberado'; }
+  var PJF_ROT = { recebido:'Recebido', enviado:'Enviado', agendado:'Agendado', a_cobrar:'A cobrar', nao_liberado:'Não liberado' };
   function pjfCurto(v){ return 'R$ ' + Math.round(v || 0).toLocaleString('pt-BR'); }
   function pjfKpis(lista){
     var el = document.getElementById('finKpis'); if(!el) return;
-    var contr = 0, rec = 0, ac = 0, en = 0, nAc = 0, nEn = 0, aRec = 0, nSaldo = 0, nl = 0;
+    var contr = 0, rec = 0, ac = 0, en = 0, nAc = 0, nEn = 0, nAgd = 0, aRec = 0, nSaldo = 0, nl = 0;
     lista.forEach(function(r){ var rr = 0;
       (r.parcelas || []).forEach(function(p){ var st = pjfSit(p), v = Number(p.valor) || 0;
-        if(st === 'recebido') rr += v; else if(st === 'a_cobrar'){ ac += v; nAc++; } else if(st === 'enviado'){ en += v; nEn++; } else nl += v; });
+        if(st === 'recebido') rr += v; else if(st === 'a_cobrar'){ ac += v; nAc++; } else if(st === 'enviado' || st === 'agendado'){ en += v; nEn++; if(st === 'agendado') nAgd++; } else nl += v; });
       contr += Number(r.valorTotal) || 0; rec += rr;
       var saldo = r.quitadoManual ? 0 : Math.max(0, (Number(r.valorTotal) || 0) - rr); aRec += saldo; if(saldo > 0.005) nSaldo++; });
     var c = function(tom, v, rot, sub){ return '<div class="pjf-kpi ' + tom + (v > 0 ? '' : ' zero') + '"' + (tom === 'amarelo' ? ' data-pjfk="cobrar" title="Mostrar só quem tem parcela a cobrar"' : '') + '><b>' + pjfCurto(v) + '</b><span>' + rot + '</span><small>' + sub + '</small></div>'; };
     el.innerHTML = c('neutro', contr, 'Contratado', lista.length + (lista.length === 1 ? ' cliente' : ' clientes')) +
       c('amarelo', ac, 'A cobrar', nAc + (nAc === 1 ? ' parcela liberada' : ' parcelas liberadas')) +
-      c('azul', en, 'Enviado', nEn + (nEn === 1 ? ' parcela aguardando' : ' parcelas aguardando')) +
+      c('azul', en, 'Enviado', nEn + (nEn === 1 ? ' parcela aguardando' : ' parcelas aguardando') + (nAgd ? ' · ' + nAgd + (nAgd === 1 ? ' agendada' : ' agendadas') : '')) +
       c('verde', rec, 'Recebido', contr > 0 ? Math.round(rec / contr * 100) + '% do contratado' : '—') +
       c('neutro', aRec, 'A receber', nSaldo + (nSaldo === 1 ? ' cliente com saldo' : ' clientes com saldo') + (nl > 0 ? ' · ' + pjfCurto(nl) + ' não liberado' : ''));
     var k = el.querySelector('[data-pjfk]'); if(k) k.onclick = function(){ finFiltro = finFiltro === 'cobrar' ? '' : 'cobrar'; var sel = document.getElementById('finFiltroSel'); if(sel) sel.value = finFiltro; renderFinanceiroLista(); };
