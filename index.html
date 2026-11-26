@@ -529,7 +529,7 @@ const SUPABASE_KEY = 'sb_publishable_Ijt5zBuf2CDbJ1f2GUFkig_7N9q_OrI'; // chave 
 /* 26/11 (Júlio: "app está muito lento… poderia ser por blocos"): as páginas seguintes vêm EM PARALELO (antes era uma depois da outra);
    lista grande (que precisou de páginas) fica guardada na memória por 2 minutos — voltar à tela ou trocar um filtro não baixa tudo de novo;
    qualquer gravação (POST/PATCH/PUT/DELETE) esvazia essa memória; dois pedidos iguais ao mesmo tempo viram um só. */
-const REST_MEM = new Map(), REST_VOO = new Map(), REST_VALE = 120000;
+const REST_MEM = new Map(), REST_VOO = new Map(), REST_VALE = 120000, REST_GUARDA = new Set();
 function restLimpa(){ REST_MEM.clear(); }
 function restChave(url, h){ return url + '|' + (h.get('Authorization') || '').slice(-24) + '|' + (h.get('Accept') || '') + '|' + (h.get('Prefer') || '') + '|' + (h.get('Accept-Profile') || ''); }
 function restTem(url){ const agora = Date.now(); for(const [k, v] of REST_MEM) if(k.startsWith(url + '|') && agora - v.em < REST_VALE) return true; return false; }
@@ -546,17 +546,21 @@ async function fetchTudo(input, init){
     const base = { txt, status: r.status, statusText: r.statusText, headers: [...hd] };
     if(!r.ok) return base;
     let d; try{ d = JSON.parse(txt); }catch(e){ return base; }
+    if(Array.isArray(d) && d.length < 1000 && REST_GUARDA.has(url)){ base.em = Date.now(); REST_MEM.set(chave, base); return base; }
     if(!Array.isArray(d) || d.length < 1000) return base;
     const sep = url.includes('?') ? '&' : '?';
-    const pagina = async off => { try{ const r2 = await fetch(url + sep + `offset=${off}&limit=1000`, { ...init, headers: h }); if(!r2.ok) return null; const d2 = await r2.json(); return Array.isArray(d2) ? d2 : null; }catch(e){ return null; } };
-    let todos = d, off = d.length, onda = 4, fim = false;
+    const pagina = async off => { for(let t = 0; t < 3; t++){ if(t) await new Promise(ok => setTimeout(ok, 500 * t * t));
+        try{ const r2 = await fetch(url + sep + `offset=${off}&limit=1000`, { ...init, headers: h }); if(r2.ok){ const d2 = await r2.json(); if(Array.isArray(d2)) return d2; } }catch(e){} }
+      return null; };
+    let todos = d, off = d.length, onda = 4, fim = false, falhou = false;
     while(!fim && off < 300000){
       const ps = await Promise.all(Array.from({ length: onda }, (_, k) => pagina(off + k * 1000)));
-      for(const pg of ps){ if(!pg || !pg.length){ fim = true; break; } todos = todos.concat(pg); if(pg.length < 1000){ fim = true; break; } }
+      for(const pg of ps){ if(!pg){ fim = falhou = true; break; } if(!pg.length){ fim = true; break; } todos = todos.concat(pg); if(pg.length < 1000){ fim = true; break; } }
       off += onda * 1000; onda = 8;
     }
     hd.set('content-range', `0-${todos.length - 1}/${(hd.get('content-range') || '').split('/')[1] || '*'}`);
     const o = { txt: JSON.stringify(todos), status: 200, statusText: 'OK', headers: [...hd], em: Date.now() };
+    if(falhou){ o.incompleta = true; return o; }          // faltou página: entrega o que veio, mas não guarda
     REST_MEM.set(chave, o); if(REST_MEM.size > 14) REST_MEM.delete(REST_MEM.keys().next().value);
     return o;
   })();
@@ -828,7 +832,10 @@ async function blocos(aba, f, n = 300){
   const r = await f().range(0, n - 1);
   if(r.error || (r.data || []).length < n){ BLOCOS_PARCIAL[aba] = false; blocosAviso(); return { data: r.data, error: r.error, parcial: false }; }
   BLOCOS_PARCIAL[aba] = true; blocosAviso();
-  if(!BLOCOS_VOO[url]) BLOCOS_VOO[url] = Promise.resolve(f()).then(x => { delete BLOCOS_VOO[url]; if(x.error){ BLOCOS_PARCIAL[aba] = false; return blocosAviso(); } blocosRedesenha(aba); }, () => { delete BLOCOS_VOO[url]; BLOCOS_PARCIAL[aba] = false; blocosAviso(); });
+  REST_GUARDA.add(url);
+  if(!BLOCOS_VOO[url]) BLOCOS_VOO[url] = Promise.resolve(f()).then(x => { delete BLOCOS_VOO[url];
+      if(x.error || !restTem(url)){ BLOCOS_PARCIAL[aba] = false; blocosAviso(); if(ST.aba === aba) toast('Não consegui carregar o restante da lista. Abra a tela de novo.'); return; }
+      blocosRedesenha(aba); }, () => { delete BLOCOS_VOO[url]; BLOCOS_PARCIAL[aba] = false; blocosAviso(); });
   return { data: r.data, error: null, parcial: true };
 }
 const pessoa = id => ST.pessoas.find(x=>x.id===id);
@@ -2314,7 +2321,7 @@ async function resumoInicio(){
   const g = $('#iniGrid'); if(!g) return;
   const l = LETRA[ST.eu.perfil], hoje = hojeISO(), sem = isoLocal(new Date(Date.now() + 7 * 864e5)), at = [], jobs = [];
   let fin = null, orc = null;
-  if('DAS'.includes(l)) jobs.push(sb.from('atividades_servico').select('id,data,etapa,os_situacao,status').then(r => { const a = (r.data || []).filter(x => x.status !== 'inativo');
+  if('DAS'.includes(l)) jobs.push(sb.from('atividades_servico').select('id,data,etapa,os_situacao,status').or(`data.eq.${hoje},os_situacao.eq.a_decidir`).then(r => {   /* 26/11: só o que entra na conta */ const a = (r.data || []).filter(x => x.status !== 'inativo');
     const dec = a.filter(x => x.os_situacao === 'a_decidir').length;
     at.push({ o:1, aba:'sv_agenda', ic:'pj_cal', n:a.filter(x => x.data === hoje).length, t:'Atividades de serviço hoje' }, { o:2, aba:'sv_os', ic:'sv_os', n:dec, t:'OS para decidir (cobrar?)', al:dec > 0 }); }));
   if('DAPG'.includes(l)) jobs.push(sb.from('tarefas_resumo').select('id,atrasada,etapa,status').then(r => { const t = (r.data || []).filter(x => x.status !== 'inativo' && !['Concluído','Fechar quadro'].includes(x.etapa)), atr = t.filter(x => x.atrasada).length;
@@ -2792,7 +2799,7 @@ function ligarFluxo(){
   const pode = t => { try{ return nivelTela(t) > 0; }catch(e){ return true; } };
   const poe = (k, v, tip) => { const el = document.getElementById('flxN_' + k); if(!el || !v) return; el.textContent = v > 99 ? '99+' : v; el.title = tip; el.classList.add('on'); };
   const conta = (q, f) => q.then(r => f(r.data || [])).catch(() => {});
-  if(pode('orc')) conta(sb.from('orcamentos').select('id,etapa').in('etapa', ['elaboracao','enviado']), l => poe('vendas', l.length, 'orçamentos em aberto'));
+  if(pode('orc')) sb.from('orcamentos').select('id', { count: 'exact', head: true }).in('etapa', ['elaboracao','enviado']).then(r => poe('vendas', r.count || 0, 'orçamentos em aberto')).catch(() => {});   /* 26/11: conta no banco */
   if(pode('pj_projetos')) conta(sb.from('tarefas_projeto').select('id,etapa,status').eq('etapa', 'Fechado'), l => poe('proj', l.filter(x => x.status !== 'inativo').length, 'projetos fechados para distribuir'));
   if(pode('cp_compras')) conta(sb.from('pedidos_servico').select('id,andamento_interno,status').in('andamento_interno', ['aguardando_sinal','aguardando_compra']), l => poe('equip', l.filter(x => x.status !== 'inativo').length, 'pedidos para comprar'));
   if(pode('sv_agenda')) conta(sb.from('atividades_servico').select('id,data,etapa,status').is('data', null), l => poe('serv', l.filter(x => x.status !== 'inativo' && x.etapa !== 'concluido').length, 'atividades para escalar técnico'));
@@ -7763,11 +7770,22 @@ const EXP = { prod: null, sis: null };
 const expId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const expCod = v => { const t = String(v == null ? '' : v).trim(); return /^\d{1,6}$/.test(t) ? t.padStart(6, '0') : t; };
 const QTD_TIPOS = [['unid', 'por unidade ×'], ['cada', '1 a cada'], ['fixo', 'fixo'], ['menos', 'unidades menos']];
-async function expCarrega(forcar){
-  if(!EXP.prod){ const r = await tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,tipo,unidade,ativo').order('id')); EXP.prod = Object.fromEntries((r.data || []).map(p => [p.codigo, p])); EXP.porId = Object.fromEntries((r.data || []).map(p => [p.id, p])); }
-  if(!EXP.kits || forcar){ const k = await sb.from('produto_componentes').select('kit_id,componente_id,quantidade,ordem').order('ordem'); EXP.kits = {}; (k.data || []).forEach(c => (EXP.kits[c.kit_id] = EXP.kits[c.kit_id] || []).push(c)); }
-  if(!EXP.sis || forcar){ const r = await sb.from('express_sistemas').select('*').order('ordem').order('nome'); if(r.error){ EXP.erro = true; EXP.sis = []; } else { EXP.erro = false; EXP.sis = r.data || []; } }
+/* 26/11 (desempenho): as três cargas saem juntas (antes era uma depois da outra) e o catálogo de produtos começa a vir sozinho,
+   por trás, alguns segundos depois de entrar no ERP — ao abrir o Express ele já está pronto. */
+function expCarregaProd(){
+  if(EXP.prod) return Promise.resolve();
+  return EXP._pp || (EXP._pp = tudo(() => sb.from('produtos').select('id,codigo,descricao,preco,tipo,unidade,ativo').order('id')).then(r => { EXP._pp = null; if(r.error) return;
+    EXP.prod = Object.fromEntries((r.data || []).map(p => [p.codigo, p])); EXP.porId = Object.fromEntries((r.data || []).map(p => [p.id, p])); }, () => { EXP._pp = null; }));
 }
+async function expCarrega(forcar){
+  await Promise.all([
+    expCarregaProd(),
+    (!EXP.kits || forcar) ? sb.from('produto_componentes').select('kit_id,componente_id,quantidade,ordem').order('ordem').then(k => { const m = {}; (k.data || []).forEach(c => (m[c.kit_id] = m[c.kit_id] || []).push(c)); EXP.kits = m; }) : null,
+    (!EXP.sis || forcar) ? sb.from('express_sistemas').select('*').order('ordem').order('nome').then(r => { if(r.error){ EXP.erro = true; EXP.sis = []; } else { EXP.erro = false; EXP.sis = r.data || []; } }) : null ]);
+  if(!EXP.prod){ EXP.prod = {}; EXP.porId = {}; }
+}
+setTimeout(function expAquece(n){ n = n || 0; if(n > 40) return; if(!ST.eu || !ST.pessoas || !ST.pessoas.length) return setTimeout(() => expAquece(n + 1), 3000);
+  try{ if(nivelTela('vd_express') >= 1 && !(typeof setorEmApp === 'function' && setorEmApp())) expCarregaProd(); }catch(e){} }, 7000);
 const expSemScript = t => `<div class="card"><h2>${t}</h2><p class="vazio">Falta rodar o script <b>93_orcamento_express.sql</b> no Supabase.</p></div>`;
 const expSe = (se, resp) => !se || Object.entries(se).every(([p, v]) => !v || resp[p] === v);
 /* quantidade de um item que vem junto, para n unidades do equipamento */
@@ -7805,8 +7823,9 @@ const expSecs = its => [...new Set(its.map(i => i.sec))];
 const expNovo = () => ({ id: null, nome: '', cliente: '', inst: [], gerados: [], sujo: false, salvoEm: null });
 ST.express = expNovo();
 async function telaExpress(){
-  carregandoTela(); await expCarrega(true);
-  const rq = await sb.from('express_rascunhos').select('id,nome,pessoa_id,total,atualizado_em,criado_por,dados').order('atualizado_em', { ascending: false });
+  carregandoTela();
+  const [, rq] = await Promise.all([expCarrega(true), sb.from('express_rascunhos').select('id,nome,pessoa_id,total,atualizado_em,criado_por,dados').order('atualizado_em', { ascending: false })]);
+  if(ST.aba !== 'vd_express') return;
   const RASC = rq.error ? null : (rq.data || []);   // null = falta o script 95
   if(EXP.erro) return $('#conteudo').innerHTML = expSemScript('Orçamento Express');
   const X = ST.express, ativos = EXP.sis.filter(s => s.ativo);
@@ -8976,7 +8995,8 @@ function telaMovCigam(){ return ST.mc.aba === 'movimentos' ? telaMovCigamMov() :
 async function telaMovCigamSaldos(){
   carregandoTela();
   const seq = ST._mcSeq = (ST._mcSeq || 0) + 1, f = ST.mc;
-  if(!_mcSaldos){ const r = await tudo(() => sb.from('cigam_saldo_estoque').select('unidade,codigo,descricao,unidade_medida,saldo,ultima_entrada,ultima_saida').order('codigo').order('unidade'));
+  if(!_mcSaldos){ try{ await sb.rpc('cigam_saldos_refaz'); }catch(e){}   /* 26/11: saldos guardados prontos; só recalcula se entrou movimento novo */
+    const r = await tudo(() => sb.from('cigam_saldo_estoque').select('unidade,codigo,descricao,unidade_medida,saldo,ultima_entrada,ultima_saida').order('codigo').order('unidade'));
     if(seq !== ST._mcSeq || ST.aba !== 'es_mov_cigam' || f.aba !== 'saldos') return;
     if(r.error) return $('#conteudo').innerHTML = ncSemScript('Estoque e movimentos');
     _mcSaldos = r.data || []; }
