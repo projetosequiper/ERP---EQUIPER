@@ -1918,29 +1918,57 @@ function pdfTabela(colunas, linhas, total){
    não salva nem envia. Esta função roda DENTRO da janela do PDF: prepara um arquivo PDF de verdade e o botão vermelho abre o
    "compartilhar" do aparelho (WhatsApp, e-mail, Salvar em Arquivos). Sem compartilhar disponível, baixa o arquivo. */
 function pdfEnviarCel(nome, pais){
-  if(!(matchMedia('(pointer:coarse)').matches || innerWidth <= 700 || /[?&#]pdfcel/.test(opener ? String(opener.location.href) : ''))) return;
+  var emb = !!window.frameElement;                      // aberto dentro do ERP (celular): os botões ficam na barra do ERP
+  if(!(emb || matchMedia('(pointer:coarse)').matches || innerWidth <= 700)) return;
   var bImp = document.querySelector('.bt'), b = document.createElement('button'), arq = null;
   b.className = 'bt bt2'; b.setAttribute('data-html2canvas-ignore', '1'); b.disabled = true; b.textContent = 'Preparando o PDF…';
   bImp.parentNode.insertBefore(b, bImp); bImp.textContent = 'Imprimir';
+  if(emb){ b.style.display = 'none'; bImp.style.display = 'none'; }
+  var avisa = function(a, m){ try{ if(window.pdfCelAviso) window.pdfCelAviso(a, m); }catch(e){} };
   function baixa(){ var a = document.createElement('a'); a.href = URL.createObjectURL(arq); a.download = arq.name; document.body.appendChild(a); a.click(); a.remove(); }
   b.onclick = function(){ if(!arq) return;
     if(navigator.canShare && navigator.canShare({ files: [arq] })) navigator.share({ files: [arq], title: nome }).catch(function(e){ if(!e || e.name !== 'AbortError') baixa(); });
     else baixa(); };
   /* a biblioteca que monta o PDF é baixada pela janela do ERP (pdfJanela) e entregue aqui como texto */
   window.pdfCelPronto = function(txt){
-    if(!txt){ b.textContent = 'Sem internet para preparar o PDF'; return; }
+    if(!txt){ b.textContent = 'Sem internet para preparar o PDF'; avisa(null, 'Sem internet para preparar o PDF'); return; }
     try{ var s = document.createElement('script'); s.textContent = txt; document.head.appendChild(s);
-      window.html2pdf().set({ margin: [10, 9, 12, 9], image: { type: 'jpeg', quality: .95 }, html2canvas: { scale: 2, windowWidth: pais ? 1054 : 726, scrollX: 0, scrollY: 0, useCORS: true, backgroundColor: '#fff' },
+      window.html2pdf().set({ margin: [10, 9, 12, 9], image: { type: 'jpeg', quality: .95 }, html2canvas: { scale: 2, windowWidth: Math.max(innerWidth, pais ? 1054 : 726), scrollX: 0, scrollY: 0, useCORS: true, backgroundColor: '#fff' },
         jsPDF: { unit: 'mm', format: 'a4', orientation: pais ? 'landscape' : 'portrait' }, pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'h2', '.pnota', '.presumo', '.pfx'] } })
         .from(document.getElementById('pdfDoc')).outputPdf('blob').then(function(bl){ arq = new File([bl], nome + '.pdf', { type: 'application/pdf' }); window.__pdfArq = arq;
-          b.disabled = false; b.textContent = '📤 Enviar ou salvar o PDF'; })
-        .catch(function(e){ b.textContent = 'Não deu para preparar o PDF'; window.__pdfErro = String(e); });
-    }catch(e){ b.textContent = 'Não deu para preparar o PDF'; window.__pdfErro = String(e); } };
+          b.disabled = false; b.textContent = '📤 Enviar ou salvar o PDF'; avisa(arq); })
+        .catch(function(e){ b.textContent = 'Não deu para preparar o PDF'; window.__pdfErro = String(e); avisa(null); });
+    }catch(e){ b.textContent = 'Não deu para preparar o PDF'; window.__pdfErro = String(e); avisa(null); } };
 }
 
 /* abre a janela do PDF. o: { titulo, sub, emissao, faixa (html), corpo (html), paisagem, arquivo, rodape, direita, empresa, imprimir } */
 function pdfJanela(o){
-  const w = window.open('', '_blank'); if(!w){ aviso('Bloqueado', 'Libere as janelas (pop-ups) para gerar o PDF.'); return null; }
+  /* 26/11 (Júlio, no iPhone: "não consigo sair dessa tela"): no celular o PDF abre DENTRO do ERP, numa folha por cima da tela,
+     com barra própria: Voltar · Enviar ou salvar o PDF · Imprimir. No computador continua abrindo em outra janela. */
+  const cel = matchMedia('(pointer:coarse)').matches || innerWidth <= 700;
+  let w, ov = null, qd = null;
+  if(cel){
+    const L = o.paisagem ? 1250 : 900;
+    document.getElementById('pdfCel')?.remove();
+    ov = document.createElement('div'); ov.id = 'pdfCel'; ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:#dcdce0;display:flex;flex-direction:column';
+    const bt = 'border:0;border-radius:10px;padding:12px 14px;font:600 15px Helvetica,Arial,sans-serif;color:#fff;cursor:pointer;min-height:46px';
+    ov.innerHTML = `<div style="display:flex;gap:8px;padding:calc(env(safe-area-inset-top, 0px) + 8px) 10px 8px;background:#141414;align-items:center">
+        <button id="pdfCelVoltar" type="button" style="${bt};background:#3a3a3e">← Voltar</button>
+        <button id="pdfCelEnviar" type="button" disabled style="${bt};background:#d71920;flex:1;opacity:.6">Preparando o PDF…</button>
+        <button id="pdfCelImp" type="button" title="Imprimir" style="${bt};background:#3a3a3e">🖨</button></div>
+      <div id="pdfCelRola" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"><div id="pdfCelCx" style="overflow:hidden;background:#fff"><iframe id="pdfCelQd" title="PDF" style="border:0;display:block;width:${L}px;height:1400px;transform-origin:0 0;background:#fff"></iframe></div></div>`;
+    document.body.appendChild(ov); qd = ov.querySelector('#pdfCelQd'); w = qd.contentWindow;
+    const ajusta = () => { try{ const e = ov.clientWidth / L, h = Math.max(w.document.documentElement.scrollHeight, w.document.body ? w.document.body.scrollHeight : 0, 600);
+      qd.style.transform = `scale(${e})`; qd.style.height = h + 'px'; const cx = ov.querySelector('#pdfCelCx'); cx.style.height = Math.ceil(h * e) + 'px'; cx.style.width = ov.clientWidth + 'px'; }catch(e){} };
+    ov._ajusta = ajusta; ov.querySelector('#pdfCelVoltar').onclick = () => ov.remove();
+    ov.querySelector('#pdfCelImp').onclick = () => { try{ w.focus(); w.print(); }catch(e){} };
+    const be = ov.querySelector('#pdfCelEnviar'); let arq = null;
+    const baixa = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(arq); a.download = arq.name; document.body.appendChild(a); a.click(); a.remove(); };
+    be.onclick = () => { if(!arq) return;
+      if(navigator.canShare && navigator.canShare({ files: [arq] })) navigator.share({ files: [arq], title: arq.name.replace(/\.pdf$/, '') }).catch(e => { if(!e || e.name !== 'AbortError') baixa(); });
+      else baixa(); };
+    ov._pronto = (a, msg) => { ajusta(); if(a){ arq = new File([a], a.name, { type: 'application/pdf' }); window.__pdfArq = arq; be.disabled = false; be.style.opacity = '1'; be.textContent = '📤 Enviar ou salvar o PDF'; } else be.textContent = msg || 'Não deu para preparar o PDF'; };
+  } else { w = window.open('', '_blank'); if(!w){ aviso('Bloqueado', 'Libere as janelas (pop-ups) para gerar o PDF.'); return null; } }
   const eqp = o.empresa === 'EQP', rod = (eqp ? 'EQP' : 'EQUIPER') + '  ' + (o.rodape || (eqp ? 'EQP' : PDF_RODAPE)).replace(/'/g, '’');
   const dir = (o.direita ? o.direita.replace(/'/g, '’') + ' · ' : '');
   const emissao = o.emissao === false ? '' : 'Emissão: ' + (o.emissao || new Date().toLocaleDateString('pt-BR'));
@@ -1966,6 +1994,7 @@ function pdfJanela(o){
       ${o.imprimir ? "addEventListener('load', () => setTimeout(() => print(), 350));" : ''}
     <\/script></bo` + `dy></ht` + `ml>`);
   w.document.close();
+  if(ov){ w.pdfCelAviso = ov._pronto; [60, 400, 1200].forEach(t => setTimeout(ov._ajusta, t)); }
   if(w.pdfCelPronto){ const entrega = t => { try{ w.pdfCelPronto(t); }catch(e){} };
     (pdfJanela._lib ||= fetch('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js').then(r => r.ok ? r.text() : Promise.reject(r.status)))
       .then(t => setTimeout(() => entrega(t), 300), () => { pdfJanela._lib = null; entrega(null); }); }
