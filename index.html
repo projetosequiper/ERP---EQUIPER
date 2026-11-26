@@ -526,22 +526,42 @@ const SUPABASE_URL = 'https://yzuwlgmufrrynwrufpug.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Ijt5zBuf2CDbJ1f2GUFkig_7N9q_OrI'; // chave pública — protegida pelas regras do banco
 /* O Supabase entrega no máximo 1.000 linhas por consulta (max-rows). Para nenhuma lista cortar em silêncio,
    toda leitura (GET) sem limite próprio que volta com 1.000 linhas busca as páginas seguintes sozinha. */
+/* 26/11 (Júlio: "app está muito lento… poderia ser por blocos"): as páginas seguintes vêm EM PARALELO (antes era uma depois da outra);
+   lista grande (que precisou de páginas) fica guardada na memória por 2 minutos — voltar à tela ou trocar um filtro não baixa tudo de novo;
+   qualquer gravação (POST/PATCH/PUT/DELETE) esvazia essa memória; dois pedidos iguais ao mesmo tempo viram um só. */
+const REST_MEM = new Map(), REST_VOO = new Map(), REST_VALE = 120000;
+function restLimpa(){ REST_MEM.clear(); }
+function restChave(url, h){ return url + '|' + (h.get('Authorization') || '').slice(-24) + '|' + (h.get('Accept') || '') + '|' + (h.get('Prefer') || '') + '|' + (h.get('Accept-Profile') || ''); }
+function restTem(url){ const agora = Date.now(); for(const [k, v] of REST_MEM) if(k.startsWith(url + '|') && agora - v.em < REST_VALE) return true; return false; }
 async function fetchTudo(input, init){
   const url = typeof input === 'string' ? input : input.url, metodo = String(init?.method || (typeof input !== 'string' && input.method) || 'GET').toUpperCase();
   const h = new Headers(init?.headers || (typeof input !== 'string' ? input.headers : undefined));
+  if(/\/rest\/v1\//.test(url) && /^(POST|PATCH|PUT|DELETE)$/.test(metodo)) restLimpa();
   if(metodo !== 'GET' || !/\/rest\/v1\/(?!rpc\/)/.test(url) || h.has('Range') || /[?&](limit|offset)=/.test(url) || /vnd\.pgrst\.object/.test(h.get('Accept') || '')) return fetch(input, init);
-  const r = await fetch(input, init);
-  if(!r.ok) return r;
-  const txt = await r.text(); let d; try{ d = JSON.parse(txt); }catch(e){ return new Response(txt, { status: r.status, statusText: r.statusText, headers: r.headers }); }
-  if(!Array.isArray(d) || d.length < 1000) return new Response(txt, { status: r.status, statusText: r.statusText, headers: r.headers });
-  let todos = d;
-  for(let off = d.length; off < 300000; ){
-    const r2 = await fetch(url + (url.includes('?') ? '&' : '?') + `offset=${off}&limit=1000`, { ...init, headers: h });
-    if(!r2.ok) break; const d2 = await r2.json(); if(!Array.isArray(d2) || !d2.length) break;
-    todos = todos.concat(d2); off += d2.length; if(d2.length < 1000) break;
-  }
-  const hh = new Headers(r.headers); hh.delete('content-length'); hh.set('content-range', `0-${todos.length - 1}/${(hh.get('content-range') || '').split('/')[1] || '*'}`);
-  return new Response(JSON.stringify(todos), { status: 200, statusText: 'OK', headers: hh });
+  const chave = restChave(url, h), resp = o => new Response(o.txt, { status: o.status, statusText: o.statusText, headers: o.headers });
+  const m = REST_MEM.get(chave); if(m && Date.now() - m.em < REST_VALE) return resp(m);
+  if(REST_VOO.has(chave)){ try{ return resp(await REST_VOO.get(chave)); }catch(e){} }
+  const p = (async () => {
+    const r = await fetch(input, init), txt = await r.text(), hd = new Headers(r.headers); hd.delete('content-length'); hd.delete('content-encoding');
+    const base = { txt, status: r.status, statusText: r.statusText, headers: [...hd] };
+    if(!r.ok) return base;
+    let d; try{ d = JSON.parse(txt); }catch(e){ return base; }
+    if(!Array.isArray(d) || d.length < 1000) return base;
+    const sep = url.includes('?') ? '&' : '?';
+    const pagina = async off => { try{ const r2 = await fetch(url + sep + `offset=${off}&limit=1000`, { ...init, headers: h }); if(!r2.ok) return null; const d2 = await r2.json(); return Array.isArray(d2) ? d2 : null; }catch(e){ return null; } };
+    let todos = d, off = d.length, onda = 4, fim = false;
+    while(!fim && off < 300000){
+      const ps = await Promise.all(Array.from({ length: onda }, (_, k) => pagina(off + k * 1000)));
+      for(const pg of ps){ if(!pg || !pg.length){ fim = true; break; } todos = todos.concat(pg); if(pg.length < 1000){ fim = true; break; } }
+      off += onda * 1000; onda = 8;
+    }
+    hd.set('content-range', `0-${todos.length - 1}/${(hd.get('content-range') || '').split('/')[1] || '*'}`);
+    const o = { txt: JSON.stringify(todos), status: 200, statusText: 'OK', headers: [...hd], em: Date.now() };
+    REST_MEM.set(chave, o); if(REST_MEM.size > 14) REST_MEM.delete(REST_MEM.keys().next().value);
+    return o;
+  })();
+  REST_VOO.set(chave, p); p.then(() => REST_VOO.delete(chave), () => REST_VOO.delete(chave));
+  return resp(await p);
 }
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, storageKey: 'erp-equiper-teste' }, global: { fetch: fetchTudo } });
 const priv = () => sb.schema('privado');
@@ -789,6 +809,28 @@ async function _carregar0(){
   for(const r of [p,o,c,pg,f]) if(r.error){ await aviso('Erro ao carregar', esc(erroBanco(r.error))); break; }
   ST.pessoas=p.data||[]; if(typeof avatarEu === 'function') setTimeout(avatarEu); ST.obras=o.data||[]; ST.contatos=c.data||[]; ST.pagadores=pg.data||[]; ST.fila=f.data||[];
 }
+/* Carregamento em blocos: devolve na hora o bloco mais recente (n linhas) e busca a lista inteira por trás; quando ela chega,
+   a tela é redesenhada sozinha (se a pessoa ainda estiver nela) e passa a ter tudo. f = função que monta a consulta, já ordenada
+   do mais recente para o mais antigo. Devolve { data, error, parcial }. */
+const BLOCOS_VOO = {}, BLOCOS_PARCIAL = {};
+function blocosAviso(){ let e = document.getElementById('blocosAviso'); const liga = !!BLOCOS_PARCIAL[ST.aba];
+  if(!e && liga){ e = document.createElement('div'); e.id = 'blocosAviso'; e.style.cssText = 'position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom, 0px) + 14px);transform:translateX(-50%);z-index:60;background:#141414;color:#fff;padding:8px 14px;border-radius:999px;font-size:12.5px;box-shadow:0 4px 16px rgba(0,0,0,.25);pointer-events:none;white-space:nowrap'; e.textContent = 'Mostrando os mais recentes · carregando o restante…'; document.body.appendChild(e); }
+  if(e) e.style.display = liga ? '' : 'none'; }
+function blocosRedesenha(aba, t = 0){
+  if(ST.aba !== aba || !BLOCOS_PARCIAL[aba]) return blocosAviso();
+  if(!$('#painel').classList.contains('hidden') || !$('#modal').classList.contains('hidden')){ if(t < 450) setTimeout(() => blocosRedesenha(aba, t + 1), 800); return; }   // ficha aberta: espera fechar
+  const a = document.activeElement, id = a && a.id && $('#conteudo').contains(a) ? a.id : null, sel = id && a.selectionStart != null ? [a.selectionStart, a.selectionEnd] : null, y = scrollY;
+  Promise.resolve(desenhar()).then(() => { scrollTo(0, y); if(id){ const n = document.getElementById(id); if(n){ n.focus(); try{ if(sel) n.setSelectionRange(sel[0], sel[1]); }catch(e){} } } });
+}
+async function blocos(aba, f, n = 300){
+  const url = String(f().url);
+  if(restTem(url)){ const r = await f(); BLOCOS_PARCIAL[aba] = false; blocosAviso(); return { data: r.data, error: r.error, parcial: false }; }
+  const r = await f().range(0, n - 1);
+  if(r.error || (r.data || []).length < n){ BLOCOS_PARCIAL[aba] = false; blocosAviso(); return { data: r.data, error: r.error, parcial: false }; }
+  BLOCOS_PARCIAL[aba] = true; blocosAviso();
+  if(!BLOCOS_VOO[url]) BLOCOS_VOO[url] = Promise.resolve(f()).then(x => { delete BLOCOS_VOO[url]; if(x.error){ BLOCOS_PARCIAL[aba] = false; return blocosAviso(); } blocosRedesenha(aba); }, () => { delete BLOCOS_VOO[url]; BLOCOS_PARCIAL[aba] = false; blocosAviso(); });
+  return { data: r.data, error: null, parcial: true };
+}
 const pessoa = id => ST.pessoas.find(x=>x.id===id);
 const obra = id => ST.obras.find(x=>x.id===id);
 
@@ -819,7 +861,7 @@ function desenhar(){
   registrarTelas();
   if(ST._abaAtual && ST._abaAtual !== ST.aba && !ST._voltando){ (ST.hist = ST.hist || []).push(ST._abaAtual); if(ST.hist.length > 50) ST.hist.shift(); }
   if(ST._abaAtual !== ST.aba){ ST.formAberto = null; const c = $('#conteudo'); if(c) c.dataset.tela = ''; }
-  ST._voltando = false; ST._abaAtual = ST.aba; atualizaVoltar(); if(window.__lembrarLigado) lembrarTelaGrava();
+  ST._voltando = false; ST._abaAtual = ST.aba; atualizaVoltar(); if(typeof blocosAviso === 'function') setTimeout(blocosAviso); if(window.__lembrarLigado) lembrarTelaGrava();
   const vis = itensVisiveis(), todos = vis.flatMap(g => g.itens);
   if(!todos.some(i => i[0] === ST.aba) && !(window.MENU_GUARDADAS && MENU_GUARDADAS[ST.aba] && menuVe(MENU_GUARDADAS[ST.aba]))) ST.aba = todos[0][0];   // telas guardadas (fora do menu) continuam abrindo por link
   document.body.classList.add('comMenu');
@@ -4731,7 +4773,7 @@ function campoAtividade(A){
 ST.osAba = 'a_decidir';
 async function telaOS(){
   carregandoTela();
-  const [r] = await Promise.all([ sb.from('agenda_servicos').select('id,obra_id,cliente,data,descricao,tecnicos_nomes,os_situacao,os_numero,os_valor,os_empresa,concluido_em,status,contrato_id').eq('etapa', 'concluido').order('concluido_em', { ascending:false }), carregaTecnicos() ]);
+  const [r] = await Promise.all([ blocos('sv_os', () => sb.from('agenda_servicos').select('id,obra_id,cliente,data,descricao,tecnicos_nomes,os_situacao,os_numero,os_valor,os_empresa,concluido_em,status,contrato_id').eq('etapa', 'concluido').order('concluido_em', { ascending:false }), 400), carregaTecnicos() ]);   // 26/11: em blocos
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
   const todas = (r.data || []).filter(a => a.status !== 'inativo'), cont = k => todas.filter(a => a.os_situacao === k).length;
   const l = todas.filter(a => a.os_situacao === ST.osAba && (!ST.busca || norm(a.cliente + ' ' + a.descricao + ' ' + (a.os_numero||'')).temTudo(ST.busca)));
@@ -7258,8 +7300,10 @@ async function importarProdutos(){
 ST.orc = { tipo:'', etapa:'todos' };   // 25/11 (Júlio): abre mostrando tudo que já foi orçado, aprovados inclusive
 async function telaOrc(){
   carregandoTela();
-  const [r, rpo] = await Promise.all([ sb.from('orcamentos_resumo').select('*').order('numero', { ascending:false }), sb.from('propostas_online').select('orcamento_id,situacao,ativa') ]);
+  /* 26/11: em blocos — primeiro os 300 orçamentos mais recentes; a lista inteira chega em seguida e a tela se completa sozinha */
+  const [r, rpo] = await Promise.all([ blocos('orc', () => sb.from('orcamentos_resumo').select('*').order('numero', { ascending:false }), 300), sb.from('propostas_online').select('orcamento_id,situacao,ativa') ]);
   if(r.error) return aviso('Erro ao carregar', esc(erroBanco(r.error)));
+  if(ST.aba !== 'orc') return;
   const PO = Object.fromEntries((rpo.data || []).map(p => [p.orcamento_id, p]));
   /* aprovado em parte: o valor que conta é o que foi aprovado (com o desconto proporcional), não o orçado inteiro */
   const parc = (r.data || []).filter(o => o.etapa === 'aprovado_parcial').map(o => o.id), GP = {};
@@ -8339,8 +8383,10 @@ function importarPedidosCigam(){
 
 async function carregaPedCigam(forcar){
   if(ST.pedCigam && !forcar) return ST.pedCigam;
-  const r = await tudo(() => sb.from('pedidos_cigam').select('numero,unidade,situacao,tipo,tipo_operacao,data_pedido,cliente_codigo,cliente_nome,pessoa_id,pagador_id,sistema,total,total_faturado,faturado,nota_fiscal,condicao_descricao,usuario_criacao').order('numero', { ascending:false }));
+  /* 26/11: em blocos — os 500 pedidos mais recentes aparecem primeiro; os quase 10 mil chegam em seguida e a tela se completa sozinha */
+  const r = await blocos('ped_cigam', () => sb.from('pedidos_cigam').select('numero,unidade,situacao,tipo,tipo_operacao,data_pedido,cliente_codigo,cliente_nome,pessoa_id,pagador_id,sistema,total,total_faturado,faturado,nota_fiscal,condicao_descricao,usuario_criacao').order('numero', { ascending:false }), 500);
   if(r.error){ aviso('Erro ao carregar os pedidos', esc(erroBanco(r.error)) + '<br>Rodou o script 19 no Supabase?'); return []; }
+  if(r.parcial) return r.data || [];          // só o bloco recente: não guarda como lista completa
   return ST.pedCigam = r.data || [];
 }
 
@@ -8484,15 +8530,17 @@ let _oscCache = null;
 async function telaOSCigam(){
   carregandoTela();
   const seq = ST._oscSeq = (ST._oscSeq || 0) + 1, f = ST.osc;
-  if(!_oscCache){ const r = await tudo(() => sb.from('os_cigam').select('numero,situacao,data,cliente_nome,pessoa_id,responsavel,total,conferir').order('numero', { ascending: false }));
+  let _oscParcial = null;   // 26/11: em blocos — as 500 OS mais recentes primeiro, o restante em seguida
+  if(!_oscCache){ const r = await blocos('os_cigam', () => sb.from('os_cigam').select('numero,situacao,data,cliente_nome,pessoa_id,responsavel,total,conferir').order('numero', { ascending: false }), 500);
     if(r.error) return $('#conteudo').innerHTML = '<div class="card"><h2>Ordens de serviço</h2><p>Rode o script 79_os_cigam.sql no Supabase.</p></div>';
-    _oscCache = r.data || []; }
+    if(r.parcial) _oscParcial = r.data || []; else _oscCache = r.data || []; }
   let porSerie = null;
   if(f.serie.trim().length >= 3){ const r = await sb.from('os_cigam_itens').select('os_numero').ilike('serie', '%' + f.serie.trim() + '%').limit(500); porSerie = new Set((r.data || []).map(x => x.os_numero)); }
   if(seq !== ST._oscSeq) return;
-  const q = norm(ST.busca || ''), anos = [...new Set(_oscCache.map(o => String(o.data || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+  const OSL = _oscCache || _oscParcial || [];   // lista completa, ou só o bloco recente enquanto o resto chega
+  const q = norm(ST.busca || ''), anos = [...new Set(OSL.map(o => String(o.data || '').slice(0, 4)).filter(Boolean))].sort().reverse();
   const nome = o => { const p = pessoa(o.pessoa_id); return p ? (p.apelido || p.nome) : (o.cliente_nome || ''); };
-  const l = _oscCache.filter(o => (!f.ano || String(o.data || '').startsWith(f.ano)) && (!porSerie || porSerie.has(o.numero))
+  const l = OSL.filter(o => (!f.ano || String(o.data || '').startsWith(f.ano)) && (!porSerie || porSerie.has(o.numero))
     && (!q || norm([o.numero, o.cliente_nome, nome(o), o.responsavel].join(' ')).temTudo(q)));
   const MAX = 300, soma = l.reduce((s, o) => s + Number(o.total || 0), 0);
   $('#conteudo').innerHTML = `<div class="card"><h2>Ordens de serviço <span class="muted" style="font-weight:400">· cliente, itens, serviços executados e materiais de cada OS</span></h2>${barraBusca()}
