@@ -1895,6 +1895,8 @@ img.f{width:220px;height:165px;object-fit:cover;margin:4px;border:1px solid #ddd
 .bt{position:fixed;top:10px;right:10px;background:#141414;color:#fff;border:0;border-radius:8px;padding:10px 14px;font:600 13px Helvetica,Arial;cursor:pointer;z-index:9}
 @media screen{body{max-width:900px;margin:24px auto;padding:0 24px}body.pais{max-width:1250px}}
 @media print{.bt{display:none}}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* iPhone: não aumentar as letras por conta própria */
+.html2pdf__container{margin:0!important;right:auto!important;left:0!important}   /* folha do arquivo sempre encostada à esquerda: não sai deslocada */
 #pdfDoc{counter-reset:sec}.bt2{top:56px;background:#d71920}.bt:disabled{opacity:.6}
 @media screen and (max-width:640px){.bt{position:static;display:block;width:100%;margin:0 0 8px;padding:14px;font-size:15px}}   /* celular: o botão não cobre o título */
 `;
@@ -1933,7 +1935,10 @@ function pdfEnviarCel(nome, pais){
   window.pdfCelPronto = function(txt){
     if(!txt){ b.textContent = 'Sem internet para preparar o PDF'; avisa(null, 'Sem internet para preparar o PDF'); return; }
     try{ var s = document.createElement('script'); s.textContent = txt; document.head.appendChild(s);
-      window.html2pdf().set({ margin: [10, 9, 12, 9], image: { type: 'jpeg', quality: .95 }, html2canvas: { scale: 2, windowWidth: Math.max(innerWidth, pais ? 1054 : 726), scrollX: 0, scrollY: 0, useCORS: true, backgroundColor: '#fff' },
+      /* nitidez: 2x; em documento muito comprido diminui para caber no limite de imagem do iPhone */
+      var lf = pais ? 1054 : 726, d0 = document.getElementById('pdfDoc'), alt = d0.scrollHeight * Math.max(1, lf / Math.max(d0.offsetWidth, 1)) + 200;
+      var esc = Math.max(1, Math.min(2, Math.floor(Math.sqrt(14e6 / (lf * alt)) * 10) / 10));
+      window.html2pdf().set({ margin: [10, 9, 12, 9], image: { type: 'jpeg', quality: .95 }, html2canvas: { scale: esc, windowWidth: Math.max(innerWidth, pais ? 1054 : 726), scrollX: 0, scrollY: 0, useCORS: true, backgroundColor: '#fff' },
         jsPDF: { unit: 'mm', format: 'a4', orientation: pais ? 'landscape' : 'portrait' }, pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'h2', '.pnota', '.presumo', '.pfx'] } })
         .from(document.getElementById('pdfDoc')).outputPdf('blob').then(function(bl){ arq = new File([bl], nome + '.pdf', { type: 'application/pdf' }); window.__pdfArq = arq;
           b.disabled = false; b.textContent = '📤 Enviar ou salvar o PDF'; avisa(arq); })
