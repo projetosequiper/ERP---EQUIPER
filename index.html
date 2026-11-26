@@ -9368,7 +9368,9 @@ async function fichaContaPedido(id){
         <tfoot><tr><td colspan="4" style="text-align:right"><b>Faturado</b></td><td style="text-align:right"><b>${R$(somaN)}</b></td></tr>
           <tr><td colspan="4" style="text-align:right">${c.a_faturar < -0.009 ? 'Passou do pedido em' : 'Falta faturar'}</td><td style="text-align:right;color:${cpZero(c.a_faturar) ? '#16a34a' : '#b45309'}"><b>${R$(Math.abs(c.a_faturar))}</b></td></tr></tfoot></table></div>`
         : '<p class="vazio">Nenhuma nota ligada a este pedido ainda.</p>'}</div>
-    <div class="card" data-nao-suja="1"><h2>Recebimentos <span class="muted" style="font-weight:400">· ${d.titulos.length} parcela(s)</span></h2>
+    <div class="card" data-nao-suja="1"><h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">Recebimentos <span class="muted" style="font-weight:400">· ${d.titulos.length} parcela(s)</span>${d.pode_baixar && c.a_receber > 0.009 ? '<button class="btn peq pri" id="cpPagar" style="margin-left:auto">＋ Registrar pagamento</button>' : ''}</h2>
+      ${(d.pagamentos || []).length ? `<div style="overflow-x:auto;margin-bottom:12px"><table class="reg"><thead><tr><th>Pagamento</th><th>Forma</th><th>Conta</th><th style="text-align:right">Valor</th><th style="width:40px"></th></tr></thead><tbody>
+        ${d.pagamentos.map(g => `<tr><td><b>${dataBR(g.data)}</b>${g.observacao ? `<div class="muted" style="font-size:11.5px">${esc(g.observacao)}</div>` : ''}</td><td>${esc(g.forma || '—')}</td><td>${esc(g.conta || '—')}</td><td style="text-align:right;color:var(--verde);font-weight:600">${R$(g.valor)}</td><td>${d.pode_baixar ? `<button class="btn peq" data-cpest="${g.grupo}" title="Estornar este pagamento: as parcelas voltam a ficar em aberto">↩</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}
       ${d.titulos.length ? `<div style="overflow-x:auto"><table class="reg"><thead><tr><th>Parcela</th><th>Vencimento</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>
         ${d.titulos.map(t => { const pago = Number(t.recebido) >= Number(t.valor) - 0.009 && Number(t.valor) > 0;
           return `<tr><td>${esc(t.descricao || '')} ${t.origem === 'cigam' ? '<span class="muted" style="font-size:11px">CIGAM</span>' : ''}</td><td>${t.vencimento ? dataBR(t.vencimento) : '—'}</td><td style="text-align:right">${R$(t.valor)}</td><td>${pago ? `<span class="tag ok">recebido${t.recebido_em ? ' em ' + dataBR(t.recebido_em) : ''}</span>` : Number(t.recebido) > 0 ? `<span class="tag">recebido ${R$(t.recebido)}</span>` : '<span class="tag" style="background:#dbeafe;color:#1d4ed8">em aberto</span>'}</td></tr>`; }).join('')}</tbody>
@@ -9377,7 +9379,51 @@ async function fichaContaPedido(id){
         : '<p class="vazio">Nenhuma parcela ou título ligado a este pedido.</p>'}</div>
     <div class="rodape"><button class="btn pri" id="cpAbreOrc">Abrir o orçamento</button></div>`;
   $('#cpAbreOrc').onclick = async () => { fecharPainel(); if(typeof formOrc === 'function') formOrc(id); };
+  if($('#cpPagar')) $('#cpPagar').onclick = async () => { if(await pagarPedido(c)){ ST._cpDados = null; await fichaContaPedido(id); if(ST.aba === 'fn_pedidos') telaContaPedidos(); } };
+  document.querySelectorAll('[data-cpest]').forEach(b => b.onclick = async () => {
+    if(!await modal('Estornar pagamento?', 'O pagamento sai do caixa e as parcelas dele voltam a ficar em aberto no pedido.', [['Cancelar', false], ['Estornar', true, 'pri']])) return;
+    const r = await sb.rpc('pedido_estornar_pagamento', { p_grupo: b.dataset.cpest }); if(r.error) return aviso('Não foi possível estornar', esc(erroBanco(r.error)));
+    toast('Pagamento estornado.'); ST._cpDados = null; await fichaContaPedido(id); if(ST.aba === 'fn_pedidos') telaContaPedidos(); });
 }
+
+/* etapa 2 (script 103): registrar um pagamento do cliente no pedido. O valor entra no caixa e é abatido das parcelas em aberto do
+   pedido, da mais antiga para a mais nova; se pagar só parte de uma parcela, o resto dela continua em aberto. */
+async function pagarPedido(c){
+  if(typeof carregaFin === 'function') try{ await carregaFin(); }catch(e){}
+  const contas = typeof optsContas === 'function' ? optsContas(null, c.empresa) : '', formas = typeof optsFormas === 'function' ? optsFormas('PIX') : '<option>PIX</option><option>Boleto</option><option>Transferência</option><option>Dinheiro</option>';
+  const ok = await modal(`Pagamento do pedido ${numOrc(c.numero)}`, `<div style="font-size:13px;margin-bottom:10px"><b>${esc(c.cliente || '')}</b> · saldo a receber do pedido <b>${R$(c.a_receber)}</b></div>
+      <div class="grade" style="text-align:left"><label class="campo">Data<input type="date" id="ppData" value="${hojeISO()}"></label>
+        <label class="campo">Valor recebido<input id="ppValor" inputmode="decimal" value="" placeholder="${numFmt(c.a_receber)}"></label>
+        <label class="campo">Conta<select id="ppConta">${contas}</select></label>
+        <label class="campo">Forma<select id="ppForma">${formas}</select></label>
+        <label class="campo largo">Observação<input id="ppObs" placeholder="ex.: sinal, 2ª parcela, comprovante…"></label></div>
+      <p class="muted" style="font-size:12px;text-align:left;margin:8px 0 0">O valor é abatido das parcelas em aberto deste pedido, da mais antiga para a mais nova, e entra em Caixa e bancos.</p>`,
+    [['Cancelar', false], ['Registrar pagamento', true, 'pri']]);
+  if(!ok) return false;
+  const valor = num($('#ppValor').value); if(!(valor > 0)){ await aviso('Valor', 'Informe o valor recebido.'); return false; }
+  const r = await sb.rpc('pedido_receber_pagamento', { p_orc: c.id, p_valor: valor, p_data: $('#ppData').value || hojeISO(), p_conta: $('#ppConta').value || null, p_forma: $('#ppForma').value || null, p_obs: $('#ppObs').value.trim() || null });
+  if(r.error){ await aviso('Não foi possível registrar', esc(erroBanco(r.error))); return false; }
+  toast(`Pagamento de ${R$(valor)} registrado. Saldo a receber do pedido: ${R$(r.data.a_receber)}.`); return true;
+}
+/* Posição do cliente: os pedidos aprovados dele, com o saldo de cada um e o botão de pagamento */
+(function(){ const orig = window.verPosicao; if(typeof orig !== 'function') return;
+  window.verPosicao = async function(pessoaId){ const r = await orig.apply(this, arguments);
+    if(typeof nivelTela !== 'function' || nivelTela('fn_pedidos') < 1 || !pessoaId) return r;
+    try{ const q = await sb.rpc('pedido_contas', { p_pagador: pessoaId }); if(q.error || !(q.data || []).length || $('#posPedidos')) return r;
+      const l = q.data.map(x => { ['vendido', 'faturado', 'recebido', 'a_faturar', 'a_receber', 'recebido_sem_nota', 'titulos_abertos'].forEach(k => x[k] = Number(x[k]) || 0); return x; });
+      const ab = l.filter(x => !cpZero(x.a_receber) || !cpZero(x.a_faturar)), mostra = (ab.length ? ab : l).slice(0, 30), podeB = nivelTela('fn_receber') >= 3;
+      const box = document.createElement('div'); box.className = 'card'; box.id = 'posPedidos'; box.dataset.naoSuja = '1';
+      box.innerHTML = `<h2>Pedidos aprovados <span class="muted" style="font-weight:400">· ${ab.length} com saldo de ${l.length} · a receber ${R$(ab.reduce((a, x) => a + Math.max(x.a_receber, 0), 0))}</span></h2>
+        <div style="overflow-x:auto"><table class="reg"><thead><tr><th>Pedido</th><th>Aprovado</th><th style="text-align:right">Vendido</th><th style="text-align:right">Recebido</th><th style="text-align:right">A receber</th><th style="text-align:right">A faturar</th><th></th></tr></thead><tbody>
+        ${mostra.map(x => `<tr><td><a href="#" data-ppv="${x.id}"><b>${numOrc(x.numero)}</b></a>${x.obra ? `<div class="muted" style="font-size:11.5px">${esc(x.obra)}</div>` : ''}</td><td>${x.data ? dataBR(x.data) : '—'}</td><td style="text-align:right">${R$(x.vendido)}</td><td style="text-align:right">${R$(x.recebido)}</td>
+          <td style="text-align:right;font-weight:600;color:${cpZero(x.a_receber) ? '#16a34a' : '#1d4ed8'}">${cpZero(x.a_receber) ? '✓' : R$(x.a_receber)}</td><td style="text-align:right;color:${cpZero(x.a_faturar) ? '#16a34a' : '#b45309'}">${cpZero(x.a_faturar) ? '✓' : R$(x.a_faturar)}</td>
+          <td style="text-align:right">${podeB && x.a_receber > 0.009 ? `<button class="btn peq pri" data-ppp="${x.id}">＋ Pagamento</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      const cab = document.querySelector('#folha .cab'); if(cab) cab.after(box);
+      box.querySelectorAll('[data-ppv]').forEach(a => a.onclick = e => { e.preventDefault(); fichaContaPedido(a.dataset.ppv); });
+      box.querySelectorAll('[data-ppp]').forEach(b => b.onclick = async () => { if(await pagarPedido(l.find(x => x.id === b.dataset.ppp))){ ST._cpDados = null; verPosicao(pessoaId); } });
+    }catch(e){}
+    return r; };
+})();
 
 ST.cp = { ano: String(new Date().getFullYear()), filtro: 'abertos', busca: '' };
 async function telaContaPedidos(){
