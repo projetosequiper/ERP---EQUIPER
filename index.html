@@ -2073,17 +2073,21 @@ function pastaBanco(){ return new Promise((ok, err) => { const r = indexedDB.ope
 async function pastaLe(ch){ try{ const db = await pastaBanco(); return await new Promise(ok => { const q = db.transaction('h').objectStore('h').get(ch); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); }catch(e){ return null; } }
 async function pastaGuarda(ch, h){ try{ const db = await pastaBanco(); await new Promise((ok, err) => { const t = db.transaction('h', 'readwrite'); t.objectStore('h').put(h, ch); t.oncomplete = ok; t.onerror = () => err(t.error); }); }catch(e){} }
 const pdfPastaPode = () => typeof window.showDirectoryPicker === 'function' && !matchMedia('(pointer:coarse)').matches;
-async function pdfPasta(trocar){
+/* 26/11 (Júlio): "precisamos ter 2 pastas diferentes para projetos e equipamentos" — qual = 'projeto' usa a pasta dos projetos;
+   qualquer outro tipo (equipamento, serviço) usa a pasta dos equipamentos, que é a que já estava escolhida (chave 'pdf'). */
+const PASTAS_PDF = { projeto: ['pdf_projeto', 'PROJETOS', 'erp-pdf-projetos'], equip: ['pdf', 'EQUIPAMENTOS', 'erp-pdf-pedidos'] };
+async function pdfPasta(trocar, qual){ const [ch, rot, pid] = PASTAS_PDF[qual === 'projeto' ? 'projeto' : 'equip']; pdfPasta._hs = pdfPasta._hs || {};
   if(!pdfPastaPode()){ aviso('Só no computador', 'Gravar direto na pasta funciona no Chrome ou no Edge do computador. No celular use "Enviar ou salvar o PDF".'); return null; }
-  let h = trocar ? null : (pdfPasta._h || await pastaLe('pdf'));
+  let h = trocar ? null : (pdfPasta._hs[ch] || await pastaLe(ch));
   if(h){ try{ let pm = await h.queryPermission({ mode: 'readwrite' }); if(pm !== 'granted') pm = await h.requestPermission({ mode: 'readwrite' }); if(pm !== 'granted') h = null; }catch(e){ h = null; } }
-  if(!h){ try{ h = await window.showDirectoryPicker({ id: 'erp-pdf-pedidos', mode: 'readwrite' }); }catch(e){ return null; }   // cancelou
-    await pastaGuarda('pdf', h); }
-  return pdfPasta._h = h;
+  if(!h){ if(!await modal('Pasta de ' + rot, `Escolha a seguir a pasta onde ficam os PDFs de <b>${rot}</b>. O ERP guarda a escolha neste computador e passa a gravar nela sozinho.`, [['Cancelar', false], ['Escolher a pasta', true, 'pri']])) return null;
+    try{ h = await window.showDirectoryPicker({ id: pid, mode: 'readwrite' }); }catch(e){ return null; }   // cancelou
+    await pastaGuarda(ch, h); }
+  return pdfPasta._hs[ch] = h;
 }
 /* geradores: funções que devolvem (uma promessa de) arquivo PDF — ver pdfJanela({ emArquivo: true }) */
-async function pdfSalvarNaPasta(geradores){
-  const h = await pdfPasta(); if(!h) return null;
+async function pdfSalvarNaPasta(geradores, qual){ const rot = PASTAS_PDF[qual === 'projeto' ? 'projeto' : 'equip'][1];
+  const h = await pdfPasta(false, qual); if(!h) return null;
   const feitos = [], falhas = [];
   for(let i = 0; i < geradores.length; i++){
     toast(`Gerando PDF ${i + 1} de ${geradores.length}…`);
@@ -2091,9 +2095,9 @@ async function pdfSalvarNaPasta(geradores){
       const fh = await h.getFileHandle(f.name, { create: true }), wr = await fh.createWritable(); await wr.write(f); await wr.close(); feitos.push(f.name);
     }catch(e){ falhas.push(String(e && e.message || e)); }
   }
-  const outra = await modal(falhas.length ? 'Nem tudo foi salvo' : 'PDF salvo na pasta', `${feitos.length ? `Gravado na pasta <b>${esc(h.name)}</b>:<br>${feitos.map(n => '• ' + esc(n)).join('<br>')}` : 'Nenhum arquivo foi gravado.'}${falhas.length ? `<br><br><span style="color:var(--verm)">${falhas.length} não deu certo: ${esc(falhas[0])}</span>` : ''}`,
-    [['OK', false, 'pri'], ['Trocar a pasta…', true]]);
-  if(outra){ const n = await pdfPasta(true); if(n) toast('Pasta trocada para "' + n.name + '". Vale a partir do próximo PDF.'); }
+  const outra = await modal(falhas.length ? 'Nem tudo foi salvo' : 'PDF salvo na pasta', `${feitos.length ? `Gravado na pasta de ${rot} <b>${esc(h.name)}</b>:<br>${feitos.map(n => '• ' + esc(n)).join('<br>')}` : 'Nenhum arquivo foi gravado.'}${falhas.length ? `<br><br><span style="color:var(--verm)">${falhas.length} não deu certo: ${esc(falhas[0])}</span>` : ''}`,
+    [['OK', false, 'pri'], ['Trocar a pasta de ' + rot + '…', true]]);
+  if(outra){ const n = await pdfPasta(true, qual); if(n) toast('Pasta de ' + rot + ' trocada para "' + n.name + '". Vale a partir do próximo PDF.'); }
   return feitos;
 }
 
@@ -7445,7 +7449,7 @@ async function formOrc(id, pre){
         <div class="grade" style="margin-top:8px">${Object.entries(ROT_TEXTOS).map(([k, r]) => `<label class="campo largo">${r}<textarea data-tx="${k}" rows="${k==='apresentacao'||k==='vencimento'?2:4}">${esc(O.textos[k])}</textarea></label>`).join('')}</div></details>` : ''}
       ${O.etapa === 'perdido' && O.motivo_perda ? `<p style="color:var(--verm)">Motivo da perda: ${esc(O.motivo_perda)}</p>` : ''}
       <div id="ocDestinos"></div></div>
-    <div class="rodape">${id ? '<button class="btn" id="ocPdf">📄 PDF</button>' + (typeof pdfPastaPode === 'function' && pdfPastaPode() ? '<button class="btn" id="ocPdfPasta" title="Grava o PDF direto na pasta dos pedidos, já com o nome no padrão (PEDIDO_número_CLIENTE_TÍTULO)">💾 PDF na pasta</button>' : '') + '<button class="btn" id="ocOnline">🌐 Proposta online</button>' + (typeof formContatoCRM === 'function' && nivelTela('crm') >= 2 ? '<button class="btn" id="ocCrm" title="Registrar uma ligação ou conversa sobre este orçamento">📞 Contato</button>' : '') + '<button class="btn" id="ocDup">Duplicar</button>' : ''}
+    <div class="rodape">${id ? '<button class="btn" id="ocPdf">📄 PDF</button>' + (typeof pdfPastaPode === 'function' && pdfPastaPode() ? '<button class="btn" id="ocPdfPasta" title="Grava o PDF direto na pasta (uma para projetos, outra para equipamentos), já com o nome no padrão">💾 PDF na pasta</button>' : '') + '<button class="btn" id="ocOnline">🌐 Proposta online</button>' + (typeof formContatoCRM === 'function' && nivelTela('crm') >= 2 ? '<button class="btn" id="ocCrm" title="Registrar uma ligação ou conversa sobre este orçamento">📞 Contato</button>' : '') + '<button class="btn" id="ocDup">Duplicar</button>' : ''}
       ${id && !travado && O.etapa === 'elaboracao' ? '<button class="btn" id="ocEnv">Marcar enviado</button>' : ''}
       ${id && podeOrc(T) && ['elaboracao','enviado','aprovado_parcial'].includes(O.etapa) ? '<button class="btn" id="ocPerd">Perdido</button><button class="btn" id="ocAprov" style="border-color:var(--verde);color:var(--verde)">✓ Cliente aprovou</button>' : ''}
       ${travado ? '' : '<button class="btn pri" id="bSalvar">Salvar</button>'}</div>`);
@@ -7664,7 +7668,7 @@ async function formOrc(id, pre){
   }
   if($('#bSalvar')) $('#bSalvar').onclick = async () => { const oid = await salvar(); if(oid){ fecharPainel(); if(ST.aba === 'orc') telaOrc(); formOrc(oid); } };
   if($('#ocPdf')) $('#ocPdf').onclick = async () => { if(!travado){ const oid = await salvar(true); if(!oid) return; } pdfOrcamento(id); };
-  if($('#ocPdfPasta')) $('#ocPdfPasta').onclick = async () => { const h = await pdfPasta(); if(!h) return; if(!travado){ const oid = await salvar(true); if(!oid) return; } pdfSalvarNaPasta([() => pdfOrcamento(id, null, { arquivo: true })]); };
+  if($('#ocPdfPasta')) $('#ocPdfPasta').onclick = async () => { const h = await pdfPasta(false, O.tipo); if(!h) return; if(!travado){ const oid = await salvar(true); if(!oid) return; } pdfSalvarNaPasta([() => pdfOrcamento(id, null, { arquivo: true })], O.tipo); };
   if($('#ocEnv')) $('#ocEnv').onclick = async () => { const oid = await salvar(true); if(!oid) return; try{ await exec(sb.from('orcamentos').update({ etapa:'enviado' }).eq('id', oid), 'Marcado como enviado ao cliente.'); fecharPainel(); telaOrc(); }catch(e){} };
   if($('#ocCrm')) $('#ocCrm').onclick = () => formContatoCRM({ pessoa_id: O.pagador_id, obra_id: O.obra_id, orcamento_id: id, assunto: 'Orçamento' }, () => formOrc(id));
   if($('#ocOnline')) $('#ocOnline').onclick = async () => { if(!travado){ const oid = await salvar(true); if(!oid) return; } abrirPropostaOnline(id); };
