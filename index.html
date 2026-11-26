@@ -12959,7 +12959,7 @@ window.MENU_GUARDADAS = {};
   const GRUPOS = [
     ['', ['inicio', 'chat']],
     ['Cadastros', ['pessoas', 'produtos']],
-    ['Vendas', ['orc', 'vd_express', 'ped_cigam', 'pv_precos', 'vd_express_cfg']],
+    ['Vendas', ['orc', 'vd_express', 'pv_precos', 'vd_express_cfg']],
     ['Compras', ['cp_compras', 'cp_controle', 'cp_precos', 'es_mov_cigam']],
     ['Serviços', ['os_cigam']],   // 25/11 (Júlio): nada de "Histórico do CIGAM" à parte — as telas fazem parte do ERP
     ['Financeiro', ['fn_receber', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fn_notas_entrada', 'fn_notas_saida', 'fin_servicos', 'fin_projetos']],
@@ -12970,7 +12970,7 @@ window.MENU_GUARDADAS = {};
   /* fora do menu: Contatos (vazia; o contato fica na ficha da empresa) · Cobrança e Posição do cliente (estão dentro de A receber:
      "Precisa de você" e "Por cliente"; a posição também abre pela ficha da empresa) · Status das ordens de compra (mesmos dados de
      Ordens de compra) · Estoque antigo do ERP (vazio; o estoque em uso é o do app de Serviços) */
-  const GUARDAR = ['contatos', 'fn_cobranca', 'fn_posicao', 'cp_status', 'sv_estoque', 'obras', 'fila', 'cp_requisicoes', 'fs_notas_cigam'];   // notas juntas: abre pela ficha da empresa; no menu ficam Notas de entrada e Notas de saída   // 25/11: Obras e Aprovação saíram do menu (abrem por link, sino e busca)
+  const GUARDAR = ['contatos', 'fn_cobranca', 'fn_posicao', 'cp_status', 'sv_estoque', 'obras', 'fila', 'cp_requisicoes', 'fs_notas_cigam', 'ped_cigam'];   // 26/11 (Júlio): Pedidos saiu do menu — repetia Orçamentos (9.860 de 9.880 já são orçamentos); abre pela lupa e pelos links   // notas juntas: abre pela ficha da empresa; no menu ficam Notas de entrada e Notas de saída   // 25/11: Obras e Aprovação saíram do menu (abrem por link, sino e busca)
   const INTERNOS = ['Projetos', 'Serviços (apps)'];
   const item = new Map(MENU.flatMap(g => g.itens.map(i => [i[0], i])));
   Object.entries(ROTULO).forEach(([k, r]) => { if(item.has(k)) item.get(k)[2] = r; });
