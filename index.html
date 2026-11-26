@@ -2000,8 +2000,13 @@ function pdfJanela(o){
   /* 26/11 (Júlio, no iPhone: "não consigo sair dessa tela"): no celular o PDF abre DENTRO do ERP, numa folha por cima da tela,
      com barra própria: Voltar · Enviar ou salvar o PDF · Imprimir. No computador continua abrindo em outra janela. */
   const cel = matchMedia('(pointer:coarse)').matches || innerWidth <= 700;
-  let w, ov = null, qd = null;
-  if(cel){
+  let w, ov = null, qd = null, arqCx = null, arqP = null, arqOk = null, arqErro = null;
+  if(o.emArquivo){   // 26/11: gera o ARQUIVO PDF sem abrir nada na tela (para gravar direto na pasta) — devolve uma promessa com o arquivo
+    const L = o.paisagem ? 1250 : 900;
+    arqCx = document.createElement('div'); arqCx.style.cssText = `position:fixed;left:-20000px;top:0;width:${L}px;height:1400px;overflow:hidden;pointer-events:none`;
+    arqCx.innerHTML = `<iframe title="PDF" style="border:0;display:block;width:${L}px;height:1400px;background:#fff"></iframe>`;
+    document.body.appendChild(arqCx); w = arqCx.firstChild.contentWindow; arqP = new Promise((ok, err) => { arqOk = ok; arqErro = err; });
+  } else if(cel){
     const L = o.paisagem ? 1250 : 900;
     document.getElementById('pdfCel')?.remove();
     ov = document.createElement('div'); ov.id = 'pdfCel'; ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:#dcdce0;display:flex;flex-direction:column';
@@ -2049,14 +2054,48 @@ function pdfJanela(o){
     <\/script></bo` + `dy></ht` + `ml>`);
   w.document.close();
   if(ov){ w.pdfCelAviso = ov._pronto; [60, 400, 1200].forEach(t => setTimeout(ov._ajusta, t)); }
+  if(arqCx){ const tira = () => setTimeout(() => arqCx.remove(), 300), tempo = setTimeout(() => { tira(); arqErro(new Error('O PDF demorou demais para ficar pronto.')); }, 120000);
+    w.pdfCelAviso = (a, msg) => { clearTimeout(tempo); tira(); if(a) arqOk(new File([a], a.name, { type: 'application/pdf' })); else arqErro(new Error(msg || 'Não deu para preparar o PDF.')); }; }
   if(w.pdfCelPronto){ const entrega = t => { try{ w.pdfCelPronto(t); }catch(e){} };
     (pdfJanela._lib ||= fetch('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js').then(r => r.ok ? r.text() : Promise.reject(r.status)))
       .then(t => setTimeout(() => entrega(t), 300), () => { pdfJanela._lib = null; entrega(null); }); }
-  return w;
+  return arqP || w;
 }
 
 /* separa "Título — complemento" / "Título · complemento" em título e subtítulo */
 function pdfPartes(t){ const m = String(t || '').match(/^(.*?)\s+(?:—|·|-)\s+(.*)$/); return m ? [m[1], m[2]] : [t, '']; }
+
+/* ============ 26/11 (Júlio): "quando eu salvar pelo PC já crie todos na pasta certa sozinho" ============
+   No computador (Chrome ou Edge) o ERP grava os PDFs DIRETO numa pasta: na primeira vez pergunta qual é a pasta dos pedidos
+   (ex.: a pasta da rede onde ficam os PEDIDO_….pdf) e guarda a escolha neste computador; nas outras vezes grava sozinho, já com
+   o nome no padrão. Arquivo com o mesmo nome é substituído. O navegador pode pedir "permitir editar arquivos" — é só aceitar. */
+function pastaBanco(){ return new Promise((ok, err) => { const r = indexedDB.open('erp-pastas', 1); r.onupgradeneeded = () => r.result.createObjectStore('h'); r.onsuccess = () => ok(r.result); r.onerror = () => err(r.error); }); }
+async function pastaLe(ch){ try{ const db = await pastaBanco(); return await new Promise(ok => { const q = db.transaction('h').objectStore('h').get(ch); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); }catch(e){ return null; } }
+async function pastaGuarda(ch, h){ try{ const db = await pastaBanco(); await new Promise((ok, err) => { const t = db.transaction('h', 'readwrite'); t.objectStore('h').put(h, ch); t.oncomplete = ok; t.onerror = () => err(t.error); }); }catch(e){} }
+const pdfPastaPode = () => typeof window.showDirectoryPicker === 'function' && !matchMedia('(pointer:coarse)').matches;
+async function pdfPasta(trocar){
+  if(!pdfPastaPode()){ aviso('Só no computador', 'Gravar direto na pasta funciona no Chrome ou no Edge do computador. No celular use "Enviar ou salvar o PDF".'); return null; }
+  let h = trocar ? null : (pdfPasta._h || await pastaLe('pdf'));
+  if(h){ try{ let pm = await h.queryPermission({ mode: 'readwrite' }); if(pm !== 'granted') pm = await h.requestPermission({ mode: 'readwrite' }); if(pm !== 'granted') h = null; }catch(e){ h = null; } }
+  if(!h){ try{ h = await window.showDirectoryPicker({ id: 'erp-pdf-pedidos', mode: 'readwrite' }); }catch(e){ return null; }   // cancelou
+    await pastaGuarda('pdf', h); }
+  return pdfPasta._h = h;
+}
+/* geradores: funções que devolvem (uma promessa de) arquivo PDF — ver pdfJanela({ emArquivo: true }) */
+async function pdfSalvarNaPasta(geradores){
+  const h = await pdfPasta(); if(!h) return null;
+  const feitos = [], falhas = [];
+  for(let i = 0; i < geradores.length; i++){
+    toast(`Gerando PDF ${i + 1} de ${geradores.length}…`);
+    try{ const f = await geradores[i](); if(!f || !f.name) throw new Error('sem arquivo');
+      const fh = await h.getFileHandle(f.name, { create: true }), wr = await fh.createWritable(); await wr.write(f); await wr.close(); feitos.push(f.name);
+    }catch(e){ falhas.push(String(e && e.message || e)); }
+  }
+  const outra = await modal(falhas.length ? 'Nem tudo foi salvo' : 'PDF salvo na pasta', `${feitos.length ? `Gravado na pasta <b>${esc(h.name)}</b>:<br>${feitos.map(n => '• ' + esc(n)).join('<br>')}` : 'Nenhum arquivo foi gravado.'}${falhas.length ? `<br><br><span style="color:var(--verm)">${falhas.length} não deu certo: ${esc(falhas[0])}</span>` : ''}`,
+    [['OK', false, 'pri'], ['Trocar a pasta…', true]]);
+  if(outra){ const n = await pdfPasta(true); if(n) toast('Pasta trocada para "' + n.name + '". Vale a partir do próximo PDF.'); }
+  return feitos;
+}
 
 /* =================== Ícones do ERP (traço, 24×24, cor = currentColor) =================== */
 const IC = {
@@ -7406,7 +7445,7 @@ async function formOrc(id, pre){
         <div class="grade" style="margin-top:8px">${Object.entries(ROT_TEXTOS).map(([k, r]) => `<label class="campo largo">${r}<textarea data-tx="${k}" rows="${k==='apresentacao'||k==='vencimento'?2:4}">${esc(O.textos[k])}</textarea></label>`).join('')}</div></details>` : ''}
       ${O.etapa === 'perdido' && O.motivo_perda ? `<p style="color:var(--verm)">Motivo da perda: ${esc(O.motivo_perda)}</p>` : ''}
       <div id="ocDestinos"></div></div>
-    <div class="rodape">${id ? '<button class="btn" id="ocPdf">📄 PDF</button><button class="btn" id="ocOnline">🌐 Proposta online</button>' + (typeof formContatoCRM === 'function' && nivelTela('crm') >= 2 ? '<button class="btn" id="ocCrm" title="Registrar uma ligação ou conversa sobre este orçamento">📞 Contato</button>' : '') + '<button class="btn" id="ocDup">Duplicar</button>' : ''}
+    <div class="rodape">${id ? '<button class="btn" id="ocPdf">📄 PDF</button>' + (typeof pdfPastaPode === 'function' && pdfPastaPode() ? '<button class="btn" id="ocPdfPasta" title="Grava o PDF direto na pasta dos pedidos, já com o nome no padrão (PEDIDO_número_CLIENTE_TÍTULO)">💾 PDF na pasta</button>' : '') + '<button class="btn" id="ocOnline">🌐 Proposta online</button>' + (typeof formContatoCRM === 'function' && nivelTela('crm') >= 2 ? '<button class="btn" id="ocCrm" title="Registrar uma ligação ou conversa sobre este orçamento">📞 Contato</button>' : '') + '<button class="btn" id="ocDup">Duplicar</button>' : ''}
       ${id && !travado && O.etapa === 'elaboracao' ? '<button class="btn" id="ocEnv">Marcar enviado</button>' : ''}
       ${id && podeOrc(T) && ['elaboracao','enviado','aprovado_parcial'].includes(O.etapa) ? '<button class="btn" id="ocPerd">Perdido</button><button class="btn" id="ocAprov" style="border-color:var(--verde);color:var(--verde)">✓ Cliente aprovou</button>' : ''}
       ${travado ? '' : '<button class="btn pri" id="bSalvar">Salvar</button>'}</div>`);
@@ -7625,6 +7664,7 @@ async function formOrc(id, pre){
   }
   if($('#bSalvar')) $('#bSalvar').onclick = async () => { const oid = await salvar(); if(oid){ fecharPainel(); if(ST.aba === 'orc') telaOrc(); formOrc(oid); } };
   if($('#ocPdf')) $('#ocPdf').onclick = async () => { if(!travado){ const oid = await salvar(true); if(!oid) return; } pdfOrcamento(id); };
+  if($('#ocPdfPasta')) $('#ocPdfPasta').onclick = async () => { const h = await pdfPasta(); if(!h) return; if(!travado){ const oid = await salvar(true); if(!oid) return; } pdfSalvarNaPasta([() => pdfOrcamento(id, null, { arquivo: true })]); };
   if($('#ocEnv')) $('#ocEnv').onclick = async () => { const oid = await salvar(true); if(!oid) return; try{ await exec(sb.from('orcamentos').update({ etapa:'enviado' }).eq('id', oid), 'Marcado como enviado ao cliente.'); fecharPainel(); telaOrc(); }catch(e){} };
   if($('#ocCrm')) $('#ocCrm').onclick = () => formContatoCRM({ pessoa_id: O.pagador_id, obra_id: O.obra_id, orcamento_id: id, assunto: 'Orçamento' }, () => formOrc(id));
   if($('#ocOnline')) $('#ocOnline').onclick = async () => { if(!travado){ const oid = await salvar(true); if(!oid) return; } abrirPropostaOnline(id); };
@@ -7660,7 +7700,7 @@ async function formOrc(id, pre){
 /* =================== PDF do orçamento =================== */
 /* juntos (opcional): ids de vários orçamentos do MESMO cliente para sair num PDF só — um pedido por orçamento, com o número de cada um,
    e resumo/total/parcelas pela SOMA (25/11, Júlio: os orçamentos do Express num arquivo único). O cabeçalho e a condição vêm do primeiro. */
-async function pdfOrcamento(id, juntos){
+async function pdfOrcamento(id, juntos, opt){   // opt.arquivo: devolve o arquivo PDF (sem abrir janela)
   const [a, b] = await Promise.all([ sb.from('orcamentos').select('*').eq('id', id).single(), sb.from('orcamento_grupos').select('*, orcamento_itens(*)').eq('orcamento_id', id).order('ordem') ]);
   if(a.error) return aviso('Erro', esc(erroBanco(a.error)));
   const O = a.data, ob = obra(O.obra_id) || {}, pg = pessoa(O.pagador_id);
@@ -7735,9 +7775,14 @@ async function pdfOrcamento(id, juntos){
       ${pdfNota([`<b>Prazo de entrega:</b> ${esc(O.prazo_texto || 'a combinar')}`, O.validade ? `<b>Validade da proposta:</b> até ${dataBR(O.validade)}` : '', O.empresa ? `<b>Faturamento:</b> ${O.empresa}` : '', O.observacoes ? `<b>Observações:</b> ${esc(O.observacoes)}` : ''].filter(Boolean).map(x => `<p>${x}</p>`).join(''))}
       ${assin(`COMPRA AUTORIZADA POR<br>${esc(cli)} · ____/____/______`)}`;
   }
-  pdfJanela({ titulo: tit, sub: `${variosOrc ? 'Orçamentos nº ' + nums.join(', ') : (O.tipo === 'projeto' ? 'Proposta' : 'Orçamento') + ' nº ' + n}${O.validade ? ' · válida até ' + dataBR(O.validade) : ''}`, emissao: dataBR(O.data_orcamento),
+  return pdfJanela({ emArquivo: !!(opt && opt.arquivo), titulo: tit, sub: `${variosOrc ? 'Orçamentos nº ' + nums.join(', ') : (O.tipo === 'projeto' ? 'Proposta' : 'Orçamento') + ' nº ' + n}${O.validade ? ' · válida até ' + dataBR(O.validade) : ''}`, emissao: dataBR(O.data_orcamento),
     faixa, corpo, direita: variosOrc ? `Nº ${nums[0]} a ${nums[nums.length - 1]}` : `Nº ${n}`,
-    arquivo: (O.tipo === 'projeto' ? 'PROPOSTA_' : 'ORCAMENTO_') + (variosOrc ? nums[0] + '_a_' + nums[nums.length - 1] : n) + '_' + String(cli || '').replace(/[\\/:*?"<>|]/g, '') });
+    /* 26/11 (Júlio): nome do arquivo no padrão que a Equiper já usa — PEDIDO_010930_RONI ARGALJI_PENDENCIAS PREVENTIVA;
+       vários pedidos num PDF só — PEDIDO_010972_a_10975_CARLOS MIRANDA. Maiúsculas, sem acento. */
+    arquivo: (() => { const limpo = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
+      const nomeCli = limpo((pg && (pg.apelido || pg.nome)) || ob.nome || cli), tits = [...new Set(G.map(g => limpo(g.titulo)).filter(t => t && t !== 'ITENS'))];
+      const tit = variosOrc ? '' : (tits.join(' + ') || limpo(O.referencia));
+      return [O.tipo === 'projeto' ? 'PROPOSTA' : 'PEDIDO', variosOrc ? (ns => numOrc(ns[0]) + '_a_' + ns[ns.length - 1])(OS.map(o => Number(o.numero)).sort((x, y) => x - y)) : n, nomeCli, tit].filter(Boolean).join('_').slice(0, 150); })() });
 }
 
 Object.assign(TELAS, { orc: telaOrc, produtos: telaProdutos });
@@ -7906,7 +7951,7 @@ async function telaExpress(){
       <div style="margin-top:14px"><span style="font-size:13px"><b>2.</b> O que este orçamento vai ter? Toque para acrescentar um sistema (pode repetir):</span>
         <div class="chips" style="margin-top:6px">${ativos.map(s => `<button class="chip" data-xadd="${s.id}">+ ${esc(s.nome)}</button>`).join('') || '<span class="muted">Nenhum sistema cadastrado. Cadastre em Configuração do Express.</span>'}</div></div></div>
     ${X.inst.map(cartao).join('')}
-    <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1"><b>3.</b> ${X.inst.length} sistema(s) · total <b style="font-size:17px">${R$(geral)}</b>${(X.gerados || []).length ? `<div style="font-size:12.5px;margin-top:2px">Já gerado: ${X.gerados.map(g => `<a href="#" data-xorc2="${g.id}"><b>${numOrc(g.numero)}</b></a> <span class="muted">${esc(g.titulo)}</span>`).join(' · ')}${X.gerados.length > 1 ? ' <button class="btn peq" id="xPdfTodos" title="Um único PDF com todos os orçamentos deste express, um pedido por sistema e o total somado">🖨 PDF único</button>' : ''}</div>` : ''}<div class="muted" style="font-size:12px">Cada sistema vira um orçamento próprio, com o seu número, em Vendas → Orçamentos. Antes de gerar, em cada sistema: troque o valor de qualquer item digitando no campo, e use ⤵ abrir kit para explodir só aquele kit.</div></span>
+    <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1"><b>3.</b> ${X.inst.length} sistema(s) · total <b style="font-size:17px">${R$(geral)}</b>${(X.gerados || []).length ? `<div style="font-size:12.5px;margin-top:2px">Já gerado: ${X.gerados.map(g => `<a href="#" data-xorc2="${g.id}"><b>${numOrc(g.numero)}</b></a> <span class="muted">${esc(g.titulo)}</span>`).join(' · ')}${X.gerados.length > 1 ? ' <button class="btn peq" id="xPdfTodos" title="Um único PDF com todos os orçamentos deste express, um pedido por sistema e o total somado">🖨 PDF único</button>' : ''}${typeof pdfPastaPode === 'function' && pdfPastaPode() ? ' <button class="btn peq" id="xPdfPasta" title="Grava direto na pasta dos pedidos: um PDF de cada pedido' + (X.gerados.length > 1 ? ' e o PDF único com todos' : '') + ', com o nome no padrão">💾 Salvar PDFs na pasta</button>' : ''}</div>` : ''}<div class="muted" style="font-size:12px">Cada sistema vira um orçamento próprio, com o seu número, em Vendas → Orçamentos. Antes de gerar, em cada sistema: troque o valor de qualquer item digitando no campo, e use ⤵ abrir kit para explodir só aquele kit.</div></span>
       ${X.inst.length ? '<button class="btn" id="xLimpa">Limpar</button>' : ''}<button class="btn pri" id="xGerar">⚡ ${X.inst.some(i => i.orc) ? 'Atualizar orçamentos' : 'Gerar orçamentos'}</button></div>`;
   /* 25/11 (Júlio): explodir cada kit separadamente e trocar o valor à mão, item por item */
   const marcaKit = (v) => b => b.onclick = () => { const d = b.dataset.xka || b.dataset.xkf, k = d.slice(0, d.indexOf(':')), cod = d.slice(d.indexOf(':') + 1), i = X.inst[+k]; (i.kits = i.kits || {})[cod] = v; mexeu(); telaExpress(); };
@@ -8008,6 +8053,9 @@ async function telaExpress(){
     document.querySelectorAll('#folha [data-xpdf]').forEach(b => b.onclick = pdfTodos); };
   document.querySelectorAll('[data-xorc2]').forEach(a => a.onclick = e => { e.preventDefault(); abrirOrc(a.dataset.xorc2); });
   if($('#xPdfTodos')) $('#xPdfTodos').onclick = pdfTodos;
+  /* 26/11: grava na pasta o PDF único (quando há mais de um pedido) e um PDF de cada pedido */
+  if($('#xPdfPasta')) $('#xPdfPasta').onclick = () => { const ids = X.inst.filter(i => i.orc).map(i => i.orc.id); if(!ids.length) return;
+    pdfSalvarNaPasta((ids.length > 1 ? [() => pdfOrcamento(ids[0], ids, { arquivo: true })] : []).concat(ids.map(id => () => pdfOrcamento(id, null, { arquivo: true })))); };
   $('#xGerar').onclick = async () => {
     const cli = pega(); if(!cli) return aviso('Cliente', 'Escolha o cliente do orçamento.');
     const com = X.inst.filter(i => itensDe(i).some(x => x.tipo !== 'titulo'));
