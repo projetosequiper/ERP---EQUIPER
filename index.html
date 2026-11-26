@@ -9324,6 +9324,115 @@ function lerCertificadoArquivo(bytes, nomeArq, senha){
   return Object.assign(_certInfo(cert), { tipo: 'A1', tem_chave: false });
 }
 
+/* =================== 48 — Conta do pedido (26/11, Júlio; script 102) ===================
+   Cada pedido aprovado com três números lado a lado: VENDIDO (total aprovado) · FATURADO (soma das notas de venda ligadas ao
+   pedido) · RECEBIDO (pagamentos baixados). Dois saldos têm que chegar a zero: a faturar e a receber. O recebimento e a nota
+   andam separados — o sinal não precisa bater com nota nenhuma; a diferença aparece como "recebido ainda sem nota".
+   Etapa 1 (esta): só leitura, juntando o que já existe (orçamentos aprovados, notas e títulos do CIGAM, parcelas do ERP).
+   Etapas seguintes: lançar pagamento debitando do pedido; emitir nota por entrega escolhendo os itens. */
+IC.fn_pedidos = '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M7 13h3M7 16h5M15 13h2.5M15 16h2.5"/>';
+(() => { if(MENU.some(g => g.itens.some(i => i[0] === 'fn_pedidos'))) return; const g = MENU.find(x => x.area === 'Financeiro') || MENU[MENU.length - 1];
+  const k = g.itens.findIndex(i => i[0] === 'fn_receber'); g.itens.splice(k < 0 ? g.itens.length : k + 1, 0, ['fn_pedidos', '🧮', 'Contas dos pedidos', 'DA']); })();
+
+const cpBarra = (feito, total, cor) => { const p = total > 0 ? Math.max(0, Math.min(100, feito / total * 100)) : 0;
+  return `<div style="height:8px;border-radius:6px;background:#e5e7eb;overflow:hidden;margin-top:6px"><div style="height:100%;width:${p.toFixed(1)}%;background:${cor}"></div></div>`; };
+const cpZero = v => Math.abs(Number(v) || 0) < 0.01;
+/* os avisos de um pedido (o que ainda não fechou) */
+function cpAvisos(c){ const a = [];
+  if(c.a_faturar > 0.009) a.push(['#b45309', `Falta faturar ${R$(c.a_faturar)}`]); else if(c.a_faturar < -0.009) a.push(['#b91c1c', `As notas somam ${R$(-c.a_faturar)} a mais que o pedido`]);
+  if(c.a_receber > 0.009) a.push(['#1d4ed8', `Falta receber ${R$(c.a_receber)}`]); else if(c.a_receber < -0.009) a.push(['#b91c1c', `Recebido ${R$(-c.a_receber)} a mais que o pedido`]);
+  if(c.recebido_sem_nota > 0.009) a.push(['#6d28d9', `${R$(c.recebido_sem_nota)} recebido ainda sem nota`]);
+  return a; }
+function cpQuadro(c){
+  const caixa = (rot, v, sub, cor) => `<div style="flex:1 1 150px;border:1px solid var(--borda);border-radius:12px;padding:10px 12px;background:#fff"><div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.3px">${rot}</div><div style="font-size:19px;font-weight:700;color:${cor || 'inherit'}">${R$(v)}</div>${sub || ''}</div>`;
+  const av = cpAvisos(c);
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap">
+      ${caixa('Vendido', c.vendido, '<div class="muted" style="font-size:11.5px;margin-top:6px">total aprovado</div>')}
+      ${caixa('Faturado', c.faturado, cpBarra(c.faturado, c.vendido, '#b45309') + `<div class="muted" style="font-size:11.5px;margin-top:3px">${c.n_notas} nota(s) · a faturar <b>${R$(c.a_faturar)}</b></div>`)}
+      ${caixa('Recebido', c.recebido, cpBarra(c.recebido, c.vendido, '#16a34a') + `<div class="muted" style="font-size:11.5px;margin-top:3px">a receber <b>${R$(c.a_receber)}</b>${c.titulos_abertos > 0.009 ? ' · ' + R$(c.titulos_abertos) + ' em títulos abertos' : ''}</div>`)}</div>
+    <div style="margin-top:8px;font-size:13px">${av.length ? av.map(([cor, t]) => `<span class="tag" style="background:${cor}14;color:${cor};border:1px solid ${cor}44;margin:0 6px 4px 0">${esc(t)}</span>`).join('') : '<span class="tag ok">Pedido fechado: tudo faturado e recebido</span>'}</div>`; }
+
+async function fichaContaPedido(id){
+  abrirPainel('<div class="cab"><h2>Conta do pedido</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div><div class="card"><div class="vazio">Carregando…</div></div>');
+  const r = await sb.rpc('pedido_conta_detalhe', { p_id: id });
+  if(r.error || !r.data){ $('#folha').innerHTML = `<div class="cab"><h2>Conta do pedido</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div><div class="card"><p class="vazio">${r.error ? esc(erroBanco(r.error)) : 'Este orçamento ainda não foi aprovado.'}</p></div>`; return; }
+  const d = r.data, c = d.conta, somaN = d.notas.reduce((a, n) => a + n.sinal * Number(n.total || 0), 0);
+  const sinalTxt = n => n.sinal === 1 ? '' : n.sinal === -1 ? ' <span class="tag" style="background:#fee2e2;color:#b91c1c">devolução: desconta</span>' : ' <span class="tag inat" title="Remessa, conserto, demonstração etc.: não é venda">não conta</span>';
+  $('#folha').innerHTML = `<div class="cab"><h2>Conta do pedido ${numOrc(c.numero)}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+    <div class="card" data-nao-suja="1"><div style="font-size:14px;margin-bottom:10px"><b>${esc(c.cliente || 'Sem cliente')}</b>${c.obra ? ' <span class="muted">· ' + esc(c.obra) + '</span>' : ''} <span class="muted">· ${esc(c.empresa || '')} · aprovado em ${dataBR(c.data)}</span></div>
+      ${cpQuadro(c)}
+      ${c.importado_cigam ? '<p class="muted" style="font-size:12px;margin:10px 0 0">Pedido vindo do CIGAM: as notas e os títulos abaixo são os do CIGAM. Lá os recebimentos não são baixados desde 2024, por isso título pago pode aparecer como aberto até ser conferido em A receber.</p>' : ''}</div>
+    <div class="card" data-nao-suja="1"><h2>Notas fiscais deste pedido <span class="muted" style="font-weight:400">· ${d.notas.length}</span></h2>
+      ${d.notas.length ? `<div style="overflow-x:auto"><table class="reg"><thead><tr><th>Nota</th><th>Emissão</th><th>Empresa</th><th>CFOP</th><th style="text-align:right">Valor</th></tr></thead><tbody>
+        ${d.notas.map(n => `<tr><td><b>${esc(n.numero)}</b> <span class="muted">${esc(n.serie || '')}</span>${sinalTxt(n)}</td><td>${dataBR(n.emissao)}</td><td>${esc(n.empresa || '')}</td><td>${esc(n.cfop || '')}</td><td style="text-align:right">${R$(n.total)}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="4" style="text-align:right"><b>Faturado</b></td><td style="text-align:right"><b>${R$(somaN)}</b></td></tr>
+          <tr><td colspan="4" style="text-align:right">${c.a_faturar < -0.009 ? 'Passou do pedido em' : 'Falta faturar'}</td><td style="text-align:right;color:${cpZero(c.a_faturar) ? '#16a34a' : '#b45309'}"><b>${R$(Math.abs(c.a_faturar))}</b></td></tr></tfoot></table></div>`
+        : '<p class="vazio">Nenhuma nota ligada a este pedido ainda.</p>'}</div>
+    <div class="card" data-nao-suja="1"><h2>Recebimentos <span class="muted" style="font-weight:400">· ${d.titulos.length} parcela(s)</span></h2>
+      ${d.titulos.length ? `<div style="overflow-x:auto"><table class="reg"><thead><tr><th>Parcela</th><th>Vencimento</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead><tbody>
+        ${d.titulos.map(t => { const pago = Number(t.recebido) >= Number(t.valor) - 0.009 && Number(t.valor) > 0;
+          return `<tr><td>${esc(t.descricao || '')} ${t.origem === 'cigam' ? '<span class="muted" style="font-size:11px">CIGAM</span>' : ''}</td><td>${t.vencimento ? dataBR(t.vencimento) : '—'}</td><td style="text-align:right">${R$(t.valor)}</td><td>${pago ? `<span class="tag ok">recebido${t.recebido_em ? ' em ' + dataBR(t.recebido_em) : ''}</span>` : Number(t.recebido) > 0 ? `<span class="tag">recebido ${R$(t.recebido)}</span>` : '<span class="tag" style="background:#dbeafe;color:#1d4ed8">em aberto</span>'}</td></tr>`; }).join('')}</tbody>
+        <tfoot><tr><td colspan="2" style="text-align:right"><b>Recebido</b></td><td style="text-align:right"><b>${R$(c.recebido)}</b></td><td></td></tr>
+          <tr><td colspan="2" style="text-align:right">Falta receber (do total do pedido)</td><td style="text-align:right;color:${cpZero(c.a_receber) ? '#16a34a' : '#1d4ed8'}"><b>${R$(c.a_receber)}</b></td><td></td></tr></tfoot></table></div>`
+        : '<p class="vazio">Nenhuma parcela ou título ligado a este pedido.</p>'}</div>
+    <div class="rodape"><button class="btn pri" id="cpAbreOrc">Abrir o orçamento</button></div>`;
+  $('#cpAbreOrc').onclick = async () => { fecharPainel(); if(typeof formOrc === 'function') formOrc(id); };
+}
+
+ST.cp = { ano: String(new Date().getFullYear()), filtro: 'abertos', busca: '' };
+async function telaContaPedidos(){
+  carregandoTela();
+  const F = ST.cp, seq = ST._cpSeq = (ST._cpSeq || 0) + 1, chave = F.ano;
+  if(!ST._cpDados || ST._cpDados.chave !== chave || Date.now() - ST._cpDados.em > 120000){
+    const arg = F.ano === 'tudo' ? {} : { p_desde: F.ano + '-01-01', p_ate: F.ano + '-12-31' }; let l = [], erro = null;
+    for(let a = 0; a < 20000; a += 1000){ const r = await sb.rpc('pedido_contas', arg).range(a, a + 999); if(r.error){ erro = r.error; break; } l = l.concat(r.data || []); if((r.data || []).length !== 1000) break; }   // página incompleta = acabou (e se o servidor devolver tudo de uma vez, também para)
+    if(seq !== ST._cpSeq || ST.aba !== 'fn_pedidos') return;
+    if(erro){ $('#conteudo').innerHTML = `<div class="card"><p class="vazio">Não deu para carregar as contas dos pedidos: ${esc(erroBanco(erro))}</p></div>`; return; }
+    l.forEach(x => ['vendido', 'faturado', 'recebido', 'titulos_abertos', 'a_faturar', 'a_receber', 'recebido_sem_nota'].forEach(k => x[k] = Number(x[k]) || 0));
+    ST._cpDados = { chave, em: Date.now(), l };
+  }
+  if(ST.aba !== 'fn_pedidos') return;
+  const L = ST._cpDados.l, anoAtual = new Date().getFullYear();
+  const FIL = { abertos: ['Com saldo', x => !cpZero(x.a_faturar) || !cpZero(x.a_receber)], faturar: ['A faturar', x => x.a_faturar > 0.009], receber: ['A receber', x => x.a_receber > 0.009],
+    semnota: ['Recebido sem nota', x => x.recebido_sem_nota > 0.009], passou: ['Nota acima do pedido', x => x.a_faturar < -0.009], fechados: ['Fechados', x => cpZero(x.a_faturar) && cpZero(x.a_receber)], todos: ['Todos', () => true] };
+  const b = norm(F.busca || '').trim(), numB = b.replace(/\D/g, '');
+  const l = L.filter(FIL[F.filtro][1]).filter(x => !b || norm([x.cliente, x.obra, numOrc(x.numero), x.numero].join(' ')).temTudo(b) || (numB && String(x.numero).includes(String(Number(numB)))));
+  const soma = k => l.reduce((a, x) => a + x[k], 0);
+  const cartao = (rot, v, cor) => `<div style="flex:1 1 150px;border:1px solid var(--borda);border-radius:12px;padding:10px 12px;background:#fff"><div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.3px">${rot}</div><div style="font-size:18px;font-weight:700;color:${cor || 'inherit'};white-space:nowrap">${R$(v)}</div></div>`;
+  $('#conteudo').dataset.tela = 'fn_pedidos';
+  $('#conteudo').innerHTML = `<div class="card"><h2>Contas dos pedidos <span class="muted" style="font-weight:400">· cada pedido aprovado: quanto foi vendido, quanto já tem nota e quanto já foi recebido</span></h2>
+      <div class="barra" style="margin:6px 0 10px;align-items:center"><select id="cpAno" style="width:auto">${[0, 1, 2, 3].map(i => `<option value="${anoAtual - i}" ${F.ano === String(anoAtual - i) ? 'selected' : ''}>Aprovados em ${anoAtual - i}</option>`).join('')}<option value="tudo" ${F.ano === 'tudo' ? 'selected' : ''}>Todos os anos</option></select>
+        <input type="search" id="cpBusca" placeholder="Buscar por cliente, obra ou número do pedido…" value="${esc(F.busca || '')}" style="flex:1 1 260px"></div>
+      <div class="chips">${Object.entries(FIL).map(([k, [rot, f]]) => `<button class="chip ${F.filtro === k ? 'on' : ''}" data-cpf="${k}">${rot} <span class="muted">${L.filter(f).length}</span></button>`).join('')}</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">${cartao('Vendido', soma('vendido'))}${cartao('Faturado', soma('faturado'), '#b45309')}${cartao('A faturar', soma('a_faturar'), '#b45309')}${cartao('Recebido', soma('recebido'), '#16a34a')}${cartao('A receber', soma('a_receber'), '#1d4ed8')}</div></div>
+    <div class="card">${l.length ? `<div style="overflow-x:auto"><table class="reg"><thead><tr><th>Pedido</th><th>Aprovado</th><th>Cliente</th><th style="text-align:right">Vendido</th><th style="text-align:right">Faturado</th><th style="text-align:right">A faturar</th><th style="text-align:right">Recebido</th><th style="text-align:right">A receber</th></tr></thead><tbody>
+        ${l.slice(0, 400).map(x => `<tr data-cp="${x.id}" style="cursor:pointer"><td><b>${numOrc(x.numero)}</b></td><td>${x.data ? dataBR(x.data) : '—'}</td><td><b>${esc(x.cliente || '—')}</b>${x.obra ? `<div class="muted" style="font-size:11.5px">${esc(x.obra)}</div>` : ''}</td>
+          <td style="text-align:right">${R$(x.vendido)}</td><td style="text-align:right">${R$(x.faturado)}<div class="muted" style="font-size:11px">${x.n_notas} nota(s)</div></td>
+          <td style="text-align:right;font-weight:600;color:${cpZero(x.a_faturar) ? '#16a34a' : x.a_faturar < 0 ? '#b91c1c' : '#b45309'}">${cpZero(x.a_faturar) ? '✓' : R$(x.a_faturar)}</td>
+          <td style="text-align:right">${R$(x.recebido)}${x.recebido_sem_nota > 0.009 ? `<div style="font-size:11px;color:#6d28d9">${R$(x.recebido_sem_nota)} sem nota</div>` : ''}</td>
+          <td style="text-align:right;font-weight:600;color:${cpZero(x.a_receber) ? '#16a34a' : x.a_receber < 0 ? '#b91c1c' : '#1d4ed8'}">${cpZero(x.a_receber) ? '✓' : R$(x.a_receber)}</td></tr>`).join('')}</tbody></table></div>
+        ${l.length > 400 ? `<p class="muted" style="font-size:12px;margin-top:8px">Mostrando 400 de ${l.length}. Use a busca ou os filtros.</p>` : ''}` : '<p class="vazio">Nenhum pedido neste filtro.</p>'}</div>`;
+  $('#cpAno').onchange = e => { F.ano = e.target.value; ST._cpDados = null; $('#conteudo').innerHTML = ''; telaContaPedidos(); };
+  $('#cpBusca').oninput = e => { F.busca = e.target.value; clearTimeout(e.target._t); e.target._t = setTimeout(async () => { await telaContaPedidos(); const i = $('#cpBusca'); if(i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 300); };
+  document.querySelectorAll('[data-cpf]').forEach(bt => bt.onclick = () => { F.filtro = bt.dataset.cpf; telaContaPedidos(); });
+  document.querySelectorAll('[data-cp]').forEach(tr => tr.onclick = () => fichaContaPedido(tr.dataset.cp));
+}
+Object.assign(TELAS, { fn_pedidos: telaContaPedidos });
+
+/* dentro do orçamento aprovado: o quadro da conta do pedido */
+(function(){ const orig = window.formOrc; if(typeof orig !== 'function') return;
+  window.formOrc = async function(id){ const r = await orig.apply(this, arguments);
+    if(!id || typeof nivelTela !== 'function' || nivelTela('fn_pedidos') < 1) return r;
+    try{ const q = await sb.rpc('pedido_contas', { p_id: id }); const c = !q.error && q.data && q.data[0]; if(!c || $('#ocConta')) return r;
+      ['vendido', 'faturado', 'recebido', 'titulos_abertos', 'a_faturar', 'a_receber', 'recebido_sem_nota'].forEach(k => c[k] = Number(c[k]) || 0);
+      const box = document.createElement('div'); box.className = 'card'; box.id = 'ocConta'; box.dataset.naoSuja = '1';
+      box.innerHTML = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><b>Conta do pedido</b><span class="muted" style="font-size:12px">vendido · faturado · recebido</span><button class="btn peq" id="ocContaAbre" style="margin-left:auto">Ver notas e recebimentos</button></div>${cpQuadro(c)}`;
+      const ancora = $('#ocCigam') || document.querySelector('#folha .cab'); if(ancora) ancora.after(box);
+      $('#ocContaAbre').onclick = () => fichaContaPedido(id);
+    }catch(e){}
+    return r; };
+})();
+
 /* ================== Notas fiscais pela Focus NFe (script 20) ==================
    A tela monta a nota e mostra tudo para conferir; quem envia para a Focus é o banco
    (o token fica no Vault do Supabase, nunca aqui). Começa sempre em homologação (teste). */
@@ -12984,7 +13093,7 @@ window.MENU_GUARDADAS = {};
     ['Vendas', ['orc', 'vd_express', 'pv_precos', 'vd_express_cfg']],
     ['Compras', ['cp_compras', 'cp_controle', 'cp_precos', 'es_mov_cigam']],
     ['Serviços', ['os_cigam']],   // 25/11 (Júlio): nada de "Histórico do CIGAM" à parte — as telas fazem parte do ERP
-    ['Financeiro', ['fn_receber', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fn_notas_entrada', 'fn_notas_saida', 'fin_servicos', 'fin_projetos']],
+    ['Financeiro', ['fn_receber', 'fn_pedidos', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fn_notas_entrada', 'fn_notas_saida', 'fin_servicos', 'fin_projetos']],
     ['Fiscal', ['fn_notas', 'fn_recebidas', 'fn_contabil', 'adm_fiscal', 'adm_cert', 'adm_regras']],
     ['Relatórios', ['fn_painel', 'fn_gerencial', 'fn_cnpj']],
     ['Administração', ['adm_usuarios', 'adm_menu', 'fn_plano', 'registro', 'adm_backup', 'vinculos', 'projetos', 'servicos']]
