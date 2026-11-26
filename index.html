@@ -9356,18 +9356,31 @@ async function fichaContaPedido(id){
   abrirPainel('<div class="cab"><h2>Conta do pedido</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div><div class="card"><div class="vazio">Carregando…</div></div>');
   const r = await sb.rpc('pedido_conta_detalhe', { p_id: id });
   if(r.error || !r.data){ $('#folha').innerHTML = `<div class="cab"><h2>Conta do pedido</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div><div class="card"><p class="vazio">${r.error ? esc(erroBanco(r.error)) : 'Este orçamento ainda não foi aprovado.'}</p></div>`; return; }
-  const d = r.data, c = d.conta, somaN = d.notas.reduce((a, n) => a + n.sinal * Number(n.total || 0), 0);
+  const d = r.data, c = d.conta; ['vendido', 'faturado', 'recebido', 'titulos_abertos', 'a_faturar', 'a_receber', 'recebido_sem_nota'].forEach(k => c[k] = Number(c[k]) || 0);
+  const fatDe = id => (d.faturas || []).find(f => f.id === id);
+  const LN = (d.notas || []).map(n => { const f = n.fatura ? fatDe(n.fatura) : null; return { numero: n.numero, serie: n.serie, emissao: n.emissao, cfop: n.cfop, total: n.total, sinal: n.sinal, cigam: true, ligada: n.ligada, fatura: n.fatura, itens: f ? f.itens.length : 0, final: f && f.final, obs: f && f.observacao }; })
+    .concat((d.faturas || []).filter(f => !(d.notas || []).some(n => n.fatura === f.id)).map(f => ({ numero: f.numero, serie: f.serie, emissao: f.emissao, total: f.valor, sinal: 1, cigam: false, fatura: f.id, itens: f.itens.length, final: f.final, obs: f.observacao })))
+    .sort((x, y) => String(x.emissao).localeCompare(String(y.emissao)));
   const sinalTxt = n => n.sinal === 1 ? '' : n.sinal === -1 ? ' <span class="tag" style="background:#fee2e2;color:#b91c1c">devolução: desconta</span>' : ' <span class="tag inat" title="Remessa, conserto, demonstração etc.: não é venda">não conta</span>';
   $('#folha').innerHTML = `<div class="cab"><h2>Conta do pedido ${numOrc(c.numero)}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
     <div class="card" data-nao-suja="1"><div style="font-size:14px;margin-bottom:10px"><b>${esc(c.cliente || 'Sem cliente')}</b>${c.obra ? ' <span class="muted">· ' + esc(c.obra) + '</span>' : ''} <span class="muted">· ${esc(c.empresa || '')} · aprovado em ${dataBR(c.data)}</span></div>
       ${cpQuadro(c)}
       ${c.importado_cigam ? '<p class="muted" style="font-size:12px;margin:10px 0 0">Pedido vindo do CIGAM: as notas e os títulos abaixo são os do CIGAM. Lá os recebimentos não são baixados desde 2024, por isso título pago pode aparecer como aberto até ser conferido em A receber.</p>' : ''}</div>
-    <div class="card" data-nao-suja="1"><h2>Notas fiscais deste pedido <span class="muted" style="font-weight:400">· ${d.notas.length}</span></h2>
-      ${d.notas.length ? `<div style="overflow-x:auto"><table class="reg"><thead><tr><th>Nota</th><th>Emissão</th><th>Empresa</th><th>CFOP</th><th style="text-align:right">Valor</th></tr></thead><tbody>
-        ${d.notas.map(n => `<tr><td><b>${esc(n.numero)}</b> <span class="muted">${esc(n.serie || '')}</span>${sinalTxt(n)}</td><td>${dataBR(n.emissao)}</td><td>${esc(n.empresa || '')}</td><td>${esc(n.cfop || '')}</td><td style="text-align:right">${R$(n.total)}</td></tr>`).join('')}</tbody>
-        <tfoot><tr><td colspan="4" style="text-align:right"><b>Faturado</b></td><td style="text-align:right"><b>${R$(somaN)}</b></td></tr>
-          <tr><td colspan="4" style="text-align:right">${c.a_faturar < -0.009 ? 'Passou do pedido em' : 'Falta faturar'}</td><td style="text-align:right;color:${cpZero(c.a_faturar) ? '#16a34a' : '#b45309'}"><b>${R$(Math.abs(c.a_faturar))}</b></td></tr></tfoot></table></div>`
-        : '<p class="vazio">Nenhuma nota ligada a este pedido ainda.</p>'}</div>
+    <div class="card" data-nao-suja="1"><h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">Notas fiscais deste pedido <span class="muted" style="font-weight:400">· ${LN.length}</span>
+        ${d.pode_faturar ? `<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${(d.soltas || []).length ? '<button class="btn peq" id="cpLigar" title="Notas de venda deste cliente que estão no CIGAM sem o número do pedido">🔗 Ligar nota do CIGAM</button>' : ''}${c.a_faturar > 0.009 ? '<button class="btn peq" id="cpNotaFinal" title="Última nota do pedido: pega tudo o que falta e fecha o valor exato">Nota final</button><button class="btn peq pri" id="cpNota">＋ Registrar nota</button>' : ''}</span>` : ''}</h2>
+      ${LN.length ? `<div style="overflow-x:auto"><table class="reg"><thead><tr><th>Nota</th><th>Emissão</th><th>Origem</th><th>Itens</th><th style="text-align:right">Valor</th><th style="width:40px"></th></tr></thead><tbody>
+        ${LN.map(n => `<tr><td><b>${esc(n.numero || '—')}</b> <span class="muted">${esc(n.serie || '')}</span>${n.sinal === 1 ? '' : n.sinal === -1 ? ' <span class="tag" style="background:#fee2e2;color:#b91c1c">devolução: desconta</span>' : ' <span class="tag inat" title="Remessa, conserto, demonstração etc.: não é venda">não conta</span>'}${n.final ? ' <span class="tag ok">nota final</span>' : ''}${n.obs ? `<div class="muted" style="font-size:11.5px">${esc(n.obs)}</div>` : ''}</td>
+          <td>${dataBR(n.emissao)}</td><td>${n.cigam ? 'CIGAM' + (n.ligada ? ' <span class="muted" style="font-size:11px">ligada à mão</span>' : '') : 'registrada no ERP'}${n.cfop ? ` <span class="muted" style="font-size:11px">${esc(n.cfop)}</span>` : ''}</td>
+          <td>${n.itens ? n.itens + ' item(ns)' : '<span class="muted">—</span>'}</td><td style="text-align:right">${R$(n.total)}</td>
+          <td>${d.pode_faturar && n.fatura ? `<button class="btn peq" data-cpfx="${n.fatura}" title="Excluir este registro (os itens voltam a ficar como a faturar)">✕</button>` : ''}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="4" style="text-align:right"><b>Faturado</b></td><td style="text-align:right"><b>${R$(c.faturado)}</b></td><td></td></tr>
+          <tr><td colspan="4" style="text-align:right">${c.a_faturar < -0.009 ? 'Passou do pedido em' : 'Falta faturar'}</td><td style="text-align:right;color:${cpZero(c.a_faturar) ? '#16a34a' : '#b45309'}"><b>${R$(Math.abs(c.a_faturar))}</b></td><td></td></tr></tfoot></table></div>`
+        : '<p class="vazio">Nenhuma nota ligada a este pedido ainda.</p>'}
+      ${(d.itens || []).length ? `<details style="margin-top:12px" ${d.itens.some(i => Number(i.fat_qtd) > 0) ? 'open' : ''}><summary style="cursor:pointer;font-size:13px;font-weight:600">Itens do pedido: o que já saiu em nota e o que falta <span class="muted" style="font-weight:400">· ${d.itens.filter(i => Number(i.quantidade) - Number(i.fat_qtd) > 0.0005).length} de ${d.itens.length} com saldo</span></summary>
+        <div style="overflow-x:auto;margin-top:8px"><table class="reg"><thead><tr><th>Código</th><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Em nota</th><th style="text-align:right">Falta</th><th style="text-align:right">Valor que falta</th></tr></thead><tbody>
+        ${d.itens.map(i => { const falta = Number(i.quantidade) - Number(i.fat_qtd); return `<tr><td>${esc(i.codigo || '')}</td><td>${esc(i.descricao || '')}</td><td style="text-align:right">${Number(i.quantidade).toLocaleString('pt-BR')}</td><td style="text-align:right">${Number(i.fat_qtd) ? Number(i.fat_qtd).toLocaleString('pt-BR') : '—'}</td>
+          <td style="text-align:right;font-weight:600;color:${falta > 0.0005 ? '#b45309' : '#16a34a'}">${falta > 0.0005 ? falta.toLocaleString('pt-BR') : '✓'}</td><td style="text-align:right">${falta > 0.0005 ? R$(falta * Number(i.unit)) : ''}</td></tr>`; }).join('')}</tbody></table></div>
+        <p class="muted" style="font-size:12px;margin:6px 0 0">As notas do CIGAM não trazem os itens: o controle item a item vale para as notas registradas aqui.</p></details>` : ''}</div>
     <div class="card" data-nao-suja="1"><h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">Recebimentos <span class="muted" style="font-weight:400">· ${d.titulos.length} parcela(s)</span>${d.pode_baixar && c.a_receber > 0.009 ? '<button class="btn peq pri" id="cpPagar" style="margin-left:auto">＋ Registrar pagamento</button>' : ''}</h2>
       ${(d.pagamentos || []).length ? `<div style="overflow-x:auto;margin-bottom:12px"><table class="reg"><thead><tr><th>Pagamento</th><th>Forma</th><th>Conta</th><th style="text-align:right">Valor</th><th style="width:40px"></th></tr></thead><tbody>
         ${d.pagamentos.map(g => `<tr><td><b>${dataBR(g.data)}</b>${g.observacao ? `<div class="muted" style="font-size:11.5px">${esc(g.observacao)}</div>` : ''}</td><td>${esc(g.forma || '—')}</td><td>${esc(g.conta || '—')}</td><td style="text-align:right;color:var(--verde);font-weight:600">${R$(g.valor)}</td><td>${d.pode_baixar ? `<button class="btn peq" data-cpest="${g.grupo}" title="Estornar este pagamento: as parcelas voltam a ficar em aberto">↩</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}
@@ -9379,6 +9392,17 @@ async function fichaContaPedido(id){
         : '<p class="vazio">Nenhuma parcela ou título ligado a este pedido.</p>'}</div>
     <div class="rodape"><button class="btn pri" id="cpAbreOrc">Abrir o orçamento</button></div>`;
   $('#cpAbreOrc').onclick = async () => { fecharPainel(); if(typeof formOrc === 'function') formOrc(id); };
+  const recarrega = async () => { ST._cpDados = null; await fichaContaPedido(id); if(ST.aba === 'fn_pedidos') telaContaPedidos(); };
+  if($('#cpNota')) $('#cpNota').onclick = () => formNotaPedido(d, false, recarrega);
+  if($('#cpNotaFinal')) $('#cpNotaFinal').onclick = () => formNotaPedido(d, true, recarrega);
+  if($('#cpLigar')) $('#cpLigar').onclick = async () => {
+    const qual = await modal('Ligar nota do CIGAM a este pedido', `<div style="text-align:left;font-size:13px">Notas de venda deste cliente que estão no CIGAM <b>sem o número do pedido</b>. Escolha a que pertence ao pedido ${numOrc(c.numero)}:<div style="margin-top:8px;max-height:300px;overflow:auto">${d.soltas.map(n => `<label style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--borda)"><input type="radio" name="cpSolta" value="${n.id}"><span><b>NF ${esc(n.numero)}</b> ${esc(n.serie || '')} · ${dataBR(n.emissao)} · ${esc(n.empresa || '')}</span><b style="margin-left:auto">${R$(n.total)}</b></label>`).join('')}</div></div>`, [['Cancelar', false], ['Ligar ao pedido', true, 'pri']]);
+    const sel = document.querySelector('input[name=cpSolta]:checked'); if(!qual || !sel) return;
+    const r2 = await sb.rpc('pedido_fatura_salvar', { p_orc: id, p: { nota_cigam_id: Number(sel.value) } }); if(r2.error) return aviso('Não foi possível ligar', esc(erroBanco(r2.error)));
+    toast('Nota ligada ao pedido.'); recarrega(); };
+  document.querySelectorAll('[data-cpfx]').forEach(b => b.onclick = async () => {
+    if(!await modal('Excluir o registro da nota?', 'A nota deixa de contar neste pedido e os itens dela voltam a ficar como "a faturar". (Isso não cancela a nota fiscal: é só o controle do ERP.)', [['Cancelar', false], ['Excluir', true, 'pri']])) return;
+    const r2 = await sb.rpc('pedido_fatura_excluir', { p_id: b.dataset.cpfx }); if(r2.error) return aviso('Não foi possível excluir', esc(erroBanco(r2.error))); toast('Registro excluído.'); recarrega(); });
   if($('#cpPagar')) $('#cpPagar').onclick = async () => { if(await pagarPedido(c)){ ST._cpDados = null; await fichaContaPedido(id); if(ST.aba === 'fn_pedidos') telaContaPedidos(); } };
   document.querySelectorAll('[data-cpest]').forEach(b => b.onclick = async () => {
     if(!await modal('Estornar pagamento?', 'O pagamento sai do caixa e as parcelas dele voltam a ficar em aberto no pedido.', [['Cancelar', false], ['Estornar', true, 'pri']])) return;
@@ -9386,6 +9410,54 @@ async function fichaContaPedido(id){
     toast('Pagamento estornado.'); ST._cpDados = null; await fichaContaPedido(id); if(ST.aba === 'fn_pedidos') telaContaPedidos(); });
 }
 
+/* etapa 3 (script 104): registrar uma nota do pedido escolhendo os itens que saíram nela. Na nota final entram todos os itens que
+   faltam e o valor sugerido é exatamente o que falta faturar — assim a soma das notas fecha no total do pedido. */
+function formNotaPedido(d, final, depois){
+  const c = d.conta, itens = (d.itens || []).map(i => ({ ...i, falta: Math.round((Number(i.quantidade) - Number(i.fat_qtd)) * 1000) / 1000, unit: Number(i.unit) })).filter(i => i.falta > 0.0005);
+  const servico = i => !['equipamento', 'material'].includes(i.tipo);
+  $('#folha').innerHTML = `<div class="cab"><h2>${final ? 'Nota final' : 'Registrar nota'} · pedido ${numOrc(c.numero)}</h2><button class="btn peq" style="margin-left:auto" id="npVolta">← Voltar</button></div>
+    <div class="card" data-nao-suja="1"><div style="font-size:13px;margin-bottom:10px"><b>${esc(c.cliente || '')}</b> · vendido ${R$(c.vendido)} · já faturado ${R$(c.faturado)} · <b style="color:#b45309">falta faturar ${R$(c.a_faturar)}</b></div>
+      <div class="grade"><label class="campo">Número da nota<input id="npNum" inputmode="numeric" placeholder="ex.: 2901"></label><label class="campo">Série<input id="npSerie" value="NFE"></label>
+        <label class="campo">Emissão<input type="date" id="npData" value="${hojeISO()}"></label>
+        <label class="campo">Tipo<select id="npTipo"><option value="produto">Produtos (NF-e)</option><option value="servico">Serviço (NFS-e)</option></select></label>
+        <label class="campo largo">Observação<input id="npObs" placeholder="${final ? 'ex.: materiais auxiliares e serviço' : 'ex.: entrega dos aquecedores'}"></label></div></div>
+    <div class="card" data-nao-suja="1"><h2>O que está saindo nesta nota <span class="muted" style="font-weight:400">· ${itens.length} item(ns) ainda a faturar</span></h2>
+      ${itens.length ? `<div class="barra" style="margin:0 0 8px"><button class="btn peq" id="npTodos">Marcar tudo o que falta</button><button class="btn peq" id="npNenhum">Limpar</button></div>
+      <div style="overflow-x:auto"><table class="reg"><thead><tr><th>Código</th><th>Descrição</th><th style="text-align:right">Falta</th><th style="text-align:right">Nesta nota</th><th style="text-align:right">Unitário</th><th style="text-align:right">Valor</th></tr></thead><tbody>
+        ${itens.map((i, k) => `<tr><td>${esc(i.codigo || '')}</td><td>${esc(i.descricao || '')}${servico(i) ? ' <span class="muted" style="font-size:11px">serviço</span>' : ''}</td><td style="text-align:right">${i.falta.toLocaleString('pt-BR')}</td>
+          <td style="text-align:right"><input data-npq="${k}" inputmode="decimal" value="${final ? String(i.falta).replace('.', ',') : ''}" placeholder="0" style="width:74px;text-align:right"></td><td style="text-align:right">${R$(i.unit)}</td><td style="text-align:right" data-npv="${k}"></td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="muted" style="font-size:13px">Todos os itens deste pedido já saíram em nota (ou as notas são do CIGAM, que não trazem os itens). Informe só o valor.</p>'}
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:12px"><label class="campo" style="width:190px;margin:0">Valor da nota<input id="npValor" inputmode="decimal" style="font-weight:700;text-align:right"></label>
+        <div style="font-size:13px;flex:1" id="npResumo"></div></div></div>
+    <div class="rodape"><button class="btn pri" id="npSalvar">Registrar nota</button></div>`;
+  let mexeuValor = false;
+  const qtds = () => itens.map((i, k) => { const el = document.querySelector(`[data-npq="${k}"]`); return el ? Math.max(0, num(el.value) || 0) : 0; });
+  const calc = () => { const q = qtds(); let soma = 0; q.forEach((v, k) => { const t = Math.round(v * itens[k].unit * 100) / 100; soma += t; const td = document.querySelector(`[data-npv="${k}"]`); if(td) td.textContent = v > 0 ? R$(t) : ''; });
+    soma = Math.round(soma * 100) / 100;
+    const tudo = itens.length > 0 && q.every((v, k) => v >= itens[k].falta - 0.0005);
+    if(!mexeuValor) $('#npValor').value = (final || tudo) ? numFmt(Math.max(c.a_faturar, 0)) : (soma ? numFmt(soma) : '');
+    const v = num($('#npValor').value) || 0, resta = Math.round((c.a_faturar - v) * 100) / 100, dif = Math.round((v - soma) * 100) / 100;
+    $('#npResumo').innerHTML = `${itens.length && soma ? `Itens marcados somam <b>${R$(soma)}</b>${Math.abs(dif) > 0.009 && v ? ` · diferença de ${R$(dif)} para o valor da nota` : ''}<br>` : ''}Depois desta nota ${Math.abs(resta) < 0.01 ? '<b style="color:#16a34a">o pedido fica todo faturado ✓</b>' : resta > 0 ? `faltará faturar <b style="color:#b45309">${R$(resta)}</b>` : `<b style="color:#b91c1c">as notas passam do pedido em ${R$(-resta)}</b>`}`;
+    q.forEach((v, k) => { const el = document.querySelector(`[data-npq="${k}"]`); if(el) el.style.borderColor = v > itens[k].falta + 0.0005 ? '#b91c1c' : ''; }); };
+  document.querySelectorAll('[data-npq]').forEach(el => el.oninput = calc);
+  $('#npValor').oninput = () => { mexeuValor = true; calc(); };
+  if($('#npTodos')) $('#npTodos').onclick = () => { itens.forEach((i, k) => document.querySelector(`[data-npq="${k}"]`).value = String(i.falta).replace('.', ',')); mexeuValor = false; calc(); };
+  if($('#npNenhum')) $('#npNenhum').onclick = () => { document.querySelectorAll('[data-npq]').forEach(el => el.value = ''); mexeuValor = false; calc(); };
+  if(final && itens.every(servico) && itens.length) $('#npTipo').value = 'servico';
+  $('#npVolta').onclick = () => fichaContaPedido(c.id);
+  $('#npSalvar').onclick = async () => { const q = qtds(), valor = num($('#npValor').value) || 0, numero = $('#npNum').value.trim();
+    if(!numero) return aviso('Número', 'Informe o número da nota fiscal.'); if(!(valor > 0)) return aviso('Valor', 'Informe o valor da nota.');
+    if(q.some((v, k) => v > itens[k].falta + 0.0005)) return aviso('Quantidade', 'Há item com quantidade maior do que a que falta faturar.');
+    const corpo = { numero, serie: $('#npSerie').value.trim(), emissao: $('#npData').value || hojeISO(), tipo: $('#npTipo').value, valor, final: !!final || Math.abs(c.a_faturar - valor) < 0.01, observacao: $('#npObs').value.trim(),
+      itens: itens.map((i, k) => ({ item_id: i.id, quantidade: q[k], valor: Math.round(q[k] * i.unit * 100) / 100 })).filter(x => x.quantidade > 0) };
+    let r = await sb.rpc('pedido_fatura_salvar', { p_orc: c.id, p: corpo });
+    if(r.error && /passa do que falta faturar/.test(r.error.message || '')){
+      if(!await modal('A nota passa do pedido', esc(r.error.message) + '<br><br>Registrar assim mesmo?', [['Corrigir', false], ['Registrar assim mesmo', true, 'pri']])) return;
+      r = await sb.rpc('pedido_fatura_salvar', { p_orc: c.id, p: { ...corpo, forcar: true } }); }
+    if(r.error) return aviso('Não foi possível registrar', esc(erroBanco(r.error)));
+    toast(Math.abs(Number(r.data.a_faturar)) < 0.01 ? 'Nota registrada. Pedido todo faturado ✓' : `Nota registrada. Falta faturar ${R$(r.data.a_faturar)}.`); depois(); };
+  calc();
+}
 /* etapa 2 (script 103): registrar um pagamento do cliente no pedido. O valor entra no caixa e é abatido das parcelas em aberto do
    pedido, da mais antiga para a mais nova; se pagar só parte de uma parcela, o resto dela continua em aberto. */
 async function pagarPedido(c){
