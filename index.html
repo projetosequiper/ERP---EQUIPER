@@ -1895,7 +1895,8 @@ img.f{width:220px;height:165px;object-fit:cover;margin:4px;border:1px solid #ddd
 .bt{position:fixed;top:10px;right:10px;background:#141414;color:#fff;border:0;border-radius:8px;padding:10px 14px;font:600 13px Helvetica,Arial;cursor:pointer;z-index:9}
 @media screen{body{max-width:900px;margin:24px auto;padding:0 24px}body.pais{max-width:1250px}}
 @media print{.bt{display:none}}
-@media screen and (max-width:640px){.bt{position:sticky;top:6px;display:block;width:100%;margin:0 0 10px}}   /* celular: o botão não cobre o título */
+#pdfDoc{counter-reset:sec}.bt2{top:56px;background:#d71920}.bt:disabled{opacity:.6}
+@media screen and (max-width:640px){.bt{position:static;display:block;width:100%;margin:0 0 8px;padding:14px;font-size:15px}}   /* celular: o botão não cobre o título */
 `;
 const pdfEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 /* faixa de dados: [[rótulo, valor (texto), detalhe opcional (html)], …] */
@@ -1913,6 +1914,30 @@ function pdfTabela(colunas, linhas, total){
     ${total ? `<tr class="sub">${(() => { let h = ''; for(let i = 0; i < total.length; i++){ if(total[i] === null) continue; let n = 1; while(total[i + n] === null) n++;
       h += `<td${n > 1 ? ` colspan="${n}"` : ''}${C[i + n - 1] && C[i + n - 1].num ? ' class="num"' : ''}>${total[i] ?? ''}</td>`; } return h; })()}</tr>` : ''}</tbody></table>`; }
 
+/* 26/11 (Júlio: "na hora que eu gero o PDF, não estou conseguindo salvar ou enviar ele pelo celular"): no celular o "imprimir"
+   não salva nem envia. Esta função roda DENTRO da janela do PDF: prepara um arquivo PDF de verdade e o botão vermelho abre o
+   "compartilhar" do aparelho (WhatsApp, e-mail, Salvar em Arquivos). Sem compartilhar disponível, baixa o arquivo. */
+function pdfEnviarCel(nome, pais){
+  if(!(matchMedia('(pointer:coarse)').matches || innerWidth <= 700 || /[?&#]pdfcel/.test(opener ? String(opener.location.href) : ''))) return;
+  var bImp = document.querySelector('.bt'), b = document.createElement('button'), arq = null;
+  b.className = 'bt bt2'; b.setAttribute('data-html2canvas-ignore', '1'); b.disabled = true; b.textContent = 'Preparando o PDF…';
+  bImp.parentNode.insertBefore(b, bImp); bImp.textContent = 'Imprimir';
+  function baixa(){ var a = document.createElement('a'); a.href = URL.createObjectURL(arq); a.download = arq.name; document.body.appendChild(a); a.click(); a.remove(); }
+  b.onclick = function(){ if(!arq) return;
+    if(navigator.canShare && navigator.canShare({ files: [arq] })) navigator.share({ files: [arq], title: nome }).catch(function(e){ if(!e || e.name !== 'AbortError') baixa(); });
+    else baixa(); };
+  /* a biblioteca que monta o PDF é baixada pela janela do ERP (pdfJanela) e entregue aqui como texto */
+  window.pdfCelPronto = function(txt){
+    if(!txt){ b.textContent = 'Sem internet para preparar o PDF'; return; }
+    try{ var s = document.createElement('script'); s.textContent = txt; document.head.appendChild(s);
+      window.html2pdf().set({ margin: [10, 9, 12, 9], image: { type: 'jpeg', quality: .95 }, html2canvas: { scale: 2, windowWidth: pais ? 1054 : 726, scrollX: 0, scrollY: 0, useCORS: true, backgroundColor: '#fff' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: pais ? 'landscape' : 'portrait' }, pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'h2', '.pnota', '.presumo', '.pfx'] } })
+        .from(document.getElementById('pdfDoc')).outputPdf('blob').then(function(bl){ arq = new File([bl], nome + '.pdf', { type: 'application/pdf' }); window.__pdfArq = arq;
+          b.disabled = false; b.textContent = '📤 Enviar ou salvar o PDF'; })
+        .catch(function(e){ b.textContent = 'Não deu para preparar o PDF'; window.__pdfErro = String(e); });
+    }catch(e){ b.textContent = 'Não deu para preparar o PDF'; window.__pdfErro = String(e); } };
+}
+
 /* abre a janela do PDF. o: { titulo, sub, emissao, faixa (html), corpo (html), paisagem, arquivo, rodape, direita, empresa, imprimir } */
 function pdfJanela(o){
   const w = window.open('', '_blank'); if(!w){ aviso('Bloqueado', 'Libere as janelas (pop-ups) para gerar o PDF.'); return null; }
@@ -1926,10 +1951,13 @@ function pdfJanela(o){
       @bottom-right{content:'${dir}Página ' counter(page) ' de ' counter(pages);font:8.5px Helvetica,Arial,sans-serif;color:#666;vertical-align:top;padding-top:6px;
         background:linear-gradient(#cfcfcf,#cfcfcf) no-repeat left top/100% 1px}}
     ${PDF_CSS}</style></head><body class="${o.paisagem ? 'pais' : ''}">
-    <button class="bt" onclick="print()">Salvar PDF / imprimir</button>
+    <button class="bt" data-html2canvas-ignore="1" onclick="print()">Salvar PDF / imprimir</button>
+    <div id="pdfDoc">
     <div class="pcab">${eqp ? '<div class="eqp">EQP</div>' : `<img src="${PDF_LOGO}" alt="Equiper">`}<div class="tt"><h1>${pdfEsc(o.titulo)}</h1>${o.sub ? `<div class="sub">${o.sub}</div>` : ''}${emissao ? `<div class="emi">${pdfEsc(emissao)}</div>` : ''}</div></div>
     ${o.faixa || ''}${o.corpo || ''}
+    </div>
     <script>
+      (${pdfEnviarCel})(${JSON.stringify(String(o.arquivo || o.titulo || 'documento').replace(/[\/:*?"<>|]/g, '').trim()).replace(/</g, '\u003c')}, ${!!o.paisagem});
       /* última coluna de valores de cada tabela ganha o destaque (como no modelo) */
       document.querySelectorAll('table').forEach(t => { if(t.dataset.semDest !== undefined) return; const rs = [...t.rows]; if(rs.length < 2) return;
         const n = Math.max(...rs.map(r => r.cells.length)), ult = rs.filter(r => r.cells.length === n && r.parentElement.tagName === 'TBODY' && !r.classList.contains('sub') && !r.classList.contains('tp') && !r.classList.contains('tt'));
@@ -1938,6 +1966,9 @@ function pdfJanela(o){
       ${o.imprimir ? "addEventListener('load', () => setTimeout(() => print(), 350));" : ''}
     <\/script></bo` + `dy></ht` + `ml>`);
   w.document.close();
+  if(w.pdfCelPronto){ const entrega = t => { try{ w.pdfCelPronto(t); }catch(e){} };
+    (pdfJanela._lib ||= fetch('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js').then(r => r.ok ? r.text() : Promise.reject(r.status)))
+      .then(t => setTimeout(() => entrega(t), 300), () => { pdfJanela._lib = null; entrega(null); }); }
   return w;
 }
 
@@ -7371,11 +7402,11 @@ async function formOrc(id, pre){
         <input data-gt="${gi}" list="ocTitulos" value="${esc(/^itens$/i.test(g.titulo || '') ? '' : g.titulo)}" placeholder="Título do pedido (ex.: PRESSURIZAÇÃO, AQUECIMENTO, SAUNA…)" title="Título do pedido: o sistema a que ele se refere. Aparece na lista de orçamentos e na proposta." style="font-weight:700;flex:1" ${travado?'disabled':''}>${gi === 0 ? `<datalist id="ocTitulos">${TITULOS_PEDIDO.map(t => `<option value="${t}">`).join('')}</datalist>` : ''}
         <select data-ge="${gi}" style="max-width:150px" ${travado?'disabled':''}><option value="">${O.empresa ? 'empresa do orçamento' : 'a definir'}</option>${['EQP','Equiper'].map(e => `<option ${g.empresa===e?'selected':''}>${e}</option>`).join('')}</select>
         ${g.aprovado === true ? '<span class="tag ok">aprovado</span>' : g.aprovado === false ? '<span class="tag inat">não aprovado</span>' : ''}${travado||G.length===1?'':`<button class="btn peq" data-gx="${gi}" type="button">✕</button>`}</div>` : ''}
-      <div style="overflow:auto"><table class="reg"><thead><tr><th style="width:30px">#</th><th style="width:90px">Código</th><th>Descrição</th><th style="width:70px">Qtd</th><th style="width:120px">Unitário</th><th style="width:110px;text-align:right">Total</th><th style="width:30px"></th></tr></thead><tbody>
+      <div style="overflow:auto"><table class="reg ocItens"><thead><tr><th style="width:30px">#</th><th style="width:90px">Código</th><th>Descrição</th><th style="width:70px">Qtd</th><th style="width:120px">Unitário</th><th style="width:110px;text-align:right">Total</th><th style="width:30px"></th></tr></thead><tbody>
       ${g.itens.map((it, ii) => it.tipo === 'titulo' ? `<tr style="background:#f0f0f2"><td></td><td style="font-size:11px" class="muted">título</td><td colspan="4"><input data-id="${gi}-${ii}" value="${esc(it.descricao)}" style="font-weight:700;background:transparent" ${travado?'disabled':''}></td><td>${travado?'':`<button class="btn peq" data-ix="${gi}-${ii}" type="button">✕</button>`}</td></tr>` : `<tr><td>${ii+1}</td><td style="font-size:12px">${esc(it.codigo||'')}<div class="muted" style="font-size:10px">${TIPOS_PROD[it.tipo]||''}${it.kit_codigo?' · kit':''}</div></td>
         <td><input data-id="${gi}-${ii}" value="${esc(it.descricao)}" ${travado?'disabled':''}>${T==='projeto'?`<textarea data-ie="${gi}-${ii}" rows="2" placeholder="escopo (um item por linha)" style="margin-top:4px;font-size:12px" ${travado?'disabled':''}>${esc(it.escopo||'')}</textarea>`:''}</td>
-        <td><input data-iq="${gi}-${ii}" inputmode="decimal" value="${String(Number(it.quantidade)).replace('.',',')}" ${travado?'disabled':''}><div class="muted" style="font-size:10px;text-align:center">${unidadeTxt(it.unidade)}</div></td>
-        <td><input data-iu="${gi}-${ii}" inputmode="decimal" value="${fmt3(it.preco_unit)}" ${travado?'disabled':''}></td>
+        <td data-rot="Quantidade"><input data-iq="${gi}-${ii}" inputmode="decimal" value="${String(Number(it.quantidade)).replace('.',',')}" ${travado?'disabled':''}><div class="muted" style="font-size:10px;text-align:center">${unidadeTxt(it.unidade)}</div></td>
+        <td data-rot="Unitário"><input data-iu="${gi}-${ii}" inputmode="decimal" value="${fmt3(it.preco_unit)}" ${travado?'disabled':''}></td>
         <td style="text-align:right" data-it="${gi}-${ii}">${R$(Number(it.quantidade) * Number(it.preco_unit))}</td>
         <td style="white-space:nowrap">${!travado && it.produto_id && ST.kitsIds && ST.kitsIds.has(it.produto_id) ? `<button class="btn peq" data-ik="${gi}-${ii}" type="button" title="Explodir o kit: troca esta linha pelos itens de dentro dele">⤵ kit</button> ` : ''}${travado?'':`<button class="btn peq" data-ix="${gi}-${ii}" type="button">✕</button>`}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">Nenhum item. Busque abaixo no catálogo${T==='projeto'?' (dica: “KIT ORC PROJETOS BIM” traz todos os projetos de uma vez)':''}.</td></tr>`}
       </tbody></table></div>
@@ -7621,6 +7652,26 @@ async function pdfOrcamento(id, juntos){
 }
 
 Object.assign(TELAS, { orc: telaOrc, produtos: telaProdutos });
+
+/* 26/11 (Júlio, pelo celular: "o campo da quantidade, eu não consigo ler o que está escrito"): no celular cada item vira um
+   cartão — descrição na largura toda e, embaixo, Quantidade e Unitário grandes, com rótulo, e o total ao lado. */
+(() => { const c = document.createElement('style'); c.textContent = `
+.ocItens [data-iq]{text-align:center;padding-left:4px;padding-right:4px}
+@media (max-width:700px){
+  .ocItens thead{display:none}
+  .ocItens,.ocItens tbody{display:block;width:100%}
+  .ocItens tr{display:grid;grid-template-columns:1fr 1.3fr auto;gap:6px 8px;align-items:end;padding:10px 0;border-bottom:1px solid var(--borda)}
+  .ocItens td{display:block;padding:0!important;border:0!important;min-width:0}
+  .ocItens td:nth-child(1){display:none}
+  .ocItens td:nth-child(2){grid-column:1/3;align-self:center}
+  .ocItens td:nth-child(3){grid-column:1/-1;grid-row:2}
+  .ocItens td:nth-child(7){grid-column:3;grid-row:1;text-align:right}
+  .ocItens td:nth-child(6){align-self:center;font-weight:700;white-space:nowrap}
+  .ocItens td[data-rot]::before{content:attr(data-rot);display:block;font-size:11px;color:var(--texto2);margin-bottom:2px}
+  .ocItens [data-iq],.ocItens [data-iu]{font-size:18px;font-weight:600;padding:10px 8px;min-height:46px;text-align:center}
+  .ocItens td:nth-child(4):last-child{grid-column:3;grid-row:1;text-align:right}
+  .ocItens td[colspan="7"]{grid-column:1/-1;display:block!important}
+}`; document.head.appendChild(c); })();
 
 /* ============ Orçamento Express + Configuração do Express (script 93, 25/11 — pedido do Júlio) ============
    Traz para o ERP a "Planilha orçamento equipamentos": escolhe o cliente, marca os sistemas (PRESSURIZAÇÃO, AQUECIMENTO…),
