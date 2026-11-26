@@ -7880,7 +7880,18 @@ const expNovo = () => ({ id: null, nome: '', cliente: '', inst: [], gerados: [],
 ST.express = expNovo();
 async function telaExpress(){
   carregandoTela();
-  const [, rq] = await Promise.all([expCarrega(true), sb.from('express_rascunhos').select('id,nome,pessoa_id,total,atualizado_em,criado_por,dados').order('atualizado_em', { ascending: false })]);
+  const idsReais = ST.express._lista ? [] : (ST.express.inst || []).filter(i => i.orc).map(i => i.orc.id);
+  const [, rq, gq] = await Promise.all([expCarrega(true), sb.from('express_rascunhos').select('id,nome,pessoa_id,total,atualizado_em,criado_por,dados').order('atualizado_em', { ascending: false }),
+    idsReais.length ? sb.from('orcamento_grupos').select('orcamento_id,ordem,titulo,orcamento_itens(ordem,codigo,descricao,tipo,quantidade,preco_unit)').in('orcamento_id', idsReais) : Promise.resolve({ data: [] })]);
+  /* 26/11 (Júlio): "atualizei alguns pedidos em orçamento, no express não apareceram as alterações" — o orçamento é quem manda:
+     se o pedido está diferente do que o Express gravou, o Express mostra o que está no orçamento e não passa por cima ao salvar. */
+  const assLinha = x => x.tipo === 'titulo' ? 'T:' + String(x.descricao || '').trim().toUpperCase() : [x.codigo || '', Math.round((Number(x.quantidade) || 1) * 1000), Math.round((Number(x.preco_unit) || 0) * 100)].join('|');
+  const assItens = (titulo, itens) => 'G:' + String(titulo || '').trim().toUpperCase() + ';' + itens.map(assLinha).join(';');
+  const REAL = {};
+  ((gq && gq.data) || []).slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0)).forEach(g => { const r = REAL[g.orcamento_id] || (REAL[g.orcamento_id] = { gs: [], total: 0 });
+    const its = (g.orcamento_itens || []).slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0)); r.gs.push({ titulo: g.titulo, itens: its });
+    r.total += its.reduce((a, x) => a + (x.tipo === 'titulo' ? 0 : (Number(x.quantidade) || 0) * (Number(x.preco_unit) || 0)), 0); });
+  Object.values(REAL).forEach(r => r.ass = r.gs.map(g => assItens(g.titulo, g.itens)).join('#'));
   if(ST.aba !== 'vd_express') return;
   const RASC = rq.error ? null : (rq.data || []);   // null = falta o script 95
   if(EXP.erro) return $('#conteudo').innerHTML = expSemScript('Orçamento Express');
@@ -7923,7 +7934,23 @@ async function telaExpress(){
     return { id: expId('i'), sis: s.id, titulo: s.nome, resp, esc: {} }; };
   const sisDe = i => EXP.sis.find(s => s.id === i.sis);
   X.inst = X.inst.filter(sisDe);
-  const cartao = (i, k) => { const s = sisDe(i), cfg = s.config || {}, its = expItens(cfg, i), tot = its.reduce((a, x) => a + x.quantidade * x.preco, 0);
+  const itensDe = i => { const its = expItens(sisDe(i).config || {}, i).filter(x => x.p), varias = expSecs(its).length > 1, l = [];
+    its.forEach((x, xi) => { if(varias && (xi === 0 || its[xi - 1].sec !== x.sec)) l.push({ descricao: String(x.sec).toUpperCase(), tipo: 'titulo', quantidade: 1, preco_unit: 0 });
+      l.push({ produto_id: x.p.id, codigo: x.p.codigo, descricao: x.p.descricao, tipo: x.p.tipo, unidade: x.p.unidade || 'UN', quantidade: x.quantidade, preco_unit: x.preco }); }); return l; };
+  const tituloDe = i => (i.titulo || sisDe(i).nome).toUpperCase();
+  /* devolve o que está no orçamento quando ele está diferente do que o Express gravou (ou gravaria, nos salvos antigos) */
+  const mudouFora = i => { const r = i.orc && REAL[i.orc.id]; if(!r || i.orc.refaz) return null;
+    return r.ass !== (i.orc.ass != null ? i.orc.ass : assItens(tituloDe(i), itensDe(i))) ? r : null; };
+  const totDe = i => { const r = mudouFora(i); return r ? r.total : expItens(sisDe(i).config || {}, i).reduce((b, x) => b + x.quantidade * x.preco, 0); };
+  const cartaoReal = (i, k, r) => `<div class="card" data-xi="${k}" style="border-left:4px solid #b45309">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap"><b class="muted" style="font-size:12px">SISTEMA ${k + 1}</b><a href="#" data-xorc2="${i.orc.id}" class="tag ok" title="Abrir este orçamento">orçamento ${numOrc(i.orc.numero)}</a><b style="flex:1">${esc((r.gs[0] || {}).titulo || i.titulo)}</b><button class="btn peq" data-xrem="${k}" title="Tirar este sistema do express (o orçamento continua em Orçamentos)">✕</button></div>
+      <div data-xfora="${k}" style="background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:9px 11px;font-size:13px">✏️ Este pedido foi <b>alterado em Orçamentos</b> (ou o cadastro mudou depois que ele foi gerado). O Express mostra abaixo <b>o que está no orçamento</b> e não mexe nele ao salvar.
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn peq pri" data-xorc2="${i.orc.id}">Abrir o orçamento ${numOrc(i.orc.numero)}</button><button class="btn peq" data-xrefaz="${k}" title="Volta a montar este pedido pelo Express. Ao salvar, o orçamento é refeito e as alterações feitas lá são perdidas.">↺ Refazer pelo Express</button></div></div>
+      <div style="overflow-x:auto;margin-top:12px"><table class="reg"><thead><tr><th>Código</th><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>
+        ${r.gs.map(g => (r.gs.length > 1 ? `<tr style="background:#e8e8ec"><td colspan="5" style="font-weight:700;font-size:12px">${esc(g.titulo || '')}</td></tr>` : '') + g.itens.map(x => x.tipo === 'titulo' ? `<tr style="background:#f0f0f2"><td colspan="5" style="font-weight:700;font-size:12px;letter-spacing:.3px;text-transform:uppercase">${esc(x.descricao || '')}</td></tr>`
+          : `<tr><td>${esc(x.codigo || '')}</td><td>${esc(x.descricao || '')}</td><td style="text-align:right">${Number(x.quantidade).toLocaleString('pt-BR')}</td><td style="text-align:right;white-space:nowrap">${R$(x.preco_unit)}</td><td style="text-align:right">${R$((Number(x.quantidade) || 0) * (Number(x.preco_unit) || 0))}</td></tr>`).join('')).join('')}</tbody>
+        <tfoot><tr><td colspan="4" style="text-align:right"><b>Total do pedido</b></td><td style="text-align:right"><b>${R$(r.total)}</b></td></tr></tfoot></table></div></div>`;
+  const cartao = (i, k) => { const rf = mudouFora(i); if(rf) return cartaoReal(i, k, rf); const s = sisDe(i), cfg = s.config || {}, its = expItens(cfg, i), tot = its.reduce((a, x) => a + x.quantidade * x.preco, 0);
     return `<div class="card" data-xi="${k}" style="border-left:4px solid var(--verm)">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><b class="muted" style="font-size:12px">SISTEMA ${k + 1}</b>${i.orc ? `<a href="#" data-xorc2="${i.orc.id}" class="tag ok" title="Abrir este orçamento">orçamento ${numOrc(i.orc.numero)}</a>` : ''}<input data-xt="${k}" value="${esc(i.titulo)}" style="font-weight:700;flex:1" title="Título do pedido"><button class="btn peq" data-xrem="${k}" title="Tirar este sistema">✕</button></div>
       <div class="grade">${(cfg.perguntas || []).map(p => `<label class="campo">${esc(p.rotulo)}<select data-xp="${k}:${esc(p.id)}">${(p.opcoes || []).map(o => `<option ${i.resp[p.id] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`).join('')}</div>
@@ -7942,7 +7969,7 @@ async function telaExpress(){
       <div style="position:relative;margin-top:10px"><input data-xbus="${k}" placeholder="➕ Adicionar item só neste pedido: código ou parte do nome…" autocomplete="off" title="O item entra só neste orçamento; o padrão do sistema não muda.">
         <div data-xsug="${k}" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:30;background:#fff;border:1px solid var(--borda);border-radius:10px;max-height:280px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.14)"></div></div></div>`; };
   const mexeu = () => { X.sujo = true; };
-  const geral = X.inst.reduce((a, i) => a + expItens(sisDe(i).config || {}, i).reduce((b, x) => b + x.quantidade * x.preco, 0), 0);
+  const geral = X.inst.reduce((a, i) => a + totDe(i), 0);
   const vazio = !X.cliente && !X.inst.length;
   $('#conteudo').innerHTML = `<div class="card"><h2>Orçamento Express <span class="muted" style="font-weight:400">· escolha o cliente e os sistemas; o ERP monta um orçamento numerado para cada sistema</span></h2>
       <div class="barra" style="margin:2px 0 12px;align-items:center"><span style="flex:1;font-size:13px" id="xEstado">${X.id ? `📄 <b>${esc(X.nome)}</b> <span class="muted">· ${X.sujo ? '<b style="color:#b45309">alterado, não salvo</b>' : 'salvo' + (X.salvoEm ? ' em ' + fmtData(X.salvoEm) : '')}</span>` : vazio ? '<span class="muted">Orçamento novo (em branco).</span>' : '<span class="muted">Orçamento novo · <b style="color:#b45309">ainda não salvo</b></span>'}</span>
@@ -7961,6 +7988,9 @@ async function telaExpress(){
   /* 26/11 (Júlio): item a mais, item a menos e mais de um conjunto — tudo só neste orçamento */
   const kd = d => { const a = d.indexOf(':'); return [X.inst[+d.slice(0, a)], d.slice(a + 1)]; };
   document.querySelectorAll('[data-xfo]').forEach(b => b.onclick = () => { const [i, ch] = kd(b.dataset.xfo); (i.fora = i.fora || {})[ch] = true; mexeu(); telaExpress(); });
+  document.querySelectorAll('[data-xrefaz]').forEach(b => b.onclick = async () => { const i = X.inst[+b.dataset.xrefaz];
+    if(!await modal('Refazer pelo Express?', `O orçamento <b>${numOrc(i.orc.numero)}</b> volta a ser montado pelo Express. Quando você salvar, <b>as alterações feitas em Orçamentos neste pedido são perdidas</b>.`, [['Cancelar', false], ['Refazer', true, 'pri']])) return;
+    i.orc.refaz = true; mexeu(); telaExpress(); });
   document.querySelectorAll('[data-xvolta]').forEach(b => b.onclick = () => { delete X.inst[+b.dataset.xvolta].fora; mexeu(); telaExpress(); });
   document.querySelectorAll('[data-xex]').forEach(b => b.onclick = () => { const [i, id] = kd(b.dataset.xex); i.extras = (i.extras || []).filter(x => x.id !== id); mexeu(); telaExpress(); });
   document.querySelectorAll('[data-xeq]').forEach(n => n.onchange = () => { const [i, id] = kd(n.dataset.xeq), x = (i.extras || []).find(y => y.id === id); if(x){ x.quantidade = Math.max(0.001, num(n.value) || 1); mexeu(); telaExpress(); } });
@@ -8001,7 +8031,7 @@ async function telaExpress(){
     /* já tem orçamentos gerados: o que mudou aqui vai para eles (mesmo número) */
     if(!semSinc && X.cliente && X.inst.some(i => i.orc)){ const rs = await sincOrcs();
       await sb.from('express_rascunhos').update({ dados: { cliente: X.cliente, inst: X.inst, gerados: X.gerados || [] } }).eq('id', X.id);
-      X._sinc = rs.atualizados.length + rs.criados.length ? `${rs.atualizados.length} orçamento(s) atualizado(s)${rs.criados.length ? ' e ' + rs.criados.length + ' criado(s)' : ''}${rs.travados.length ? ' · ' + rs.travados.length + ' já fechado(s) não mudaram' : ''}` : (rs.travados.length ? 'os orçamentos já estão fechados e não mudaram' : ''); }
+      X._sinc = rs.atualizados.length + rs.criados.length ? `${rs.atualizados.length} orçamento(s) atualizado(s)${rs.criados.length ? ' e ' + rs.criados.length + ' criado(s)' : ''}${rs.travados.length ? ' · ' + rs.travados.length + ' já fechado(s) não mudaram' : ''}${rs.mantidos.length ? ' · ' + rs.mantidos.length + ' alterado(s) em Orçamentos ficaram como estão' : ''}` : rs.mantidos.length ? rs.mantidos.length + ' pedido(s) alterado(s) em Orçamentos ficaram como estão' : (rs.travados.length ? 'os orçamentos já estão fechados e não mudaram' : ''); }
     return true; };
   /* antes de trocar o que está na tela: se há algo não salvo, pergunta */
   const podeTrocar = async () => { if(vazio || !X.sujo) return true;
@@ -8011,11 +8041,7 @@ async function telaExpress(){
   if($('#xSalvar')) $('#xSalvar').onclick = async () => { if(await salvar(!X.id)){ toast('Orçamento express salvo' + (X._sinc ? ' · ' + X._sinc : '') + '.'); X._sinc = ''; telaExpress(); } };
   if($('#xAbrir')) $('#xAbrir').onclick = async () => { if(!await podeTrocar()) return; ST.express._lista = true; telaExpress(); };
   /* ---- cada sistema ↔ um orçamento próprio (i.orc = { id, numero }): cria os que faltam e ATUALIZA os que já existem ---- */
-  const itensDe = i => { const its = expItens(sisDe(i).config || {}, i).filter(x => x.p), varias = expSecs(its).length > 1, l = [];
-    its.forEach((x, xi) => { if(varias && (xi === 0 || its[xi - 1].sec !== x.sec)) l.push({ descricao: String(x.sec).toUpperCase(), tipo: 'titulo', quantidade: 1, preco_unit: 0 });
-      l.push({ produto_id: x.p.id, codigo: x.p.codigo, descricao: x.p.descricao, tipo: x.p.tipo, unidade: x.p.unidade || 'UN', quantidade: x.quantidade, preco_unit: x.preco }); }); return l; };
-  const tituloDe = i => (i.titulo || sisDe(i).nome).toUpperCase();
-  const sincOrcs = async () => { const res = { criados: [], atualizados: [], travados: [], erro: false }, cli = X.cliente;
+  const sincOrcs = async () => { const res = { criados: [], atualizados: [], travados: [], mantidos: [], erro: false }, cli = X.cliente;
     await carregaCadastrosOrc();
     const obrasCli = [...new Set(ST.pagadores.filter(g => g.pessoa_id === cli).map(g => g.obra_id))], obraId = obrasCli.length === 1 ? obrasCli[0] : null;   // cliente com uma obra só: já vai nela
     const parc = ((ST.condicoes.find(c => c.codigo === COND_PADRAO.equipamento) || {}).parcelas || PARC_PADRAO.equipamento).map((p, i, l) => ({ ...p, quando: p.quando || quandoPadrao(i, l.length) }));
@@ -8023,18 +8049,19 @@ async function telaExpress(){
     const gravaItens = async (oid, titulo, itens) => { const ng = await exec(sb.from('orcamento_grupos').insert({ orcamento_id: oid, ordem: 1, titulo }).select('id').single());
       await exec(sb.from('orcamento_itens').insert(itens.map((it, n) => ({ grupo_id: ng.id, ordem: n + 1, produto_id: it.produto_id || null, codigo: it.codigo || null, descricao: it.descricao, tipo: it.tipo || 'equipamento',
         unidade: it.unidade || null, quantidade: it.tipo === 'titulo' ? 1 : (Number(it.quantidade) || 1), preco_unit: it.tipo === 'titulo' ? 0 : (Number(it.preco_unit) || 0) })))); };
-    for(const i of X.inst){ const itens = itensDe(i), titulo = tituloDe(i); if(!itens.some(x => x.tipo !== 'titulo')) continue;
+    for(const i of X.inst){ if(mudouFora(i)){ res.mantidos.push({ id: i.orc.id, numero: i.orc.numero, titulo: tituloDe(i) }); continue; }
+      const itens = itensDe(i), titulo = tituloDe(i); if(!itens.some(x => x.tipo !== 'titulo')) continue;
       try{
         const o = i.orc ? atuais.find(a => a.id === i.orc.id && a.status !== 'inativo') : null;
         if(i.orc && !o) delete i.orc;                                             // o orçamento foi apagado/inativado: nasce outro
         if(o && !['elaboracao', 'enviado'].includes(o.etapa)){ res.travados.push({ numero: o.numero, titulo }); continue; }   // aprovado/perdido: não mexe
         if(o){ await exec(sb.from('orcamentos').update({ referencia: titulo, pagador_id: cli }).eq('id', o.id));
-          await exec(sb.from('orcamento_grupos').delete().eq('orcamento_id', o.id).is('aprovado', null)); await gravaItens(o.id, titulo, itens);
+          await exec(sb.from('orcamento_grupos').delete().eq('orcamento_id', o.id).is('aprovado', null)); await gravaItens(o.id, titulo, itens); i.orc.ass = assItens(titulo, itens); delete i.orc.refaz;
           res.atualizados.push({ id: o.id, numero: o.numero, titulo }); continue; }
         const n = await exec(sb.from('orcamentos').insert({ tipo: 'equipamento', obra_id: obraId, pagador_id: cli, referencia: titulo, data_orcamento: hojeISO(), validade: somaDias(hojeISO(), 15),
           desconto_tipo: 'valor', desconto_valor: 0, desconto_percentual: 0, frete: 0, parcelas: parc, prazo_texto: 'A combinar', vendedor: ST.eu.nome, observacoes: 'Preço reajustável por itens.', textos: {},
           condicao_pagamento_id: COND_PADRAO.equipamento, tipo_operacao: opPadrao('equipamento', obraId) }).select('id,numero').single());
-        await gravaItens(n.id, titulo, itens); i.orc = { id: n.id, numero: n.numero }; res.criados.push({ id: n.id, numero: n.numero, titulo });
+        await gravaItens(n.id, titulo, itens); i.orc = { id: n.id, numero: n.numero, ass: assItens(titulo, itens) }; res.criados.push({ id: n.id, numero: n.numero, titulo });
       }catch(e){ res.erro = true; break; }
     }
     X.gerados = X.inst.filter(i => i.orc).map(i => ({ id: i.orc.id, numero: i.orc.numero, titulo: tituloDe(i) }));
@@ -8046,6 +8073,7 @@ async function telaExpress(){
     abrirPainel(`<div class="cab"><h2>Orçamentos do express</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
       <div class="card" data-nao-suja="1">${res.erro ? '<p style="color:var(--verm)">Atenção: houve erro no meio do caminho e nem todos os sistemas foram gravados. Confira e toque de novo em gerar.</p>' : ''}
         <div class="lista">${todos.map(g => `<div class="item"><div><div class="nome">Orçamento ${numOrc(g.numero)} <span class="tag ${g.o === 'criado' ? 'ok' : ''}">${g.o}</span></div><div class="sub">${esc(g.titulo)}</div></div><div class="acoes"><button class="btn peq pri" data-xorc="${g.id}">Abrir</button></div></div>`).join('')
+          + (res.mantidos || []).map(g => `<div class="item"><div><div class="nome">Orçamento ${numOrc(g.numero)} <span class="tag inat">mantido</span></div><div class="sub">${esc(g.titulo)} · foi alterado em Orçamentos: o express não passou por cima</div></div><div class="acoes"><button class="btn peq" data-xorc="${g.id}">Abrir</button></div></div>`).join('')
           + res.travados.map(g => `<div class="item"><div><div class="nome">Orçamento ${numOrc(g.numero)} <span class="tag inat">não alterado</span></div><div class="sub">${esc(g.titulo)} · já aprovado, perdido ou cancelado: o express não mexe nele</div></div></div>`).join('')}</div>
         ${X.inst.filter(i => i.orc).length > 1 ? '<div style="margin-top:12px"><button class="btn pri" data-xpdf>🖨 Imprimir todos em um único arquivo</button> <span class="muted" style="font-size:12px">um pedido por sistema, com o total somado</span></div>' : ''}
         <p class="muted" style="font-size:12px;margin-top:10px">Cada sistema é um orçamento separado em Vendas → Orçamentos. Mudou algo aqui no express? Toque em Salvar ou em Atualizar orçamentos: os orçamentos em elaboração ou enviados recebem a mudança, com o mesmo número.</p></div>`);
@@ -8058,13 +8086,13 @@ async function telaExpress(){
     pdfSalvarNaPasta((ids.length > 1 ? [() => pdfOrcamento(ids[0], ids, { arquivo: true })] : []).concat(ids.map(id => () => pdfOrcamento(id, null, { arquivo: true })))); };
   $('#xGerar').onclick = async () => {
     const cli = pega(); if(!cli) return aviso('Cliente', 'Escolha o cliente do orçamento.');
-    const com = X.inst.filter(i => itensDe(i).some(x => x.tipo !== 'titulo'));
+    const com = X.inst.filter(i => mudouFora(i) || itensDe(i).some(x => x.tipo !== 'titulo'));
     if(!com.length) return aviso('Sistemas', 'Acrescente pelo menos um sistema e escolha o equipamento.');
-    const fora = X.inst.flatMap(i => expItens(sisDe(i).config || {}, i).filter(x => !x.p).map(x => x.codigo));
+    const fora = X.inst.filter(i => !mudouFora(i)).flatMap(i => expItens(sisDe(i).config || {}, i).filter(x => !x.p).map(x => x.codigo));
     if(fora.length && !await modal('Itens fora do cadastro', `Os códigos <b>${fora.map(esc).join(', ')}</b> não estão no cadastro de materiais e vão ficar de fora. Continuar assim mesmo?`, [['Cancelar', false], ['Continuar', true, 'pri']])) return;
     if(!podeOrc('equipamento')) return aviso('Sem permissão', 'Seu perfil não monta orçamentos de equipamento.');
-    const val = i => itensDe(i).reduce((a, x) => a + (x.tipo === 'titulo' ? 0 : x.quantidade * x.preco_unit), 0), novos = com.filter(i => !i.orc).length;
-    if(!await modal(novos === com.length ? 'Gerar orçamentos' : 'Atualizar orçamentos', `Cada sistema é <b>um orçamento separado</b>, com o seu número:<br><br>${com.map(i => '• ' + esc(tituloDe(i)) + ' — ' + R$(val(i)) + (i.orc ? ` <span class="muted">· atualiza o ${numOrc(i.orc.numero)}</span>` : ' <span class="muted">· número novo</span>')).join('<br>')}<br><br>Ficam em Vendas → Orçamentos.`, [['Cancelar', false], [novos === com.length ? 'Gerar ' + com.length + ' orçamento(s)' : 'Confirmar', true, 'pri']])) return;
+    const val = i => mudouFora(i) ? mudouFora(i).total : itensDe(i).reduce((a, x) => a + (x.tipo === 'titulo' ? 0 : x.quantidade * x.preco_unit), 0), novos = com.filter(i => !i.orc).length;
+    if(!await modal(novos === com.length ? 'Gerar orçamentos' : 'Atualizar orçamentos', `Cada sistema é <b>um orçamento separado</b>, com o seu número:<br><br>${com.map(i => '• ' + esc(tituloDe(i)) + ' — ' + R$(val(i)) + (mudouFora(i) ? ` <span class="muted">· ${numOrc(i.orc.numero)} alterado em Orçamentos: fica como está</span>` : i.orc ? ` <span class="muted">· atualiza o ${numOrc(i.orc.numero)}</span>` : ' <span class="muted">· número novo</span>')).join('<br>')}<br><br>Ficam em Vendas → Orçamentos.`, [['Cancelar', false], [novos === com.length ? 'Gerar ' + com.length + ' orçamento(s)' : 'Confirmar', true, 'pri']])) return;
     X.cliente = cli; const res = await sincOrcs(); X.sujo = true; if(RASC) await salvar(false, true);
     await telaExpress(); mostraResultado(res);
   };
