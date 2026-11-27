@@ -11045,13 +11045,18 @@ const tagOC = x => { const s = typeof x === 'string' ? x : x.situacao, ap = type
 ST.cmp = { aba:'ocs', sit:'todas' };   // 19/11 (Júlio: "não estamos vendo as ordens de compra") — abre direto na lista de OCs, todas
 const semScript23 = () => '<div class="card"><h2>Compras</h2><div class="vazio">Falta rodar o script <b>23_compras_estoque.sql</b> no Supabase.</div></div>';
 
+/* 27/11 (Júlio: "vamos deixar só os próximos que forem aprovados, tem coisa muito antiga ali"): em Ordens de compra → Pedidos entram só os
+   pedidos aprovados a partir desta data. Os antigos (vindos do CIGAM) não são apagados: aparecem pelo link "ver os antigos". */
+const CMP_PEDIDOS_DESDE = '2026-11-27';
+const cmpPedNovo = p => String(p.aprovado_em || p.criado_em || '').slice(0, 10) >= CMP_PEDIDOS_DESDE;
 async function telaCompras(){
   carregandoTela();
   const [oc, pe, op] = await Promise.all([ sb.from('compras_resumo').select('*').order('numero', { ascending:false }),
     sb.from('pedidos_servico').select('id,numero,obra_id,pagador_id,descricao,empresa,andamento_interno,em_deposito,material_recebido_em,valor,status,aprovado_em,criado_em').in('andamento_interno', ['aguardando_sinal','aguardando_compra','comprado','liberado_entrega']),
     sb.from('compras_ordem_pedidos').select('ordem_id,pedido_id') ]);   // 27/11 (script 106): uma OC pode atender vários pedidos do mesmo cliente
   if(oc.error) return $('#conteudo').innerHTML = semScript23();
-  const f = ST.cmp, ocs = oc.data || [], peds = (pe.data || []).filter(p => p.status !== 'inativo').map(p => ({ ...p, obra: obra(p.obra_id)?.nome || '' })), mes = hojeISO().slice(0, 7);
+  const f = ST.cmp, ocs = oc.data || [], pedsTodos = (pe.data || []).filter(p => p.status !== 'inativo').map(p => ({ ...p, obra: obra(p.obra_id)?.nome || '' })), antigos = pedsTodos.filter(p => !cmpPedNovo(p)).length,
+    peds = ST.cmp.antigos ? pedsTodos : pedsTodos.filter(cmpPedNovo), mes = hojeISO().slice(0, 7);
   const econ = ocs.filter(o => o.situacao !== 'cancelada' && o.valor_inicial && String(o.enviada_em || '').slice(0, 4) === mes.slice(0, 4)).reduce((s, o) => s + Math.max(0, Number(o.valor_inicial) - Number(o.total)), 0);
   const abertas = ocs.filter(o => ['rascunho','enviada','parcial'].includes(o.situacao)), validas = ocs.filter(o => o.situacao !== 'cancelada'), semPrev = abertas.filter(o => !o.previsao_entrega);
   const doMes = validas.filter(o => String(o.enviada_em || o.criado_em || '').slice(0, 7) === mes), podePrev = nivelTela('cp_compras') >= 3;
@@ -11083,8 +11088,8 @@ async function telaCompras(){
           return `<tr><td><b>${esc(p.numero || '—')}</b><div class="muted" style="font-size:11px">${esc(p.descricao || '')}</div></td><td>${esc(p.obra || '')}</td><td>${p.empresa || '—'}</td>
           <td>${p.andamento_interno === 'aguardando_sinal' ? '<span class="tag" style="background:#fff4d6;color:#7A6413">fechado · aguardando sinal</span>' : esc(ETAPA_PED[p.andamento_interno])}${p.em_deposito ? ' <span class="tag">em depósito</span>' : ''}</td><td>${os.map(o => `<a href="#" data-oc="${o.id}">OC ${o.numero}</a> ${tagOC(o)}`).join('<br>') || '—'}</td>
           <td style="white-space:nowrap">${os.some(o => ['enviada','parcial'].includes(o.situacao)) ? `<button class="btn peq pri" data-chg="${p.id}" title="Registrar que o material chegou na empresa">📦 Chegou</button> ` : ''}${p.andamento_interno !== 'liberado_entrega' && os.length && !os.some(o => ['rascunho','enviada','parcial'].includes(o.situacao)) ? `<button class="btn peq pri" data-lib="${p.id}" title="Todas as OCs chegaram">✓ Liberar para instalar</button> ` : ''}${p.andamento_interno !== 'liberado_entrega' ? `<button class="btn peq ${os.length ? '' : 'pri'}" data-mc="${p.id}">Montar compra</button>` : `<button class="btn peq" data-dep="${p.id}" data-v="${p.em_deposito ? 0 : 1}">${p.em_deposito ? 'Saiu do depósito' : 'Fica em depósito'}</button><button class="btn peq pri" data-ent="${p.id}">Entregue</button>`}</td></tr>`; }).join('')).join('')
-        || '<tr><td colspan="6" class="vazio">Nenhum pedido em compras. O pedido chega aqui quando o orçamento é aprovado.</td></tr>'}</tbody></table>
-        <p class="muted" style="font-size:12px">${gruposPed.length.toLocaleString('pt-BR')} cliente(s) · ${gruposPed.reduce((a, g) => a + g.peds.length, 0).toLocaleString('pt-BR')} pedido(s)${gruposPed.length > 150 ? ' · mostrando os 150 clientes mais recentes — use a busca' : ''}</p>`
+        || '<tr><td colspan="6" class="vazio">Nenhum pedido novo em compras. O pedido chega aqui quando o orçamento é aprovado.</td></tr>'}</tbody></table>
+        <p class="muted" style="font-size:12px">${antigos ? `<a href="#" id="cpAntigos" style="float:right">${f.antigos ? 'esconder os antigos' : 'ver os ' + antigos.toLocaleString('pt-BR') + ' pedidos antigos (aprovados antes de ' + dataBR(CMP_PEDIDOS_DESDE) + ')'}</a>` : ''}${gruposPed.length.toLocaleString('pt-BR')} cliente(s) · ${gruposPed.reduce((a, g) => a + g.peds.length, 0).toLocaleString('pt-BR')} pedido(s)${gruposPed.length > 150 ? ' · mostrando os 150 clientes mais recentes — use a busca' : ''}</p>`
       : `<div class="barra"><input type="search" id="busca" placeholder="Fornecedor, pedido, obra, nº da OC ou da nota…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
           <select id="cpSit" style="max-width:170px">${[['abertas','Em aberto'],['aguardando','Enviadas · aguardando aprovar'],['aprovadas','Aprovadas · aguardando material'],['atrasadas','Atrasadas'],['semprev','Sem previsão de chegada'],['recebidas','Liquidadas'],['todas','Todas']].map(([k, t]) => `<option value="${k}" ${f.sit === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
         <table class="reg"><thead><tr><th>OC</th><th>Fornecedor</th><th>Pedido / obra</th><th>Previsão de chegada</th><th style="text-align:right">Total</th><th>Situação</th><th>Notas</th></tr></thead><tbody>
@@ -11114,6 +11119,7 @@ async function telaCompras(){
   document.querySelectorAll('[data-ent]').forEach(b => b.onclick = async () => { if(!await confirmaDuplo('Pedido entregue', 'Marcar como entregue? O material reservado para este pedido sai do estoque.', 'Entregue')) return;
     try{ await exec(sb.from('pedidos_servico').update({ andamento_interno:'entregue' }).eq('id', b.dataset.ent), 'Pedido entregue.'); telaCompras(); }catch(e){} });
   document.querySelectorAll('[data-mcc]').forEach(b => b.onclick = () => { const g = gruposPed.find(x => x.k === b.dataset.mcc); if(g) montarComprasCliente(g.peds.filter(p => p.andamento_interno !== 'liberado_entrega'), g.nome); });
+  if($('#cpAntigos')) $('#cpAntigos').onclick = e => { e.preventDefault(); f.antigos = !f.antigos; telaCompras(); };
   $('#cpEstoque').onclick = () => montarCompra(null);
   $('#cpInv').onclick = inventario;
 }
@@ -11461,9 +11467,9 @@ async function telaPrecosCompraLista(topo, liga){
 /* ---------- sino ---------- */
 async function avisosCompras(){
   const out = [];
-  const [p, o, e] = await Promise.all([ sb.from('pedidos_servico').select('id,andamento_interno,em_deposito,status').in('andamento_interno', ['aguardando_compra','liberado_entrega']),
+  const [p, o, e] = await Promise.all([ sb.from('pedidos_servico').select('id,andamento_interno,em_deposito,status,aprovado_em,criado_em').in('andamento_interno', ['aguardando_compra','liberado_entrega']),
     sb.from('compras_resumo').select('id,atrasada').eq('atrasada', true), sb.from('estoque_saldos').select('id').eq('abaixo_minimo', true) ]);
-  const ps = (p.data || []).filter(x => x.status !== 'inativo');
+  const ps = (p.data || []).filter(x => x.status !== 'inativo' && cmpPedNovo(x));
   const comprar = ps.filter(x => x.andamento_interno === 'aguardando_compra').length, chegou = ps.filter(x => x.andamento_interno === 'liberado_entrega' && !x.em_deposito).length;
   if(comprar) out.push({ ord: 3.7, aba:'cp_compras', ic:'cp_compras', txt:`<b>${comprar}</b> pedido(s) com sinal pago para comprar` });
   if(chegou) out.push({ ord: 3.8, aba:'cp_compras', ic:'cp_compras', txt:`<b>${chegou}</b> pedido(s) com material recebido · combinar entrega` });
