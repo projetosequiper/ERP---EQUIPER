@@ -11044,13 +11044,25 @@ const semScript23 = () => '<div class="card"><h2>Compras</h2><div class="vazio">
 
 async function telaCompras(){
   carregandoTela();
-  const [oc, pe] = await Promise.all([ sb.from('compras_resumo').select('*').order('numero', { ascending:false }),
-    sb.from('pedidos_servico').select('id,numero,obra_id,descricao,empresa,andamento_interno,em_deposito,material_recebido_em,valor,status').in('andamento_interno', ['aguardando_sinal','aguardando_compra','comprado','liberado_entrega']) ]);
+  const [oc, pe, op] = await Promise.all([ sb.from('compras_resumo').select('*').order('numero', { ascending:false }),
+    sb.from('pedidos_servico').select('id,numero,obra_id,pagador_id,descricao,empresa,andamento_interno,em_deposito,material_recebido_em,valor,status,aprovado_em,criado_em').in('andamento_interno', ['aguardando_sinal','aguardando_compra','comprado','liberado_entrega']),
+    sb.from('compras_ordem_pedidos').select('ordem_id,pedido_id') ]);   // 27/11 (script 106): uma OC pode atender vários pedidos do mesmo cliente
   if(oc.error) return $('#conteudo').innerHTML = semScript23();
   const f = ST.cmp, ocs = oc.data || [], peds = (pe.data || []).filter(p => p.status !== 'inativo').map(p => ({ ...p, obra: obra(p.obra_id)?.nome || '' })), mes = hojeISO().slice(0, 7);
   const econ = ocs.filter(o => o.situacao !== 'cancelada' && o.valor_inicial && String(o.enviada_em || '').slice(0, 4) === mes.slice(0, 4)).reduce((s, o) => s + Math.max(0, Number(o.valor_inicial) - Number(o.total)), 0);
   const abertas = ocs.filter(o => ['rascunho','enviada','parcial'].includes(o.situacao)), validas = ocs.filter(o => o.situacao !== 'cancelada'), semPrev = abertas.filter(o => !o.previsao_entrega);
   const doMes = validas.filter(o => String(o.enviada_em || o.criado_em || '').slice(0, 7) === mes), podePrev = nivelTela('cp_compras') >= 3;
+  /* 27/11 (Júlio): pedidos aprovados ficam juntos por cliente; o grupo aprovado mais recentemente vem primeiro */
+  const OCP = {}; ((op && op.data) || []).forEach(x => (OCP[x.pedido_id] ||= new Set()).add(x.ordem_id));
+  const ocsDoPed = pid => ocs.filter(o => o.situacao !== 'cancelada' && (o.pedido_id === pid || (OCP[pid] && OCP[pid].has(o.id))));
+  const ordEt = Object.keys(ETAPA_PED), GP = {};
+  peds.forEach(p => { const k = p.pagador_id || 'o' + p.obra_id, g = GP[k] ||= { k, nome: (p.pagador_id && pessoa(p.pagador_id)?.nome) || p.obra || 'Sem cliente', peds: [], ult: '' };
+    g.peds.push(p); const d = String(p.aprovado_em || p.criado_em || ''); if(d > g.ult) g.ult = d; });
+  const gruposPed = Object.values(GP).filter(g => !ST.busca || f.aba !== 'pedidos' || norm([g.nome, ...g.peds.flatMap(p => [p.numero, p.obra, p.descricao])].join(' ')).temTudo(ST.busca)).sort((a, b) => b.ult.localeCompare(a.ult) || a.nome.localeCompare(b.nome));
+  gruposPed.forEach(g => g.peds.sort((a, b) => ordEt.indexOf(a.andamento_interno) - ordEt.indexOf(b.andamento_interno) || String(b.numero).localeCompare(String(a.numero))));
+  const cabGrupo = g => `<tr data-nao-exporta="1"><td colspan="6" style="background:#f1f1f4;border-top:2px solid #d9d9df;padding:8px 10px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:14px">👤 ${esc(g.nome)}</b>
+      <span class="muted" style="font-size:12.5px">${g.peds.length} pedido(s) · ${R$(g.peds.reduce((a, p) => a + Number(p.valor || 0), 0))}${g.ult ? ' · aprovado em ' + dataBR(g.ult.slice(0, 10)) : ''}</span>
+      ${g.peds.some(p => p.andamento_interno !== 'liberado_entrega') ? `<button class="btn peq pri" data-mcc="${esc(g.k)}" style="margin-left:auto" title="Junta o que falta comprar de todos os pedidos deste cliente e cria uma OC por fornecedor">🛒 Montar compras do cliente</button>` : ''}</div></td></tr>`;
   const filtro = { abertas: o => ['rascunho','enviada','parcial'].includes(o.situacao), atrasadas: o => o.atrasada, semprev: o => ['rascunho','enviada','parcial'].includes(o.situacao) && !o.previsao_entrega, recebidas: o => o.situacao === 'recebida', todas: () => true };
   const lo = ocs.filter(filtro[f.sit] || filtro.abertas).filter(o => !ST.busca || norm([o.fornecedor, o.pedido_numero, o.obra, o.numero, o.notas].join(' ')).temTudo(ST.busca));
   $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px">
@@ -11061,12 +11073,14 @@ async function telaCompras(){
     <div class="card"><h2>Ordens de compra</h2>
       <div class="barra"><button class="btn ${f.aba === 'pedidos' ? 'pri' : ''}" data-ab="pedidos">Pedidos</button><button class="btn ${f.aba === 'ocs' ? 'pri' : ''}" data-ab="ocs">Ordens de compra</button>
         <span style="flex:1"></span><button class="btn" id="cpEstoque">Compra para o estoque</button><button class="btn" id="cpInv">Inventário</button></div>
-      ${f.aba === 'pedidos' ? `<table class="reg"><thead><tr><th>Pedido</th><th>Obra</th><th>Empresa</th><th>Etapa</th><th>OCs</th><th></th></tr></thead><tbody>
-        ${peds.sort((a, b) => Object.keys(ETAPA_PED).indexOf(a.andamento_interno) - Object.keys(ETAPA_PED).indexOf(b.andamento_interno)).map(p => { const os = ocs.filter(o => o.pedido_id === p.id && o.situacao !== 'cancelada');
+      ${f.aba === 'pedidos' ? `<div class="barra"><input type="search" id="busca" placeholder="Cliente, obra ou nº do pedido…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label></div>
+        <table class="reg"><thead><tr><th>Pedido</th><th>Obra</th><th>Empresa</th><th>Etapa</th><th>OCs</th><th></th></tr></thead><tbody>
+        ${gruposPed.slice(0, 150).map(g => cabGrupo(g) + g.peds.map(p => { const os = ocsDoPed(p.id);
           return `<tr><td><b>${esc(p.numero || '—')}</b><div class="muted" style="font-size:11px">${esc(p.descricao || '')}</div></td><td>${esc(p.obra || '')}</td><td>${p.empresa || '—'}</td>
           <td>${p.andamento_interno === 'aguardando_sinal' ? '<span class="tag" style="background:#fff4d6;color:#7A6413">fechado · aguardando sinal</span>' : esc(ETAPA_PED[p.andamento_interno])}${p.em_deposito ? ' <span class="tag">em depósito</span>' : ''}</td><td>${os.map(o => `<a href="#" data-oc="${o.id}">OC ${o.numero}</a> ${tagOC(o.situacao)}`).join('<br>') || '—'}</td>
-          <td style="white-space:nowrap">${os.some(o => ['enviada','parcial'].includes(o.situacao)) ? `<button class="btn peq pri" data-chg="${p.id}" title="Registrar que o material chegou na empresa">📦 Chegou</button> ` : ''}${p.andamento_interno !== 'liberado_entrega' && os.length && !os.some(o => ['rascunho','enviada','parcial'].includes(o.situacao)) ? `<button class="btn peq pri" data-lib="${p.id}" title="Todas as OCs chegaram">✓ Liberar para instalar</button> ` : ''}${p.andamento_interno !== 'liberado_entrega' ? `<button class="btn peq ${os.length ? '' : 'pri'}" data-mc="${p.id}">Montar compra</button>` : `<button class="btn peq" data-dep="${p.id}" data-v="${p.em_deposito ? 0 : 1}">${p.em_deposito ? 'Saiu do depósito' : 'Fica em depósito'}</button><button class="btn peq pri" data-ent="${p.id}">Entregue</button>`}</td></tr>`; }).join('')
-        || '<tr><td colspan="6" class="vazio">Nenhum pedido em compras. O pedido chega aqui quando o sinal é recebido.</td></tr>'}</tbody></table>`
+          <td style="white-space:nowrap">${os.some(o => ['enviada','parcial'].includes(o.situacao)) ? `<button class="btn peq pri" data-chg="${p.id}" title="Registrar que o material chegou na empresa">📦 Chegou</button> ` : ''}${p.andamento_interno !== 'liberado_entrega' && os.length && !os.some(o => ['rascunho','enviada','parcial'].includes(o.situacao)) ? `<button class="btn peq pri" data-lib="${p.id}" title="Todas as OCs chegaram">✓ Liberar para instalar</button> ` : ''}${p.andamento_interno !== 'liberado_entrega' ? `<button class="btn peq ${os.length ? '' : 'pri'}" data-mc="${p.id}">Montar compra</button>` : `<button class="btn peq" data-dep="${p.id}" data-v="${p.em_deposito ? 0 : 1}">${p.em_deposito ? 'Saiu do depósito' : 'Fica em depósito'}</button><button class="btn peq pri" data-ent="${p.id}">Entregue</button>`}</td></tr>`; }).join('')).join('')
+        || '<tr><td colspan="6" class="vazio">Nenhum pedido em compras. O pedido chega aqui quando o orçamento é aprovado.</td></tr>'}</tbody></table>
+        <p class="muted" style="font-size:12px">${gruposPed.length.toLocaleString('pt-BR')} cliente(s) · ${gruposPed.reduce((a, g) => a + g.peds.length, 0).toLocaleString('pt-BR')} pedido(s)${gruposPed.length > 150 ? ' · mostrando os 150 clientes mais recentes — use a busca' : ''}</p>`
       : `<div class="barra"><input type="search" id="busca" placeholder="Fornecedor, pedido, obra, nº da OC ou da nota…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
           <select id="cpSit" style="max-width:170px">${[['abertas','Em aberto'],['atrasadas','Atrasadas'],['semprev','Sem previsão de chegada'],['recebidas','Recebidas'],['todas','Todas']].map(([k, t]) => `<option value="${k}" ${f.sit === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
         <table class="reg"><thead><tr><th>OC</th><th>Fornecedor</th><th>Pedido / obra</th><th>Previsão de chegada</th><th style="text-align:right">Total</th><th>Situação</th><th>Notas</th></tr></thead><tbody>
@@ -11085,7 +11099,7 @@ async function telaCompras(){
     const sug = (await sb.rpc('compras_sugestao', { p_pedido: p.id })).data || [], falta = sug.filter(x => Number(x.comprar) > 0);
     if(!await modal('Liberar para instalar?', `Todas as OCs do pedido ${esc(p.numero || '')} chegaram.${falta.length ? `<br><br>Pelo orçamento ainda faltaria: <b>${falta.map(x => esc(x.descricao) + ' (' + numFmt(x.comprar).replace(/,00$/, '') + ')').join(', ')}</b>. Libere só se isso foi trocado, comprado por fora ou não vai mais.` : ''}<br><br>O pedido fica "Material chegou · combinar entrega", Serviços é avisado e a 2ª parcela vai para cobrança.`, [['Cancelar', false], ['Liberar', true, 'pri']])) return;
     const r = await sb.rpc('compras_liberar_pedido', { p_pedido: p.id }); if(r.error) return aviso('Erro', esc(erroBanco(r.error))); toast('Pedido liberado para instalar.'); atualizaSino(); telaCompras(); });
-  document.querySelectorAll('[data-chg]').forEach(b => b.onclick = async () => { const p = peds.find(x => x.id === b.dataset.chg), abertas = ocs.filter(o => o.pedido_id === p.id && ['enviada','parcial'].includes(o.situacao));
+  document.querySelectorAll('[data-chg]').forEach(b => b.onclick = async () => { const p = peds.find(x => x.id === b.dataset.chg), abertas = ocsDoPed(p.id).filter(o => ['enviada','parcial'].includes(o.situacao));
     if(abertas.length === 1) return registrarChegada(abertas[0].id);
     const ok = await modal('Qual OC chegou?', `<div class="grade">${abertas.map(o => `<label style="display:flex;gap:8px;align-items:center"><input type="radio" name="chgOc" value="${o.id}" style="width:auto"> OC ${o.numero} · ${esc(o.fornecedor || '')} · ${R$(o.total)}</label>`).join('')}</div>`, [['Cancelar', false], ['Continuar', true, 'pri']]);
     const r = document.querySelector('input[name=chgOc]:checked'); if(ok && r) registrarChegada(r.value); });
@@ -11095,6 +11109,7 @@ async function telaCompras(){
   document.querySelectorAll('[data-dep]').forEach(b => b.onclick = async () => { try{ await exec(sb.from('pedidos_servico').update({ em_deposito: b.dataset.v === '1' }).eq('id', b.dataset.dep), 'Atualizado.'); telaCompras(); }catch(e){} });
   document.querySelectorAll('[data-ent]').forEach(b => b.onclick = async () => { if(!await confirmaDuplo('Pedido entregue', 'Marcar como entregue? O material reservado para este pedido sai do estoque.', 'Entregue')) return;
     try{ await exec(sb.from('pedidos_servico').update({ andamento_interno:'entregue' }).eq('id', b.dataset.ent), 'Pedido entregue.'); telaCompras(); }catch(e){} });
+  document.querySelectorAll('[data-mcc]').forEach(b => b.onclick = () => { const g = gruposPed.find(x => x.k === b.dataset.mcc); if(g) montarComprasCliente(g.peds.filter(p => p.andamento_interno !== 'liberado_entrega'), g.nome); });
   $('#cpEstoque').onclick = () => montarCompra(null);
   $('#cpInv').onclick = inventario;
 }
@@ -11179,7 +11194,7 @@ async function verOC(id){
     <div class="card"><h2 style="font-size:15px">Notas do fornecedor</h2>
       ${(nf.data || []).map(n => `<div>NF-e ${esc(n.numero)} · ${R$(n.valor)} · ${n.conferida_em ? '<span class="tag ok">conferida</span>' : `<button class="btn peq pri" data-cf="${n.id}">Conferir recebimento</button>`}</div>`).join('') || '<p class="muted" style="font-size:13px">Nenhuma nota ligada ainda.</p>'}
       ${pend.filter(n => !n.ordem_id).length ? `<p style="font-size:13px;margin-top:8px">Notas deste fornecedor ainda não conferidas:</p>${pend.filter(n => !n.ordem_id).map(n => `<div>NF-e ${esc(n.numero)} · ${R$(n.valor)} · ${dataBR(String(n.data_emissao).slice(0, 10))} <button class="btn peq" data-cf="${n.id}">Conferir com esta OC</button></div>`).join('')}` : ''}</div>
-    <div class="rodape">${['rascunho','enviada','parcial'].includes(O.situacao) ? '<button class="btn" id="voCanc">Cancelar OC</button>' : ''}<button class="btn" id="voImp">Imprimir para o fornecedor</button>${['enviada','parcial'].includes(O.situacao) ? '<button class="btn pri" id="voChegou">📦 Chegou</button>' : ''}
+    <div class="rodape">${['rascunho','enviada','parcial'].includes(O.situacao) ? '<button class="btn" id="voCanc">Cancelar OC</button>' : ''}<button class="btn" id="voImp">Imprimir para o fornecedor</button>${O.situacao !== 'cancelada' && its.length ? '<button class="btn" id="voMail" title="Monta o PDF da OC e abre o e-mail preenchido">✉ Enviar por e-mail</button><button class="btn" id="voZap" title="Monta o PDF da OC e abre o WhatsApp do fornecedor">🟢 Enviar por WhatsApp</button>' : ''}${['enviada','parcial'].includes(O.situacao) ? '<button class="btn pri" id="voChegou">📦 Chegou</button>' : ''}
       ${O.situacao !== 'recebida' && O.situacao !== 'cancelada' ? '<button class="btn" id="voSalvar">Salvar</button>' : ''}${O.situacao === 'rascunho' ? '<button class="btn pri" id="voEnviar">Enviar</button>' : ''}</div>`);
   $('#folha').style.width = 'min(960px,100%)';
   const pegaCli = pickEmpresa($('#voCli'), O.cliente_id || '', pid => { ST._painelSujo = true; if(pid && $('#voDest')) $('#voDest').value = pessoa(pid)?.nome || ''; }, { papel: 'cliente', rotulo: 'cliente' });
@@ -11200,6 +11215,8 @@ async function verOC(id){
     ${Number(O.frete) ? `<tr><td colspan="4">Frete</td><td style="text-align:right">${R$(O.frete)}</td></tr>` : ''}<tr><td colspan="4"><b>Total</b></td><td style="text-align:right"><b>${R$(O.total)}</b></td></tr></tbody></table>`);
   document.querySelectorAll('#folha [data-cf]').forEach(b => b.onclick = () => conferirRecebimento(b.dataset.cf, id));
   if($('#voChegou')) $('#voChegou').onclick = () => registrarChegada(id);
+  if($('#voMail')) $('#voMail').onclick = () => enviarOC(O, its, 'email');
+  if($('#voZap')) $('#voZap').onclick = () => enviarOC(O, its, 'zap');
 }
 
 /* ---------- 📦 Chegou: registra o que chegou, com ou sem a nota do fornecedor ---------- */
@@ -11617,6 +11634,205 @@ async function telaTabelaPrecos(modo, topo, liga){
   if(typeof formProduto === 'function') document.querySelectorAll('#tpLista [data-tp]').forEach(tr => tr.onclick = () => formProduto(tr.dataset.tp));
   expRegistra(() => [expCols(titulo, [['Código', p => p.codigo], ['Produto', p => p.descricao], ['Un.', p => p.unidade || ''], ['Tabela de compra', p => p.custo_tabela || ''],
     ['Preço de compra', p => p.custo != null ? R$(p.custo) : ''], ['Margem', p => fator(p) ? fx(fator(p)) : ''], ['Preço de venda (tabela)', p => R$(p.preco_cigam)], ['Preço de venda no ERP', p => R$(p.preco)], ['Desde', p => p.preco_cigam_data ? dataBR(p.preco_cigam_data) : '']], l)]);
+}
+
+/* ================== Compras por cliente · contatos de fornecedores · envio da OC (script 106) ==================
+   27/11/2026 (Júlio):
+   1. Em Ordens de compra → Pedidos, os pedidos aprovados ficam juntos por cliente (o agrupamento está no 56_compras.js).
+   2. "Montar compras do cliente": junta o que falta comprar de todos os pedidos do cliente, sugere o fornecedor de cada item
+      (o do último preço) e cria uma OC por fornecedor, já ligada ao cliente; cada item guarda de qual pedido é.
+   3. Tela "Contatos de fornecedores" (cp_contatos): quem atende a Equiper em cada fornecedor, com telefone/WhatsApp e e-mail.
+   4. Na OC: "Enviar por e-mail" e "Enviar por WhatsApp" — monta o PDF da OC e abre a mensagem já preenchida. */
+IC.cp_contatos = IC.contatos;
+MENU.find(g => g.area === 'Suprimentos').itens.push(['cp_contatos', '📇', 'Contatos de fornecedores', 'DAS']);
+const cfTel = t => typeof fmtTel === 'function' ? fmtTel(t) : String(t || '').trim();
+const cfDig = t => String(t || '').replace(/\D/g, '');
+const cfPartes = (l, n) => { const r = []; for(let i = 0; i < l.length; i += n) r.push(l.slice(i, i + n)); return r; };
+
+/* contatos (pessoas) de um ou mais fornecedores, com telefone e e-mail */
+async function contatosDeFornecedores(ids){
+  const quer = ids ? new Set(ids) : null, cs = (ST.contatos || []).filter(c => c.pessoa_id && c.status !== 'inativo' && (!quer || quer.has(c.pessoa_id))), D = {};
+  if(cs.length && humano()) for(const parte of cfPartes(cs.map(c => c.id), 100)){ const r = await priv().from('contatos_dados').select('*').in('contato_id', parte); (r.data || []).forEach(d => D[d.contato_id] = d); }
+  return cs.map(c => ({ ...c, telefone: (D[c.id] || {}).telefone || '', whatsapp: !!(D[c.id] || {}).whatsapp, email: (D[c.id] || {}).email || '' }));
+}
+
+/* ---------- tela: Contatos de fornecedores ---------- */
+ST.cf = { ver: 'todos' };
+async function telaContatosForn(){
+  carregandoTela();
+  const forn = ST.pessoas.filter(x => (x.papeis || []).includes('fornecedor') && x.status !== 'inativo'), ids = new Set(forn.map(x => x.id));
+  const cs = (await contatosDeFornecedores(null)).filter(c => ids.has(c.pessoa_id)), POR = {};
+  if(ST.aba !== 'cp_contatos') return;
+  cs.forEach(c => (POR[c.pessoa_id] ||= []).push(c));
+  const f = ST.cf, pode = nivelTela('cp_contatos') >= 3;
+  const l = forn.filter(x => f.ver === 'todos' || (f.ver === 'com') === !!POR[x.id])
+    .filter(x => !ST.busca || norm([x.nome, x.apelido, ...(POR[x.id] || []).flatMap(c => [c.nome, c.funcao, c.email, c.telefone])].join(' ')).temTudo(ST.busca))
+    .sort((a, b) => (POR[b.id] ? 1 : 0) - (POR[a.id] ? 1 : 0) || a.nome.localeCompare(b.nome));
+  $('#conteudo').innerHTML = `<div class="kpis" style="margin-bottom:14px">
+      <div class="kpi" data-cfv="todos"><span class="muted">Fornecedores</span><b>${forn.length.toLocaleString('pt-BR')}</b></div>
+      <div class="kpi" data-cfv="com"><span class="muted">Com contato cadastrado</span><b style="color:var(--verde)">${Object.keys(POR).length.toLocaleString('pt-BR')}</b></div>
+      <div class="kpi" data-cfv="sem"><span class="muted">Sem contato</span><b style="color:#b7791f">${(forn.length - Object.keys(POR).length).toLocaleString('pt-BR')}</b></div></div>
+    <div class="card"><h2>Contatos de fornecedores</h2>
+      <p class="muted" style="font-size:12.5px;margin:-4px 0 10px">Quem atende a Equiper em cada fornecedor. O e-mail e o WhatsApp daqui são os usados nos botões <b>Enviar por e-mail</b> e <b>Enviar por WhatsApp</b> da ordem de compra.</p>
+      <div class="barra"><input type="search" id="busca" placeholder="Fornecedor, nome do contato, e-mail ou telefone…" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
+        <select id="cfVer" style="max-width:210px">${[['todos', 'Todos os fornecedores'], ['com', 'Com contato'], ['sem', 'Sem contato']].map(([k, t]) => `<option value="${k}" ${f.ver === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <table class="reg"><thead><tr><th>Fornecedor</th><th>Contato</th><th>Telefone / WhatsApp</th><th>E-mail</th><th></th></tr></thead><tbody>
+      ${l.slice(0, 300).map(x => { const k = POR[x.id] || [], n = Math.max(k.length, 1);
+        return Array.from({ length: n }, (_, i) => { const c = k[i];
+          return `<tr>${i === 0 ? `<td rowspan="${n}" style="vertical-align:top"><b>${esc(x.nome)}</b>${x.apelido && x.apelido !== x.nome ? `<div class="muted" style="font-size:11.5px">${esc(x.apelido)}</div>` : ''}${pode ? `<div style="margin-top:4px"><button class="btn peq" data-cfn="${x.id}">+ contato</button></div>` : ''}</td>` : ''}
+            ${c ? `<td><b>${esc(c.nome)}</b>${c.funcao ? `<div class="muted" style="font-size:11.5px">${esc(c.funcao)}</div>` : ''}</td>
+              <td style="white-space:nowrap">${c.telefone ? esc(c.telefone) + (c.whatsapp ? ' <span class="tag ok" style="font-size:10px">WhatsApp</span>' : '') : '<span class="muted">—</span>'}</td>
+              <td>${c.email ? esc(c.email) : '<span class="muted">—</span>'}</td><td>${pode ? `<button class="btn peq" data-cfe="${c.id}">Editar</button>` : ''}</td>`
+            : '<td colspan="4" class="muted" style="font-size:12.5px">sem contato cadastrado</td>'}</tr>`; }).join(''); }).join('') || '<tr><td colspan="5" class="vazio">Nenhum fornecedor.</td></tr>'}</tbody></table>
+      <p class="muted" style="font-size:12px">${l.length.toLocaleString('pt-BR')} fornecedor(es)${l.length > 300 ? ' · mostrando 300 — use a busca' : ''}</p></div>`;
+  ligaBarra(null);
+  $('#cfVer').onchange = e => { f.ver = e.target.value; telaContatosForn(); };
+  document.querySelectorAll('[data-cfv]').forEach(b => b.onclick = () => { f.ver = b.dataset.cfv; telaContatosForn(); });
+  document.querySelectorAll('[data-cfn]').forEach(b => b.onclick = async () => { if(await formContatoForn(b.dataset.cfn, null)) telaContatosForn(); });
+  document.querySelectorAll('[data-cfe]').forEach(b => b.onclick = async () => { const c = cs.find(y => y.id === b.dataset.cfe); if(await formContatoForn(c.pessoa_id, c)) telaContatosForn(); });
+}
+Object.assign(TELAS, { cp_contatos: telaContatosForn });
+
+/* cadastra ou edita um contato do fornecedor; devolve o contato gravado (ou null) */
+async function formContatoForn(pessoaId, c){
+  const novo = !c, P = pessoa(pessoaId) || {}; c = c || {};
+  const r = await modal((novo ? 'Novo contato · ' : 'Contato · ') + (P.nome || ''), `<div class="grade" style="text-align:left">
+      <label class="campo">Nome<input id="cfNome" value="${esc(c.nome || '')}" placeholder="ex.: Maria (vendas)"></label>
+      <label class="campo">Função / setor<input id="cfFuncao" value="${esc(c.funcao || '')}" placeholder="ex.: Vendas, Financeiro"></label>
+      <label class="campo">Telefone<input id="cfFone" inputmode="tel" value="${esc(c.telefone || '')}" placeholder="(24) 99999-9999"></label>
+      <label class="campo" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="cfWpp" style="width:auto" ${novo || c.whatsapp ? 'checked' : ''}> este número tem WhatsApp</label>
+      <label class="campo largo">E-mail<input id="cfMail" type="email" value="${esc(c.email || '')}" placeholder="vendas@fornecedor.com.br"></label></div>`,
+    [['Cancelar', false], ...(novo ? [] : [['Inativar', 'inativar']]), ['Salvar', true, 'pri']]);
+  if(!r) return null;
+  if(r === 'inativar'){ const x = await sb.from('contatos').update({ status: 'inativo' }).eq('id', c.id); if(x.error){ await aviso('Erro', esc(erroBanco(x.error))); return null; }
+    const k = (ST.contatos || []).find(y => y.id === c.id); if(k) k.status = 'inativo'; toast('Contato inativado.'); return { inativo: true }; }
+  const nome = $('#cfNome').value.trim(), mail = $('#cfMail').value.trim().toLowerCase(), fone = $('#cfFone').value.trim();
+  if(!nome){ await aviso('Nome', 'Informe o nome do contato.'); return null; }
+  if(mail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)){ await aviso('E-mail', 'O e-mail não parece certo.'); return null; }
+  const d = { nome, funcao: $('#cfFuncao').value.trim() || null, pessoa_id: pessoaId };
+  let id = c.id;
+  if(novo){ const x = await sb.from('contatos').insert(d).select('*').single(); if(x.error){ await aviso('Erro', esc(erroBanco(x.error))); return null; } id = x.data.id; (ST.contatos ||= []).push(x.data); }
+  else { const x = await sb.from('contatos').update(d).eq('id', id); if(x.error){ await aviso('Erro', esc(erroBanco(x.error))); return null; } const k = (ST.contatos || []).find(y => y.id === id); if(k) Object.assign(k, d); }
+  const dd = { contato_id: id, telefone: fone ? cfTel(fone) : null, whatsapp: $('#cfWpp').checked && !!fone, email: mail || null };
+  const y = await priv().from('contatos_dados').upsert(dd); if(y.error){ await aviso('Erro ao gravar telefone e e-mail', esc(erroBanco(y.error))); return null; }
+  toast('Contato salvo.'); return { ...d, id, ...dd };
+}
+
+/* ---------- PDF da OC (o mesmo conteúdo do "Imprimir para o fornecedor") ---------- */
+function ocCorpoPdf(O, its){
+  return `<p>Fornecedor: <b>${esc(O.fornecedor || '')}</b><br>Previsão de chegada: ${O.previsao_entrega ? dataBR(O.previsao_entrega) : '—'} · Condição: ${esc(O.condicao || '—')}${O.pedido_numero ? '<br>Referência: pedido ' + esc(O.pedido_numero) : ''}</p>
+    <table><thead><tr><th>Produto</th><th>Código</th><th style="text-align:right">Qtd</th><th style="text-align:right">Unitário</th><th style="text-align:right">Total</th></tr></thead><tbody>${its.map(i => `<tr><td>${esc(i.descricao)}</td><td>${esc(i.codigo_fornecedor || '')}</td><td style="text-align:right">${numFmt(i.quantidade).replace(/,00$/, '')} ${esc(i.unidade)}</td><td style="text-align:right">${R$(i.valor_unitario)}</td><td style="text-align:right">${R$(i.quantidade * i.valor_unitario)}</td></tr>`).join('')}
+    ${[['Frete', O.frete], ['IPI', O.ipi], ['Encargo', O.encargo], ['Seguro', O.seguro], ['Desconto', -Number(O.desconto || 0)]].filter(([, v]) => Number(v)).map(([r, v]) => `<tr><td colspan="4">${r}</td><td style="text-align:right">${R$(v)}</td></tr>`).join('')}<tr><td colspan="4"><b>Total</b></td><td style="text-align:right"><b>${R$(O.total)}</b></td></tr></tbody></table>`;
+}
+function ocArquivoPdf(O, its){
+  const tit = `Ordem de compra nº ${O.numero} · ${O.empresa}`, [t, sub] = pdfPartes(tit);
+  return pdfJanela({ emArquivo: true, titulo: t, sub: pdfEsc(sub), corpo: ocCorpoPdf(O, its), arquivo: `OC ${O.numero} - ${String(O.fornecedor || 'fornecedor').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60)}` });
+}
+
+/* ---------- enviar a OC por e-mail ou WhatsApp ----------
+   O navegador não deixa um site anexar arquivo sozinho no programa de e-mail nem no WhatsApp. Então:
+   · no celular, abre a folha "Compartilhar" do aparelho já com o PDF e o texto (escolhe-se Mail ou WhatsApp);
+   · no computador, baixa o PDF e abre o e-mail (ou o WhatsApp) já com destinatário, assunto e texto — falta só arrastar o PDF. */
+async function enviarOC(O, its, canal){
+  const email = canal === 'email', cs = O.fornecedor_id ? await contatosDeFornecedores([O.fornecedor_id]) : [];
+  const ops = cs.filter(c => email ? c.email : c.telefone).sort((a, b) => (b.whatsapp ? 1 : 0) - (a.whatsapp ? 1 : 0)).map(c => ({ v: email ? c.email : c.telefone, n: c.nome }));
+  if(email && O.contato_email && !ops.some(o => o.v.toLowerCase() === String(O.contato_email).toLowerCase())) ops.push({ v: O.contato_email, n: O.contato || 'contato da OC' });
+  if(!email && !ops.length && O.fornecedor_id && humano()) try{ const r = await priv().from('pessoas_dados').select('telefones').eq('pessoa_id', O.fornecedor_id).maybeSingle();
+    ((r.data || {}).telefones || []).forEach(t => { const v = typeof t === 'string' ? t : (t && (t.numero || t.telefone)) || ''; if(cfDig(v).length >= 10) ops.push({ v, n: 'telefone do cadastro' }); }); }catch(e){}
+  const quem = (ops[0] && ops[0].n && !/cadastro|contato da OC/.test(ops[0].n) ? ops[0].n.split(/[ (]/)[0] : ''), eu = (ST.eu && (ST.eu.nome || '')).split(' ')[0] || '';
+  const texto = `Olá${quem ? ' ' + quem : ''}, tudo bem?\n\nSegue ${email ? 'em anexo ' : ''}a ordem de compra nº ${O.numero} da ${O.empresa === 'EQP' ? 'EQP' : 'Equiper'}, no valor de ${R$(O.total)}.${O.previsao_entrega ? '\nPrevisão de chegada combinada: ' + dataBR(O.previsao_entrega) + '.' : ''}${O.condicao ? '\nCondição de pagamento: ' + O.condicao + '.' : ''}\n\nPor favor, confirme o recebimento e o prazo de entrega.\n\nObrigado,\n${eu ? eu + ' · ' : ''}Equiper`;
+  const pm = modal(email ? `Enviar a OC ${O.numero} por e-mail` : `Enviar a OC ${O.numero} por WhatsApp`, `<div class="grade" style="text-align:left">
+      <label class="campo largo">${email ? 'Para (e-mail)' : 'Para (WhatsApp, com DDD)'}<input id="eoPara" ${email ? 'type="email"' : 'inputmode="tel"'} list="eoOps" value="${esc(ops[0] ? ops[0].v : '')}" placeholder="${email ? 'vendas@fornecedor.com.br' : '(24) 99999-9999'}"><datalist id="eoOps">${ops.map(o => `<option value="${esc(o.v)}">${esc(o.n)}</option>`).join('')}</datalist></label>
+      ${ops.length ? `<div class="campo largo" style="font-size:12px"><span>Contatos de ${esc(O.fornecedor || 'fornecedor')}</span><div>${ops.map((o, i) => `<a href="#" data-eop="${i}" style="margin-right:10px">${esc(o.n)} · ${esc(o.v)}</a>`).join('')}</div></div>`
+        : `<div class="campo largo" style="font-size:12px;color:#b45309">Este fornecedor ainda não tem ${email ? 'e-mail' : 'WhatsApp'} em Compras → Contatos de fornecedores. Digite acima; ${O.fornecedor_id ? 'marque abaixo para guardar.' : ''}</div>`}
+      ${O.fornecedor_id && nivelTela('cp_contatos') >= 3 ? `<label class="campo largo" style="flex-direction:row;align-items:center;gap:8px;font-size:12.5px"><input type="checkbox" id="eoGuarda" style="width:auto" ${ops.length ? '' : 'checked'}> guardar este ${email ? 'e-mail' : 'número'} nos contatos do fornecedor (se for novo)</label>` : ''}
+      ${email ? `<label class="campo largo">Assunto<input id="eoAss" value="${esc(`Ordem de compra nº ${O.numero} · ${O.empresa === 'EQP' ? 'EQP' : 'Equiper'}`)}"></label>` : ''}
+      <label class="campo largo">Mensagem<textarea id="eoMsg" rows="9">${esc(texto)}</textarea></label></div>
+      <p class="muted" style="font-size:12px;text-align:left;margin:8px 0 0">O ERP monta o PDF da OC. No celular ele vai junto pela tela de compartilhar; no computador o PDF é baixado e a mensagem abre pronta — é só arrastar o arquivo para ela.</p>`,
+    [['Cancelar', false], ['Preparar o PDF e enviar', true, 'pri']]);
+  document.querySelectorAll('#mTxt [data-eop]').forEach(a => a.onclick = e => { e.preventDefault(); $('#eoPara').value = ops[+a.dataset.eop].v; });
+  if(!await pm) return false;
+  const para = $('#eoPara').value.trim(), msg = $('#eoMsg').value, ass = email ? $('#eoAss').value.trim() : '', guarda = $('#eoGuarda') && $('#eoGuarda').checked;
+  if(email ? !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(para) : cfDig(para).length < 10){ await aviso(email ? 'E-mail' : 'WhatsApp', email ? 'Informe o e-mail do fornecedor.' : 'Informe o número com DDD.'); return false; }
+  if(guarda && !cs.some(c => email ? String(c.email).toLowerCase() === para.toLowerCase() : cfDig(c.telefone) === cfDig(para))) try{
+    const x = await sb.from('contatos').insert({ nome: O.contato || (email ? para.split('@')[0] : 'Contato'), funcao: 'Vendas', pessoa_id: O.fornecedor_id }).select('*').single();
+    if(!x.error){ (ST.contatos ||= []).push(x.data); await priv().from('contatos_dados').upsert(email ? { contato_id: x.data.id, email: para.toLowerCase() } : { contato_id: x.data.id, telefone: cfTel(para), whatsapp: true }); } }catch(e){}
+  toast('Preparando o PDF da OC…');
+  let arq = null; try{ arq = await ocArquivoPdf(O, its); }catch(e){}
+  const cel = matchMedia('(pointer:coarse)').matches || innerWidth <= 700, compart = !!(arq && cel && navigator.canShare && navigator.canShare({ files: [arq] }));
+  const d = cfDig(para), link = email ? `mailto:${encodeURIComponent(para)}?subject=${encodeURIComponent(ass)}&body=${encodeURIComponent(msg)}` : `https://wa.me/${d.length <= 11 ? '55' + d : d}?text=${encodeURIComponent(msg)}`;
+  /* segundo toque: o aparelho só deixa compartilhar/abrir outro programa logo depois de um toque do usuário */
+  const vai = await modal(arq ? 'PDF pronto' : 'Não deu para montar o PDF', arq ? (compart ? `O PDF <b>${esc(arq.name)}</b> está pronto. Toque em <b>Enviar</b> e escolha ${email ? 'o e-mail' : 'o WhatsApp'}: o PDF e o texto vão juntos.${email ? `<br><span class="muted" style="font-size:12px">Destinatário: ${esc(para)} (copiado, é só colar).</span>` : ''}`
+      : `O PDF <b>${esc(arq.name)}</b> vai ser baixado e ${email ? 'o e-mail' : 'o WhatsApp'} abre com ${email ? 'destinatário, assunto e texto' : 'o número e o texto'} prontos. <b>Arraste o PDF baixado para a mensagem</b> antes de enviar.`)
+      : 'Sem internet para montar o PDF agora. Posso abrir a mensagem só com o texto.', [['Cancelar', false], ['Enviar', true, 'pri']]);
+  if(!vai) return false;
+  if(compart){ try{ if(email && navigator.clipboard) navigator.clipboard.writeText(para).catch(() => {}); }catch(e){}
+    try{ await navigator.share({ files: [arq], title: ass || arq.name, text: msg }); }catch(e){ if(e && e.name === 'AbortError') return false; window.open(link, '_blank'); } }
+  else { if(arq){ const a = document.createElement('a'); a.href = URL.createObjectURL(arq); a.download = arq.name; document.body.appendChild(a); a.click(); a.remove(); }
+    if(email) location.href = link; else window.open(link, '_blank'); }
+  toast(email ? 'E-mail aberto para enviar.' : 'WhatsApp aberto para enviar.');
+  return true;
+}
+
+/* ---------- Montar compras do cliente: tudo o que falta comprar dos pedidos dele, uma OC por fornecedor ---------- */
+async function montarComprasCliente(peds, nomeCli){
+  toast('Levantando o que falta comprar…');
+  const sugs = await Promise.all(peds.map(p => sb.rpc('compras_sugestao', { p_pedido: p.id })));
+  const ruim = sugs.find(s => s.error); if(ruim) return aviso('Erro', esc(erroBanco(ruim.error)));
+  const itens = []; sugs.forEach((s, i) => (s.data || []).filter(x => Number(x.comprar) > 0).forEach(x => itens.push({ ...x, ped: peds[i] })));
+  if(!itens.length) return aviso('Nada para comprar', `Pelos orçamentos dos ${peds.length} pedido(s) de <b>${esc(nomeCli)}</b> não falta comprar nada: já está em outras OCs ou no estoque — ou o pedido não tem itens de equipamento/material no orçamento. Para lançar à mão, use <b>Montar compra</b> na linha do pedido.`);
+  const forn = ST.pessoas.filter(x => (x.papeis || []).includes('fornecedor') && x.status !== 'inativo').sort((a, b) => a.nome.localeCompare(b.nome)), porNome = {}; forn.forEach(x => porNome[norm(x.nome)] = x);
+  const PR = {}, pids = [...new Set(itens.map(x => x.produto_id).filter(Boolean))];
+  for(const parte of cfPartes(pids, 60)){ const r = await sb.from('compras_precos').select('produto_id,fornecedor_id,fornecedor_nome,codigo_fornecedor,preco,atualizado_em').in('produto_id', parte).order('atualizado_em', { ascending: false });
+    (r.data || []).forEach(x => (PR[x.produto_id] ||= []).push(x)); }
+  itens.forEach(x => { const u = (PR[x.produto_id] || []).find(y => y.fornecedor_id && pessoa(y.fornecedor_id)) || null; x.sug = u; x.fornNome = u ? pessoa(u.fornecedor_id).nome : ''; });
+  const sinal = peds.filter(p => p.andamento_interno === 'aguardando_sinal'), emp = (peds.find(p => p.empresa) || {}).empresa || 'Equiper';
+  abrirPainel(`<div class="cab"><h2>Compras de ${esc(nomeCli)}</h2><button class="btn peq" style="margin-left:auto" data-fechar>Fechar</button></div>
+    <div class="card" style="font-size:13px">${peds.length} pedido(s): ${peds.map(p => `<b>${esc(p.numero || '—')}</b>${p.obra ? ' <span class="muted">' + esc(p.obra) + '</span>' : ''}`).join(' · ')}
+      <br><span class="muted">Já descontado o que está em outras OCs e o que tem no estoque próprio. O fornecedor sugerido é o do último preço de cada produto; troque quando precisar.</span>
+      ${sinal.length ? `<p style="color:#b45309;margin:6px 0 0">⚠ Sinal ainda não recebido: pedido(s) ${sinal.map(p => esc(p.numero || '')).join(', ')}.</p>` : ''}</div>
+    <div class="card"><div class="grade">
+      <label class="campo">Empresa que compra<select id="mcEmp">${['Equiper', 'EQP'].map(e => `<option ${emp === e ? 'selected' : ''}>${e}</option>`).join('')}</select></label>
+      <label class="campo">Previsão de chegada<input id="mcPrev" type="date" value="${somaDias2(hojeISO(), 15)}"></label>
+      <label class="campo largo">Trocar o fornecedor de todos os itens marcados<input id="mcTodos" list="mcForn" placeholder="escolha para aplicar a todos os marcados"></label></div>
+      <datalist id="mcForn">${forn.map(x => `<option value="${esc(x.nome)}"></option>`).join('')}</datalist></div>
+    <div class="card"><div style="overflow-x:auto"><table class="reg"><thead><tr><th></th><th>Produto</th><th>Pedido</th><th style="text-align:right">Qtd</th><th>Fornecedor</th><th>Cód. no fornecedor</th><th style="text-align:right">Valor unit.</th></tr></thead><tbody id="mcItens">
+      ${itens.map((x, i) => `<tr data-i="${i}"><td><input type="checkbox" data-s checked style="width:auto"></td><td>${x.codigo ? `<span class="muted">${esc(x.codigo)}</span> ` : ''}${esc(x.descricao)}${Number(x.em_estoque) > 0 || Number(x.em_oc) > 0 ? `<div class="muted" style="font-size:11px">pedido ${numFmt(x.pedido).replace(/,00$/, '')}${Number(x.em_oc) > 0 ? ' · já em OC ' + numFmt(x.em_oc).replace(/,00$/, '') : ''}${Number(x.em_estoque) > 0 ? ' · em estoque ' + numFmt(x.em_estoque).replace(/,00$/, '') : ''}</div>` : ''}</td>
+        <td style="white-space:nowrap">${esc(x.ped.numero || '—')}</td><td><input data-f="quantidade" inputmode="decimal" value="${numFmt(x.comprar).replace(/,00$/, '')}" style="width:70px;text-align:right"> <span class="muted">${esc(x.unidade || 'UN')}</span></td>
+        <td><input data-f="forn" list="mcForn" value="${esc(x.fornNome)}" placeholder="escolher…" style="min-width:190px"></td><td><input data-f="codigo_fornecedor" value="${esc(x.sug ? x.sug.codigo_fornecedor || '' : '')}" style="width:110px"></td>
+        <td><input data-f="valor_unitario" inputmode="decimal" value="${x.sug && Number(x.sug.preco) ? numFmt(x.sug.preco) : ''}" style="width:100px;text-align:right"></td></tr>`).join('')}</tbody></table></div></div>
+    <div class="card" id="mcResumo" data-nao-suja="1"></div>
+    <div class="rodape"><button class="btn pri" id="mcCriar">Criar as OCs em rascunho</button></div>`);
+  $('#folha').style.width = 'min(1080px,100%)';
+  const linhas = () => [...document.querySelectorAll('#mcItens tr')].map(tr => { const g = k => tr.querySelector(`[data-f="${k}"]`).value.trim(), x = itens[+tr.dataset.i], f = porNome[norm(g('forn'))];
+    return { tr, x, marcado: tr.querySelector('[data-s]').checked, forn: f || null, fornTxt: g('forn'), quantidade: num(g('quantidade')), valor_unitario: num(g('valor_unitario')) || 0, codigo_fornecedor: g('codigo_fornecedor') || null }; });
+  const grupos = () => { const G = {}; linhas().filter(l => l.marcado && l.forn && l.quantidade > 0).forEach(l => (G[l.forn.id] ||= { forn: l.forn, itens: [] }).itens.push(l)); return Object.values(G).sort((a, b) => a.forn.nome.localeCompare(b.forn.nome)); };
+  const resumo = () => { const L = linhas().filter(l => l.marcado), sem = L.filter(l => !l.forn), G = grupos();
+    L.forEach(l => l.tr.querySelector('[data-f=forn]').style.borderColor = l.forn ? '' : 'var(--verm)');
+    $('#mcResumo').innerHTML = `<h2 style="font-size:15px">Ordens de compra que serão criadas · ${G.length}</h2>
+      ${G.map(g => `<div style="display:flex;gap:10px;padding:4px 0;border-bottom:1px solid var(--linha,#eee)"><b style="flex:1">${esc(g.forn.nome)}</b><span class="muted">${g.itens.length} item(ns)${new Set(g.itens.map(l => l.x.ped.id)).size > 1 ? ' · ' + new Set(g.itens.map(l => l.x.ped.id)).size + ' pedidos' : ' · pedido ' + esc(g.itens[0].x.ped.numero || '')}</span><b>${R$(g.itens.reduce((a, l) => a + l.quantidade * l.valor_unitario, 0))}</b></div>`).join('') || '<p class="muted" style="font-size:13px">Escolha o fornecedor dos itens.</p>'}
+      ${sem.length ? `<p style="color:var(--verm);font-size:13px;margin:8px 0 0">${sem.length} item(ns) marcado(s) sem fornecedor${sem.some(l => l.fornTxt) ? ' (nome que não está no cadastro de fornecedores)' : ''}: não entram em nenhuma OC.</p>` : ''}`; };
+  resumo();
+  $('#mcItens').addEventListener('input', resumo); $('#mcItens').addEventListener('change', e => { const tr = e.target.closest('tr');
+    if(e.target.dataset.f === 'forn' && tr){ const x = itens[+tr.dataset.i], f = porNome[norm(e.target.value)], p = f && (PR[x.produto_id] || []).find(y => y.fornecedor_id === f.id);
+      if(p){ tr.querySelector('[data-f=codigo_fornecedor]').value = p.codigo_fornecedor || ''; if(Number(p.preco)) tr.querySelector('[data-f=valor_unitario]').value = numFmt(p.preco); } }
+    resumo(); });
+  $('#mcTodos').onchange = e => { const f = porNome[norm(e.target.value)]; if(!f) return;
+    document.querySelectorAll('#mcItens tr').forEach(tr => { if(!tr.querySelector('[data-s]').checked) return; const i = tr.querySelector('[data-f=forn]'); i.value = f.nome; i.dispatchEvent(new Event('change', { bubbles: true })); }); e.target.value = ''; };
+  $('#mcCriar').onclick = async () => { const G = grupos(); if(!G.length) return aviso('Fornecedor', 'Marque os itens e escolha o fornecedor de cada um.');
+    const sem = linhas().filter(l => l.marcado && !l.forn).length;
+    if(!await modal('Criar as ordens de compra?', `Serão criadas <b>${G.length}</b> OC(s) em rascunho para <b>${esc(nomeCli)}</b>:<br>${G.map(g => '• ' + esc(g.forn.nome) + ' · ' + g.itens.length + ' item(ns)').join('<br>')}${sem ? `<br><br><span style="color:var(--verm)">${sem} item(ns) sem fornecedor ficam de fora.</span>` : ''}<br><br>Depois é só abrir cada uma, conferir e enviar ao fornecedor.`, [['Cancelar', false], ['Criar', true, 'pri']])) return;
+    const cli = (peds.find(p => p.pagador_id) || {}).pagador_id || null, feitas = [];
+    for(const g of G){ const ps = [...new Set(g.itens.map(l => l.x.ped.id))];
+      const o = await sb.from('compras_ordens').insert({ empresa: $('#mcEmp').value, fornecedor_id: g.forn.id, pedido_id: ps.length === 1 ? ps[0] : null, previsao_entrega: $('#mcPrev').value || null, finalidade: 'cliente', cliente_id: cli, destino: nomeCli || null }).select().single();
+      if(o.error){ await aviso('Erro ao criar a OC de ' + g.forn.nome, esc(erroBanco(o.error)) + (feitas.length ? `<br><br>Já criadas: ${feitas.map(f => 'OC ' + f.numero).join(', ')}.` : '')); break; }
+      const x = await sb.from('compras_itens').insert(g.itens.map(l => ({ ordem_id: o.data.id, pedido_id: l.x.ped.id, produto_id: l.x.produto_id || null, descricao: l.x.descricao, codigo_fornecedor: l.codigo_fornecedor, quantidade: l.quantidade, unidade: l.x.unidade || 'UN', valor_unitario: l.valor_unitario })));
+      if(x.error){ await aviso('Erro nos itens da OC ' + o.data.numero, esc(erroBanco(x.error))); break; }
+      feitas.push({ ...o.data, forn: g.forn.nome }); }
+    if(!feitas.length) return;
+    fecharPainel(); ST.cmp.aba = 'ocs'; ST.cmp.sit = 'abertas'; ST.busca = ''; if(ST.aba === 'cp_compras') await telaCompras();
+    const abrir = await modal(`${feitas.length} OC(s) criada(s)`, `${feitas.map(f => `• OC <b>${f.numero}</b> · ${esc(f.forn)}`).join('<br>')}<br><br>Estão em <b>rascunho</b> na lista de ordens de compra. Abra cada uma para conferir, enviar ao fornecedor e mandar por e-mail ou WhatsApp.`, [['Fechar', false], ['Abrir a primeira', true, 'pri']]);
+    if(abrir) verOC(feitas[0].id); };
 }
 
 /* ============ Status das ordens de compra (script 77, 19/11 — pedido do Júlio) ============
@@ -13280,7 +13496,7 @@ window.MENU_GUARDADAS = {};
     ['', ['inicio', 'chat']],
     ['Cadastros', ['pessoas', 'produtos']],
     ['Vendas', ['orc', 'vd_express', 'pv_precos', 'vd_express_cfg']],
-    ['Compras', ['cp_compras', 'cp_controle', 'cp_precos', 'es_mov_cigam']],
+    ['Compras', ['cp_compras', 'cp_controle', 'cp_contatos', 'cp_precos', 'es_mov_cigam']],
     ['Serviços', ['os_cigam']],   // 25/11 (Júlio): nada de "Histórico do CIGAM" à parte — as telas fazem parte do ERP
     ['Financeiro', ['fn_receber', 'fn_pedidos', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fn_notas_entrada', 'fn_notas_saida', 'fin_servicos', 'fin_projetos']],
     ['Fiscal', ['fn_notas', 'fn_recebidas', 'fn_contabil', 'adm_fiscal', 'adm_cert', 'adm_regras']],
