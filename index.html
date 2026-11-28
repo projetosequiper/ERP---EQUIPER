@@ -9262,6 +9262,95 @@ Object.assign(TELAS, { fs_notas_cigam: telaNotasCigam, fn_notas_entrada: telaNot
   }
 })();
 
+/* =================== XML das notas (script 108, 27/11 — Júlio: "quero que puxe tudo, NFe xml") ===================
+   fs_xml_cigam = XML das notas: os arquivos XML que estavam no servidor do CIGAM (saída Equiper desde 2015, saída EQP, notas de entrada
+   e CT-e baixados da SEFAZ desde dez/2023, cancelamentos e cartas de correção). Mostra também as notas de entrada que estão na SEFAZ e
+   NÃO foram lançadas no CIGAM. Só consulta: baixa o XML. Na ficha da nota do histórico aparece o XML dela. */
+IC.fs_xml_cigam = '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9.5 11l-2 2 2 2M14.5 11l2 2-2 2"/>';
+(() => { const g = MENU.find(x => x.area === 'Financeiro'); if(g && !g.itens.some(i => i[0] === 'fs_xml_cigam')){ const i = g.itens.findIndex(x => x[0] === 'fn_notas_saida'); g.itens.splice(i < 0 ? g.itens.length : i + 1, 0, ['fs_xml_cigam', '🗂️', 'XML das notas', 'DA']); } })();
+
+const XML_EV = { '110111': 'Cancelamento', '110110': 'Carta de correção', '210200': 'Confirmação da operação', '210210': 'Ciência da operação', '210220': 'Desconhecimento', '210240': 'Operação não realizada' };
+/* baixa o XML guardado (gzip) — o banco devolve o bytea como texto "\x1f8b…" */
+async function xmlBaixar(id){
+  const r = await sb.from('notas_cigam_xml').select('chave,documento,evento,evento_seq,xml_gz').eq('id', id).maybeSingle();
+  if(r.error || !r.data) return aviso('XML', 'Não consegui ler este XML.');
+  const s = String(r.data.xml_gz || ''); let b;
+  if(s.startsWith('\\x')){ const h = s.slice(2); b = new Uint8Array(h.length / 2); for(let i = 0; i < b.length; i++) b[i] = parseInt(h.substr(i * 2, 2), 16); }
+  else { const t = atob(s); b = Uint8Array.from(t, c => c.charCodeAt(0)); }
+  try {
+    const txt = await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).blob();
+    const x = r.data, nome = `${x.chave}${x.documento === 'evento' ? '-evento' + x.evento + '-' + x.evento_seq : x.documento === 'cte' ? '-procCTe' : '-procNFe'}.xml`;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/xml' })); a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+  } catch(e){ aviso('XML', 'Este navegador não conseguiu abrir o arquivo compactado. Atualize o navegador.'); }
+}
+
+/* ficha da nota do histórico: acrescenta o XML dela (nota + eventos) */
+(() => { const orig = window.verNotaCigam; if(typeof orig !== 'function') return;
+  window.verNotaCigam = async function(id){
+    await orig.apply(this, arguments);
+    const r = await sb.from('notas_cigam_xml').select('id,documento,evento,evento_seq,evento_desc,chave,protocolo,emissao').eq('nota_cigam_id', id).order('documento', { ascending: false }).order('evento_seq');
+    const L = r.error ? [] : (r.data || []), fim = [...document.querySelectorAll('#folha > p.muted')].pop(); if(!fim || !L.length) return;
+    const nota = L.find(x => x.documento !== 'evento'), canc = L.some(x => x.evento === '110111');
+    fim.insertAdjacentHTML('beforebegin', `<div class="card" id="ncXml"><h2 style="font-size:15px">Arquivo XML ${canc ? '<span class="tag" style="background:#fee2e2;color:#b91c1c">cancelada na SEFAZ</span>' : ''}</h2>
+      ${nota ? `<p class="muted" style="font-size:12px;margin:0 0 8px">Chave ${esc(nota.chave)}${nota.protocolo ? ' · protocolo ' + esc(nota.protocolo) : ''}</p>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${L.map(x => `<button class="btn peq" type="button" data-xmlb="${x.id}">⬇ ${x.documento === 'evento' ? esc(x.evento_desc || XML_EV[x.evento] || 'Evento ' + x.evento) + (x.evento_seq > 1 ? ' ' + x.evento_seq : '') : x.documento === 'cte' ? 'XML do CT-e' : 'XML da nota'}</button>`).join('')}</div></div>`);
+    document.querySelectorAll('[data-xmlb]').forEach(b => b.onclick = () => xmlBaixar(+b.dataset.xmlb));
+  };
+})();
+
+ST.xc = { dir: 'entrada', emp: '', lig: '', doc: '', de: '', ate: '', pagina: 0 };
+async function telaXmlCigam(){
+  carregandoTela();
+  const seq = ST._xcSeq = (ST._xcSeq || 0) + 1, f = ST.xc, por = 200, b = (ST.busca || '').trim(); if(ST._xcBusca !== b){ ST._xcBusca = b; f.pagina = 0; }
+  const COLS = 'id,documento,direcao,empresa,numero,serie,emit_nome,dest_nome,emissao,valor,protocolo,nota_cigam_id,chave';
+  const filtra = q => { q = q.neq('documento', 'evento'); if(f.dir) q = q.eq('direcao', f.dir); if(f.emp) q = q.eq('empresa', f.emp); if(f.doc) q = q.eq('documento', f.doc);
+    if(f.lig === 'nao') q = q.is('nota_cigam_id', null); if(f.lig === 'sim') q = q.not('nota_cigam_id', 'is', null);
+    if(f.de) q = q.gte('emissao', f.de); if(f.ate) q = q.lte('emissao', f.ate);
+    if(b) q = /^\d{1,15}$/.test(b) ? q.eq('numero', b) : /^\d{44}$/.test(b) ? q.eq('chave', b) : q.buscaEm(['emit_nome', 'dest_nome'], b);
+    return q; };
+  const ordena = q => q.order('emissao', { ascending: false, nullsFirst: false }).order('id', { ascending: false });
+  const [r, cnt, sem] = await Promise.all([ ordena(filtra(sb.from('notas_cigam_xml').select(COLS))).range(f.pagina * por, f.pagina * por + por - 1),
+    filtra(sb.from('notas_cigam_xml').select('id', { count: 'exact', head: true })),
+    sb.from('notas_cigam_xml').select('valor,empresa').eq('direcao', 'entrada').eq('documento', 'nfe').is('nota_cigam_id', null) ]);
+  if(seq !== ST._xcSeq || ST.aba !== 'fs_xml_cigam') return;
+  if(r.error) return $('#conteudo').innerHTML = `<div class="card"><h2>XML das notas</h2><p>Rode o script 108_xml_notas_cigam.sql no Supabase.</p></div>`;
+  const l = r.data || [], total = cnt.count || 0, S = sem.data || [];
+  const ev = l.length ? await sb.from('notas_cigam_xml').select('chave').eq('evento', '110111').in('chave', l.map(x => x.chave)) : { data: [] };
+  const canc = new Set((ev.data || []).map(x => x.chave)); if(seq !== ST._xcSeq) return;
+  const somaSem = e => S.filter(x => !e || x.empresa === e).reduce((s, x) => s + Number(x.valor || 0), 0);
+  const quem = x => x.direcao === 'saida' ? x.dest_nome : x.emit_nome;
+  $('#conteudo').innerHTML = `<div class="card"><h2>XML das notas <span class="muted" style="font-weight:400">· arquivos trazidos do servidor do CIGAM</span></h2>
+    <div class="kpis">
+      <div class="kpi" data-xk="nao" style="cursor:pointer"><span class="muted">Entradas na SEFAZ sem lançamento no CIGAM</span><b>${S.length.toLocaleString('pt-BR')}</b><span class="muted" style="font-size:12px">${R$(somaSem())} · Equiper ${R$(somaSem('Equiper'))} · EQP ${R$(somaSem('EQP'))}</span></div>
+      <div class="kpi"><span class="muted">Com estes filtros</span><b>${total.toLocaleString('pt-BR')}</b></div></div>
+    <div class="barra" style="flex-wrap:wrap">
+      <input type="search" id="busca" placeholder="Nº da nota, chave de acesso ou nome do emitente / destinatário" value="${esc(ST.busca)}"><label style="display:none"><input type="checkbox" id="vInat"></label>
+      <select id="xcDir" style="max-width:170px"><option value="">Entrada e saída</option><option value="entrada" ${f.dir === 'entrada' ? 'selected' : ''}>Entrada (recebidas)</option><option value="saida" ${f.dir === 'saida' ? 'selected' : ''}>Saída (emitidas)</option></select>
+      <select id="xcEmp" style="max-width:130px"><option value="">EQP e Equiper</option>${['Equiper', 'EQP'].map(e => `<option ${f.emp === e ? 'selected' : ''}>${e}</option>`).join('')}</select>
+      <select id="xcDoc" style="max-width:130px"><option value="">NF-e e CT-e</option><option value="nfe" ${f.doc === 'nfe' ? 'selected' : ''}>Só NF-e</option><option value="cte" ${f.doc === 'cte' ? 'selected' : ''}>Só CT-e (frete)</option></select>
+      <select id="xcLig" style="max-width:220px"><option value="">Lançadas ou não no CIGAM</option><option value="nao" ${f.lig === 'nao' ? 'selected' : ''}>Sem lançamento no CIGAM</option><option value="sim" ${f.lig === 'sim' ? 'selected' : ''}>Lançadas no CIGAM</option></select>
+      <label class="muted" style="font-size:12px">de <input type="date" id="xcDe" value="${f.de}" style="width:auto"></label><label class="muted" style="font-size:12px">até <input type="date" id="xcAte" value="${f.ate}" style="width:auto"></label></div>
+    <p class="muted" style="font-size:12px;margin:4px 0 8px">${total > por ? `mostrando ${f.pagina * por + 1} a ${Math.min(total, (f.pagina + 1) * por)} · ` : ''}O XML guardado aqui tem todos os dados e o protocolo da SEFAZ; o arquivo original assinado continua no servidor do CIGAM.</p>
+    <div style="overflow:auto"><table class="reg"><thead><tr><th>Data</th><th>Nº / série</th><th>Empresa</th><th>Emitente / destinatário</th><th style="text-align:right">Valor</th><th>No CIGAM</th><th></th></tr></thead><tbody>
+    ${l.map(x => `<tr><td>${dataBR(x.emissao)}</td><td><b>${x.numero || ''}</b>${x.serie ? ' / ' + esc(x.serie) : ''} ${f.dir ? '' : ncTagTipo(x.direcao)} ${x.documento === 'cte' ? '<span class="tag">CT-e</span>' : ''}${canc.has(x.chave) ? ' <span class="tag" style="background:#fee2e2;color:#b91c1c">cancelada</span>' : ''}</td>
+      <td>${tagEmp(x.empresa)}</td><td>${esc(quem(x) || '')}</td><td style="text-align:right;white-space:nowrap">${x.valor === null ? '—' : R$(x.valor)}</td>
+      <td>${x.nota_cigam_id ? `<a href="#" data-xnc="${x.nota_cigam_id}">abrir a nota</a>` : '<span class="tag" style="background:#fef3c7;color:#92400e">não lançada</span>'}</td>
+      <td><button class="btn peq" type="button" data-xmlb="${x.id}" title="Baixar o XML">⬇ XML</button></td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum XML com estes filtros.</td></tr>'}</tbody></table></div>
+    ${total > por ? `<div style="display:flex;gap:8px;justify-content:center;margin-top:10px"><button class="btn peq" id="xcAnt" ${f.pagina ? '' : 'disabled'}>◀ Anteriores</button><button class="btn peq" id="xcProx" ${(f.pagina + 1) * por < total ? '' : 'disabled'}>Próximas ▶</button></div>` : ''}</div>`;
+  ligaBarra(null);
+  expRegistra(async () => { const t = await ordena(filtra(sb.from('notas_cigam_xml').select(COLS))).limit(5000); const L = t.data || l;
+    return [expCols('XML das notas', [['Data', x => dataBR(x.emissao)], ['Tipo', x => x.direcao === 'saida' ? 'Saída' : 'Entrada'], ['Documento', x => x.documento === 'cte' ? 'CT-e' : 'NF-e'], ['Nº', x => x.numero], ['Série', x => x.serie],
+      ['Empresa', x => x.empresa], ['Emitente / destinatário', quem], ['Valor', x => x.valor === null ? '' : R$(x.valor)], ['No CIGAM', x => x.nota_cigam_id ? 'lançada' : 'não lançada'], ['Chave', x => x.chave]], L)]; });
+  const muda = (k, v) => { f[k] = v; f.pagina = 0; telaXmlCigam(); };
+  $('#xcDir').onchange = e => muda('dir', e.target.value); $('#xcEmp').onchange = e => muda('emp', e.target.value); $('#xcDoc').onchange = e => muda('doc', e.target.value);
+  $('#xcLig').onchange = e => muda('lig', e.target.value); $('#xcDe').onchange = e => muda('de', e.target.value); $('#xcAte').onchange = e => muda('ate', e.target.value);
+  const k = document.querySelector('[data-xk]'); if(k) k.onclick = () => { Object.assign(f, { dir: 'entrada', doc: 'nfe', lig: 'nao', pagina: 0 }); telaXmlCigam(); };
+  if($('#xcAnt')) $('#xcAnt').onclick = () => { f.pagina--; telaXmlCigam(); }; if($('#xcProx')) $('#xcProx').onclick = () => { f.pagina++; telaXmlCigam(); };
+  document.querySelectorAll('[data-xmlb]').forEach(b => b.onclick = () => xmlBaixar(+b.dataset.xmlb));
+  document.querySelectorAll('[data-xnc]').forEach(a => a.onclick = e => { e.preventDefault(); verNotaCigam(+a.dataset.xnc); });
+}
+Object.assign(TELAS, { fs_xml_cigam: telaXmlCigam });
+
 /* ============ Leitura do certificado digital — só no computador da pessoa ============
    Lê o arquivo .pfx/.p12 (com a senha) ou .cer/.crt/.pem (sem senha) AQUI no navegador,
    tira só os dados públicos (titular, CNPJ, emissora, validade) e descarta o resto.
@@ -13540,7 +13629,7 @@ window.MENU_GUARDADAS = {};
     ['Vendas', ['orc', 'vd_express', 'pv_precos', 'vd_express_cfg']],
     ['Compras', ['cp_compras', 'cp_controle', 'cp_contatos', 'cp_precos', 'es_mov_cigam']],
     ['Serviços', ['os_cigam']],   // 25/11 (Júlio): nada de "Histórico do CIGAM" à parte — as telas fazem parte do ERP
-    ['Financeiro', ['fn_receber', 'fn_pedidos', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fn_notas_entrada', 'fn_notas_saida', 'fin_servicos', 'fin_projetos']],
+    ['Financeiro', ['fn_receber', 'fn_pedidos', 'fn_pagar', 'fn_fluxo', 'fn_caixa', 'fn_recibos', 'fn_pendencias', 'fn_notas_entrada', 'fn_notas_saida', 'fs_xml_cigam', 'fin_servicos', 'fin_projetos']],
     ['Fiscal', ['fn_notas', 'fn_recebidas', 'fn_contabil', 'adm_fiscal', 'adm_cert', 'adm_regras']],
     ['Relatórios', ['fn_painel', 'fn_gerencial', 'fn_cnpj']],
     ['Administração', ['adm_usuarios', 'adm_menu', 'fn_plano', 'registro', 'adm_backup', 'vinculos', 'projetos', 'servicos']]
